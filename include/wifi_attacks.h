@@ -41,6 +41,13 @@ void wifi_attack_engine_start(target_info_t *_target);
 
 
 /**
+ * @brief Stop attack engine and clean variables
+ * 
+ */
+void wifi_attack_engine_stop(void);
+
+
+/**
  * @brief Deauth attack by sending deauth frames 
  * 
  * @param bssid 

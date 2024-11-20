@@ -24,6 +24,13 @@ void evil_twin_start_attack(target_info_t *targe_info);
 
 
 /**
+ * @brief Stop EVIL TWIN attack.
+ * 
+ */
+void evil_twin_stop_attack(void);
+
+
+/**
  * @brief Check the user input password
  * 
  * @param password 

@@ -74,6 +74,35 @@ void evil_twin_start_attack(target_info_t *targe_info)
 }
 
 
+void evil_twin_stop_attack(void)
+{
+    if (evil_twin_task_handle == NULL)
+    {
+        ESP_LOGE(TAG, "EvilTwin task is not running.");
+        return;
+    }
+    
+    /* Kill task */
+    vTaskDelete(evil_twin_task_handle);
+    evil_twin_task_handle = NULL;
+
+    /* Close attack server */
+    http_attack_server_stop();
+
+    /* Stop attack engine */
+    wifi_attack_engine_stop();
+
+    /* Restore original hotspot */
+    wifi_start_softap();
+
+    /* Wait softap restpre */
+    vTaskDelay(3000);
+
+    /* Start Admin server */
+    http_admin_server_start();
+}
+
+
 esp_err_t evil_twin_check_password(char *password)
 {
     //TODO
