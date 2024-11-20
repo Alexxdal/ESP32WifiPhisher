@@ -1,19 +1,19 @@
 ### Features
 
 - **Evil Twin Attack**:  
-Creates a rogue access point (AP) mimicking the target network, tricking clients into connecting to it.
+Creates a rogue access point (AP) mimicking the target network, thus tricking clients into connecting to it.
 
 - **Captive Portal**:  
 Victims will be automatically redirected to the Captive Portal page upon connecting to the fake access point.
 
 - **Advanced deauthentication technique**:  
-Supports new adavanced technique for wifi 6 deauthentication like negative tx power constraint, EAPOL-logoff, EAP-Failure, Malformed Handshare message 1, Invalid PMKID, EAPOL Rounds and EAPOL start spamming.
+Supports new advanced techniques for Wi-Fi 6 deauthentication like negative TX power constraint, EAPOL-logoff, EAP-Failure, Malformed Handshare message 1, Invalid PMKID, EAPOL Rounds and EAPOL start spamming.
 
 - **Automatic Vendor Identification**:  
-Support for vendor identification based on SSID name and capturing beacon frame (TO DO).
+Support for vendor identification based upon SSID name and capturing beacon frame (*TO DO*).
 
 - **Phishing Scenarios**:  
-Serves customized phishing pages to capture sensitive information such as login credentials.
+Serves customized phishing pages to capture sensitive information, such as login credentials.
 
 - **Compact and Portable**:  
   Runs on the ESP32, making it lightweight and suitable for hardware testing scenarios.
@@ -22,9 +22,9 @@ Serves customized phishing pages to capture sensitive information such as login 
   Allows customization of network settings and phishing scenarios through a web interface.
 
 ## To-Do List 
-- [ ] Add a channel tracking functionality (some ap may switch channel)
-- [ ] Add a handshake capture and basic aircrack implementation to check user input password
-- [ ] Add a telegram/email notification when password is succesfully stolen
+- [ ] Add a channel tracking functionality (some AP may switch channels)
+- [ ] Add a handshake capture and basic aircrack implementation to check a user input password
+- [ ] Add a telegram/email notification when password is succesfully stealed
 
 # WifiPhisher for ESP32
 
