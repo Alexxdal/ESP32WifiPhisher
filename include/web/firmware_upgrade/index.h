@@ -134,7 +134,7 @@ const char fu_index_body_html[] =
 "\t\t\t}\n"
 "\t\t\telse\n"
 "\t\t\t{\n"
-"\t\t\t\tdocument.getElementById('vendor').innerHTML = vendor + \" © 2024\";\n"
+"\t\t\t\tdocument.getElementById('vendor').innerHTML = \"© \" + vendor + \" 2024, All Rights Reserved.\";\n"
 "\t\t\t}\n"
 "\t\t\tconst logo_id = document.getElementById('logo');\n"
 "\t\t\tconst testImage = new Image();\n"

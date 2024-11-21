@@ -21,6 +21,13 @@ typedef enum {
 } vendors_t;
 
 
+typedef struct {
+    const char *uri;
+    const char *logo;
+    size_t logo_size;
+} logo_entry_t;
+
+
 /**
  * @brief Get vendor from ssid
  * 

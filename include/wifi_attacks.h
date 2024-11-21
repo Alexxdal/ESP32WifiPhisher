@@ -8,7 +8,7 @@
  * @brief Number of max client to store
  * 
  */
-#define MAX_CLIENTS 30
+#define MAX_CLIENTS 15
 
 /**
  * @brief List of associated client to the target AP
@@ -38,6 +38,13 @@ typedef struct {
  * 
  */
 void wifi_attack_engine_start(target_info_t *_target);
+
+
+/**
+ * @brief Stop attack engine and clean variables
+ * 
+ */
+void wifi_attack_engine_stop(void);
 
 
 /**

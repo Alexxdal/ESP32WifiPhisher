@@ -273,5 +273,6 @@ void http_admin_server_stop(void)
             ESP_LOGD(TAG, "Failed to stop admin server.");
             return;
         }
+        server = NULL;
     }
 }
