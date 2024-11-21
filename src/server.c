@@ -28,6 +28,8 @@
 #include "web/logo/skywifi.h"
 #include "web/logo/wind.h"
 #include "web/logo/tim.h"
+#include "web/logo/tplink.h"
+#include "web/logo/huawei.h"
 #include "web/logo/generic.h"
 #include "web/loader.h"
 #include "web/firmware_upgrade/index.h"
@@ -100,41 +102,27 @@ static void web_virtual_static_folder_manager(httpd_req_t *req)
  */
 static void web_virtual_logo_folder_manager(httpd_req_t *req)
 {
+	/* Lookup table */
+    static const logo_entry_t logo_table[] = {
+        { "/logo/Generic.png", generic_logo, sizeof(generic_logo) },
+        { "/logo/Vodafone.png", vodafone_logo, sizeof(vodafone_logo) },
+        { "/logo/Fastweb.png", fastweb_logo, sizeof(fastweb_logo) },
+        { "/logo/Skywifi.png", skywifi_logo, sizeof(skywifi_logo) },
+        { "/logo/Wind.png", wind_logo, sizeof(wind_logo) },
+        { "/logo/TIM.png", tim_logo, sizeof(tim_logo) },
+        { "/logo/TP-Link.png", tplink_logo, sizeof(tplink_logo) },
+        { "/logo/Huawei.png", huawei_logo, sizeof(huawei_logo) }
+    };
+    size_t table_size = sizeof(logo_table) / sizeof(logo_table[0]);
+	for (size_t i = 0; i < table_size; ++i) 
+	{
+        if (strcmp(req->uri, logo_table[i].uri) == 0) {
+            httpd_send_chunked_data(req, logo_table[i].logo, logo_table[i].logo_size, "image/png");
+            return;
+        }
+    }
 	/* Generic logo */
-	if( strcmp(req->uri, "/logo/Generic.png") == 0 )
-	{
-		httpd_send_chunked_data(req, generic_logo, sizeof(generic_logo), "image/png");
-	}
-	/* Vodafone logo */
-	else if( strcmp(req->uri, "/logo/Vodafone.png") == 0 )
-	{
-		httpd_send_chunked_data(req, vodafone_logo, sizeof(vodafone_logo), "image/png");
-	}
-	/* Fastweb logo */
-	else if( strcmp(req->uri, "/logo/Fastweb.png") == 0 )
-	{
-		httpd_send_chunked_data(req, fastweb_logo, sizeof(fastweb_logo), "image/png");
-	}
-	/* Skywifi logo */
-	else if( strcmp(req->uri, "/logo/Skywifi.png") == 0 )
-	{
-		httpd_send_chunked_data(req, skywifi_logo, sizeof(skywifi_logo), "image/png");
-	}
-	/* windtre logo */
-	else if( strcmp(req->uri, "/logo/Wind.png") == 0 )
-	{
-		httpd_send_chunked_data(req, wind_logo, sizeof(wind_logo), "image/png");
-	}
-	/* tim logo */
-	else if( strcmp(req->uri, "/logo/TIM.png") == 0 )
-	{
-		httpd_send_chunked_data(req, tim_logo, sizeof(tim_logo), "image/png");
-	}
-	/* Generic */
-	else
-	{
-		httpd_send_chunked_data(req, generic_logo, sizeof(generic_logo), "image/png");
-	}
+	httpd_send_chunked_data(req, generic_logo, sizeof(generic_logo), "image/png");
 }
 
 

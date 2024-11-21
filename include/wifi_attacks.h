@@ -8,7 +8,7 @@
  * @brief Number of max client to store
  * 
  */
-#define MAX_CLIENTS 30
+#define MAX_CLIENTS 15
 
 /**
  * @brief List of associated client to the target AP

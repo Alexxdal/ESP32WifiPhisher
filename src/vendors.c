@@ -4,7 +4,7 @@
 #include "vendors.h"
 
 
-const char *vendor_string[] = 
+static const char *vendor_string[] = 
 {
     "Generic",
     "Vodafone",
@@ -37,8 +37,8 @@ vendors_t getVendor(char *ssid)
         return GENERIC;
     }
 
-    char ssid_lower[33] = { 0 };
-    char temp_lower[40] = { 0 };
+    char ssid_lower[34] = { 0 };
+    char temp_lower[34] = { 0 };
     to_lowercase((char *)ssid, (char *)&ssid_lower);
     for(uint8_t i = 0; i < sizeof(vendor_string)/sizeof(vendor_string[0]); i++ )
     {
