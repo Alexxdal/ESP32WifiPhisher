@@ -7,7 +7,7 @@
  * @brief Init Wifi interface
  * 
  */
-void wifi_init(void);
+esp_err_t wifi_init(void);
 
 
 /**

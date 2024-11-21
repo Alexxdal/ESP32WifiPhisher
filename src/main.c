@@ -2,16 +2,35 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_task_wdt.h"
+#include "esp_log.h"
 #include "nvs_flash.h"
 #include "server.h"
 #include "admin_server.h"
 #include "wifiMng.h"
 #include "dns.h"
+#include "passwordMng.h"
+
+
+/**
+ * @brief Block system when an unrecoverable error accurs.
+ * 
+ */
+static void fatal_error_handler(void)
+{ 
+    while(true)
+    {
+        ESP_LOGE("FATAL_ERROR:", "Fatal error occurs, system is blocked.");
+        vTaskDelay(5000);
+    } 
+}
+
 
 void app_main() 
 {
+    esp_err_t ret = ESP_OK;
+
     /* Initialize NVS */
-    esp_err_t ret = nvs_flash_init();
+    ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
       ESP_ERROR_CHECK(nvs_flash_erase());
       ret = nvs_flash_init();
@@ -19,15 +38,26 @@ void app_main()
     ESP_ERROR_CHECK(ret);
 
     /* Config wdt */
-    esp_task_wdt_config_t wdt_conf = {
+    const esp_task_wdt_config_t wdt_conf = {
       .idle_core_mask = 0x3,
       .timeout_ms = 10000,
       .trigger_panic = false
     };
+    /* Deinit first bugfix for S3 */
+    esp_task_wdt_deinit();
     esp_task_wdt_init(&wdt_conf);
 
+    /* Init password manager */
+    if(password_manager_init())
+    {
+        fatal_error_handler();
+    }
+
     /* Init wifi */
-    wifi_init();
+    if(wifi_init())
+    {
+        fatal_error_handler();
+    }
 
     /* Start wifi AP */
     wifi_start_softap();
