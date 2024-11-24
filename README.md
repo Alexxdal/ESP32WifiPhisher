@@ -1,5 +1,8 @@
 ### Features
 
+- **Aircrack**:  
+Capture client handshake and check the user input password (Only WPA/WPA2).
+
 - **Evil Twin Attack**:  
 Creates a rogue access point (AP) mimicking the target network, thus tricking clients into connecting to it.
 
@@ -23,7 +26,7 @@ Serves customized phishing pages to capture sensitive information, such as login
 
 ## To-Do List 
 - [ ] Add a channel tracking functionality (some AP may switch channels)
-- [ ] Add a handshake capture and basic aircrack implementation to check a user input password
+- [x] Add a handshake capture and basic aircrack implementation to check a user input password
 - [ ] Add a telegram/email notification when password is succesfully stealed
 
 # WifiPhisher for ESP32
