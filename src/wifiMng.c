@@ -101,8 +101,13 @@ void wifi_start_softap(void)
 }
 
 
-void wifi_ap_clone(wifi_config_t *wifi_config)
+void wifi_ap_clone(wifi_config_t *wifi_config, uint8_t *bssid)
 {
+    ESP_ERROR_CHECK(esp_wifi_stop());
+    if( bssid != NULL )
+    {
+        ESP_ERROR_CHECK(esp_wifi_set_mac(WIFI_IF_AP, bssid));
+    }
     ESP_ERROR_CHECK(set_wifi_region());
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, wifi_config));

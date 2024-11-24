@@ -34,6 +34,23 @@ typedef struct {
 
 
 /**
+ * @brief Struct containing captured HANDSHAKE and PMKID for aircrack
+ * 
+ */
+typedef struct {
+    uint8_t mac_sta[6];
+    uint8_t anonce[32];
+    uint8_t snonce[32];
+    uint8_t mic[16];
+    uint8_t pmkid[16];
+    uint8_t eapol[256];
+    uint16_t eapol_len;
+    bool handshake_captured;
+    bool pmkid_captured;
+} handshake_info_t;
+
+
+/**
  * @brief Initialize the attack engine
  * 
  */
@@ -108,6 +125,14 @@ void wifi_attack_deauth_ap_eapol_start(void);
  * 
  */
 void wifi_attack_deauth_client_negative_tx_power(void);
+
+
+/**
+ * @brief Get captured handshake and pmkid
+ * 
+ *
+ */
+handshake_info_t * wifi_attack_engine_handshake(void);
 
 
 #endif

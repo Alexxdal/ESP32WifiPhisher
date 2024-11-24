@@ -25,6 +25,9 @@
         "string_view": "c",
         "bootstrap_min_css.h": "c",
         "index.h": "c",
-        "esp_spiffs.h": "c"
+        "esp_spiffs.h": "c",
+        "queue.h": "c",
+        "pkcs5.h": "c",
+        "build_info.h": "c"
     }
 }

