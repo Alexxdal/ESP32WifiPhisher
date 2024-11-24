@@ -53,7 +53,7 @@ static void password_manager_save_spiffs(char *text)
 
 static void password_manager_task(void *arg)
 {
-    char text_buffer[ITEM_SIZE];
+    char text_buffer[ITEM_SIZE] = { 0 };
 
     while (1) {
         if (xQueueReceive(password_queue, text_buffer, portMAX_DELAY)) {
@@ -90,7 +90,7 @@ esp_err_t password_manager_init(void)
         return ESP_FAIL;
     }
 
-    xTaskCreate(password_manager_task, "password_manager_task", 2048, NULL, 5, NULL);
+    xTaskCreate(password_manager_task, "password_manager_task", 4096, NULL, 5, NULL);
     return ESP_OK;
 }
 

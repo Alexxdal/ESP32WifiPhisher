@@ -34,8 +34,8 @@ void evil_twin_stop_attack(void);
  * @brief Check the user input password
  * 
  * @param password 
- * @return esp_err_t 
+ * @return bool
  */
-esp_err_t evil_twin_check_password(char *password);
+bool evil_twin_check_password(char *password);
 
 #endif
