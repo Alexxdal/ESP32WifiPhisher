@@ -28,7 +28,7 @@ def get_serial_port():
     try:
         output = subprocess.check_output(["platformio", "device", "list"], text=True)
         for line in output.splitlines():
-            if "USB" in line or "COM" in line:
+            if "USB" in line or "COM" in line and "COM1" not in line:
                 if line.startswith("/dev") or "COM" in line:
                     return line.split()[0]
     except subprocess.CalledProcessError as e:
