@@ -97,13 +97,13 @@ void evil_twin_stop_attack(void)
     wifi_attack_engine_stop();
 
     /* Wait engine stop */
-    vTaskDelay(3000);
+    vTaskDelay(pdMS_TO_TICKS(3000));
 
     /* Restore original hotspot */
     wifi_start_softap();
 
     /* Wait softap restore */
-    vTaskDelay(3000);
+    vTaskDelay(pdMS_TO_TICKS(3000));
 
     /* Start Admin server */
     http_admin_server_start();

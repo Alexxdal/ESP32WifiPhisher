@@ -25,8 +25,8 @@ Serves customized phishing pages to capture sensitive information, such as login
   Allows customization of network settings and phishing scenarios through a web interface.
 
 ## To-Do List 
-- [ ] Add a channel tracking functionality (some AP may switch channels)
-- [x] Add a handshake capture and basic aircrack implementation to check a user input password
+- [☑] Add a channel tracking functionality (some AP may switch channels)
+- [☑] Add a handshake capture and basic aircrack implementation to check a user input password
 - [ ] Add a telegram/email notification when password is succesfully stealed
 
 # WifiPhisher for ESP32

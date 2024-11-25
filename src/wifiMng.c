@@ -39,7 +39,7 @@ static esp_err_t set_wifi_region() {
     wifi_country_t country = {
         .cc = "CN",      // Codice paese (EU per Europa)
         .schan = 1,      // Canale iniziale
-        .nchan = 13,     // Numero di canali (1-13 per EU)
+        .nchan = 14,     // Numero di canali (1-13 per EU)
         .policy = WIFI_COUNTRY_POLICY_MANUAL // Configurazione manual
     };
 

@@ -1,6 +1,20 @@
+#include <string.h>
 #include "esp_log.h"
 #include "arpa/inet.h"
 #include "utils.h"
+
+bool isMacBroadcast(const uint8_t *mac)
+{
+    uint8_t broadcast[6] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+    return memcmp(mac, broadcast, 6) == 0;
+}
+
+
+bool isMacZero(uint8_t *mac)
+{
+    uint8_t zero_mac[6] = {0};
+    return memcmp(mac, zero_mac, 6) == 0;
+}
 
 
 void print_packet(uint8_t *data, size_t len)
@@ -109,4 +123,17 @@ size_t libwifi_dump_wpa_auth_data(struct libwifi_wpa_auth_data *auth_data, uint8
     offset += auth_data->key_info.key_data_length;
 
     return offset;
+}
+
+
+uint8_t getNextChannel(uint8_t current_channel)
+{
+    if( current_channel >= 14 )
+    {
+        return 1;
+    }
+    else
+    {
+        return current_channel + 1;
+    }
 }

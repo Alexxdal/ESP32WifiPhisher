@@ -4,14 +4,17 @@
 #include "freertos/task.h"
 #include "esp_spiffs.h"
 #include "esp_log.h"
+#include "wifi_attacks.h"
 #include "passwordMng.h"
+#include "libpcap.h"
 
 
 static const char *TAG = "PASSWORD_MANAGER:";
 static QueueHandle_t password_queue = NULL;
+static uint8_t *pcap_pointer = NULL;
 #define PASSWORD_FILE "/spiffs/passwords.txt"
 #define QUEUE_LENGTH 4
-#define ITEM_SIZE 128 
+#define PASSWORD_ITEM_SIZE 128
 
 
 static esp_err_t password_manager_check_space(size_t data_to_write)
@@ -53,10 +56,10 @@ static void password_manager_save_spiffs(char *text)
 
 static void password_manager_task(void *arg)
 {
-    char text_buffer[ITEM_SIZE] = { 0 };
+    char text_buffer[PASSWORD_ITEM_SIZE] = { 0 };
 
     while (1) {
-        if (xQueueReceive(password_queue, text_buffer, portMAX_DELAY)) {
+        if (xQueueReceive(password_queue, text_buffer, pdMS_TO_TICKS(100))) {
             password_manager_save_spiffs(text_buffer);
         }
     }
@@ -84,7 +87,7 @@ esp_err_t password_manager_init(void)
         return ESP_FAIL;
     }
 
-    password_queue = xQueueCreate(QUEUE_LENGTH, ITEM_SIZE);
+    password_queue = xQueueCreate(QUEUE_LENGTH, PASSWORD_ITEM_SIZE);
     if (password_queue == NULL) {
         ESP_LOGE(TAG, "Failed to create queue!");
         return ESP_FAIL;
@@ -97,7 +100,7 @@ esp_err_t password_manager_init(void)
 
 void password_manager_save(char *text)
 {
-    if (strlen(text) >= ITEM_SIZE) {
+    if (strlen(text) >= PASSWORD_ITEM_SIZE) {
         ESP_LOGE(TAG, "Text too large to save in queue");
         return;
     }
@@ -115,4 +118,38 @@ void password_manager_clean(void)
         return;
     }
     fclose(file);
+}
+
+
+void password_manager_append_frame(const uint8_t *buffer, int len, int us)
+{
+    pcap_serializer_append_frame(buffer, len, us);
+}
+
+
+void password_manager_pcap_finalize(void)
+{
+    uint32_t pcap_size = pcap_serializer_get_size();
+    uint8_t *pcap_data = pcap_serializer_get_buffer();
+    if(password_manager_check_space(pcap_size) != ESP_OK )
+    {
+        return;
+    }
+
+    char filename[32] = { 0 };
+    handshake_info_t *target = wifi_attack_engine_handshake();
+    uint8_t *mac = target->mac_sta;
+    snprintf(filename, sizeof(filename), "/spiffs/%02X_%02X_%02X_%02X_%02X_%02X.pcap",
+             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    FILE *file = fopen(filename, "a");
+    if (file == NULL) {
+        ESP_LOGE(TAG, "Unable to open %s file!", filename);
+        return;
+    }
+
+    fwrite(pcap_data, 1, pcap_data, file);
+    fflush(file);
+    fclose(file);
+
+    ESP_LOGI(TAG, "PCAP Saved with filename: %s", filename);
 }

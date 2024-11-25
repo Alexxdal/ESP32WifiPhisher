@@ -29,6 +29,11 @@
         "queue.h": "c",
         "pkcs5.h": "c",
         "build_info.h": "c",
-        "byteswap.h": "c"
+        "byteswap.h": "c",
+        "passwordmng.h": "c",
+        "libpcap.h": "c",
+        "utils.h": "c",
+        "esp_system.h": "c",
+        "esp_random.h": "c"
     }
 }
