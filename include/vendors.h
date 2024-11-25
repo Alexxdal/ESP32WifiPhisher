@@ -17,7 +17,8 @@ typedef enum {
     HUAWEI,
     NETGER,
     TISCALI,
-    FRITZBOX
+    FRITZBOX,
+    NETIS
 } vendors_t;
 
 

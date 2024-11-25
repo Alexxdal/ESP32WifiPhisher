@@ -1,0 +1,8 @@
+---
+BasedOnStyle: LLVM
+IndentWidth: '4'
+SpaceAfterCStyleCast: 'true'
+ColumnLimit: 400
+AllowShortFunctionsOnASingleLine: None
+IndentCaseLabels: 'true'
+...

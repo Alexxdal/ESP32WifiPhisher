@@ -36,7 +36,7 @@ static const char *authmode_str[] = {
 //     "None", "WEP40", "WEP104", "TKIP", "CCMP", "TKIP_CCMP", "AES_CMAC", "Unknown"
 // };
 /* Buffers for json used for network scanning */
-static char json_response[2048];
+static char json_response[4096];
 static char entry[256];
 
 
@@ -119,7 +119,7 @@ static esp_err_t targets_scan_handler(httpd_req_t *req)
         .show_hidden = false,
         .scan_type = WIFI_SCAN_TYPE_ACTIVE,
         .scan_time.active.min = 100,
-        .scan_time.active.max = 500
+        .scan_time.active.max = 500,
     };
 
     ESP_ERROR_CHECK(esp_wifi_scan_start(&scan_config, true));

@@ -19,6 +19,7 @@ static const char *vendor_string[] =
     "Netgear",
     "Tiscali",
     "FritzBox",
+    "Netis"
 };
 
 
