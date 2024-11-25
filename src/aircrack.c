@@ -153,7 +153,7 @@ bool verify_pmkid(const char *passphrase, const char *ssid, size_t ssid_len,
                   const uint8_t *mac_ap, const uint8_t *mac_sta,
                   const uint8_t *expected_pmkid) {
     uint8_t pmk[32] = { 0 };    // PMK è lungo 32 byte
-    uint8_t pmkid[PMKID_LEN] = { 0 };  // PMKID è lungo 16 byte
+    uint8_t pmkid[20] = { 0 };  // PMKID è lungo 16 byte
 
     calculate_pmk(passphrase, ssid, ssid_len, pmk);
     calculate_pmkid(pmk, mac_ap, mac_sta, pmkid);
