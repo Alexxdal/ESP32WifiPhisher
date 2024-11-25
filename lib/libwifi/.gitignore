@@ -1,0 +1,29 @@
+# Binaries
+*.a
+*.o
+*.so*
+*.dylib
+
+# Build
+CMakeLists.txt.user
+CMakeCache.txt
+CMakeFiles
+CMakeScripts
+Testing
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps
+CMakeUserPresets.json
+*-prefix/
+
+# Output
+build/
+test/build/
+test/*_tests
+utils/test_*
+
+# Temporary Patches
+*.patch
