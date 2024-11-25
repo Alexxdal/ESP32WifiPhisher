@@ -155,12 +155,13 @@ bool verify_pmkid(const char *passphrase, const char *ssid, size_t ssid_len,
     uint8_t pmk[32] = { 0 };    // PMK è lungo 32 byte
     uint8_t pmkid[PMKID_LEN] = { 0 };  // PMKID è lungo 16 byte
 
-    // Calcola PMK
     calculate_pmk(passphrase, ssid, ssid_len, pmk);
-
-    // Calcola PMKID
     calculate_pmkid(pmk, mac_ap, mac_sta, pmkid);
 
-    // Confronta PMKID calcolato con quello atteso
-    return memcmp(pmkid, expected_pmkid, PMKID_LEN) == 0;
+    bool ret = memcmp(pmkid, expected_pmkid, PMKID_LEN) == 0;
+    if(ret == true)
+    {
+        ESP_LOGI(TAG, "Password \"%s\" verified with PMKID!.", passphrase);
+    }
+    return ret;
 }

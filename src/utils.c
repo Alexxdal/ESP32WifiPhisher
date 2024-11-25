@@ -1,4 +1,5 @@
 #include "esp_log.h"
+#include "arpa/inet.h"
 #include "utils.h"
 
 
@@ -36,4 +37,76 @@ void print_handshake(handshake_info_t *handshake)
     printf("\nEAPOL: ");
     print_buffer(handshake->eapol, handshake->eapol_len);
     printf("\n#####################\n");
+}
+
+
+size_t libwifi_dump_wpa_auth_data(struct libwifi_wpa_auth_data *auth_data, uint8_t *buffer, size_t buffer_len) 
+{
+    if( buffer_len < auth_data->length )
+    {
+        return -EINVAL; 
+    }
+    size_t offset = 0;
+
+    // Serialize 'version'
+    memcpy(buffer + offset, &auth_data->version, sizeof(auth_data->version));
+    offset += sizeof(auth_data->version);
+
+    // Serialize 'type'
+    memcpy(buffer + offset, &auth_data->type, sizeof(auth_data->type));
+    offset += sizeof(auth_data->type);
+
+    // Serialize 'Length'
+    uint16_t data_len_network = htons(auth_data->length); 
+    memcpy(buffer + offset, &data_len_network, sizeof(auth_data->length));
+    offset += sizeof(auth_data->length);
+
+    // Serialize 'Descriptor'
+    memcpy(buffer + offset, &auth_data->descriptor, sizeof(auth_data->descriptor));
+    offset += sizeof(auth_data->descriptor);
+
+    // Serialize 'Key information'
+    uint16_t key_info_network = htons(auth_data->key_info.information); 
+    memcpy(buffer + offset, &key_info_network, sizeof(auth_data->key_info.information));
+    offset += sizeof(auth_data->key_info.information);
+
+    // Serialize 'key_len'
+    uint16_t key_len_network = htons(auth_data->key_info.key_length);
+    memcpy(buffer + offset, &key_len_network, sizeof(auth_data->key_info.key_length));
+    offset += sizeof(auth_data->key_info.key_length);
+
+    // Serialize 'Replay counter'
+    memcpy(buffer + offset, &auth_data->key_info.replay_counter, sizeof(auth_data->key_info.replay_counter));
+    offset += sizeof(auth_data->key_info.replay_counter);
+
+    // Serialize 'nonce'
+    memcpy(buffer + offset, auth_data->key_info.nonce, sizeof(auth_data->key_info.nonce));
+    offset += sizeof(auth_data->key_info.nonce);
+    
+    // Serialize 'IV'
+    memcpy(buffer + offset, auth_data->key_info.iv, sizeof(auth_data->key_info.iv));
+    offset += sizeof(auth_data->key_info.iv);
+
+    // Serialize 'RSC'
+    memcpy(buffer + offset, auth_data->key_info.rsc, sizeof(auth_data->key_info.rsc));
+    offset += sizeof(auth_data->key_info.rsc);
+
+    // Serialize 'ID'
+    memcpy(buffer + offset, auth_data->key_info.id, sizeof(auth_data->key_info.id));
+    offset += sizeof(auth_data->key_info.id);
+
+    // Serialize 'mic'
+    memcpy(buffer + offset, auth_data->key_info.mic, sizeof(auth_data->key_info.mic));
+    offset += sizeof(auth_data->key_info.mic);
+
+    // Serialize 'data_len'
+    uint16_t key_data_len_network = htons(auth_data->key_info.key_data_length);
+    memcpy(buffer + offset, &key_data_len_network, sizeof(auth_data->key_info.key_data_length));
+    offset += sizeof(auth_data->key_info.key_data_length);
+
+    // Serialize 'data'
+    memcpy(buffer + offset, auth_data->key_info.key_data, auth_data->key_info.key_data_length);
+    offset += auth_data->key_info.key_data_length;
+
+    return offset;
 }
