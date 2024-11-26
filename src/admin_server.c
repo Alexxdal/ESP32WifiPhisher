@@ -32,12 +32,9 @@ static const char *TAG = "ADMIN_SERVER:";
 static const char *authmode_str[] = {
         "Open", "WEP", "WPA/PSK", "WPA2/PSK", "WPA_WPA2/PSK", "WPA3/PSK", "WPA2_WPA3/PSK", "WAPI/PSK"
 };
-// static const char *cipher_str[] = {
-//     "None", "WEP40", "WEP104", "TKIP", "CCMP", "TKIP_CCMP", "AES_CMAC", "Unknown"
-// };
 /* Buffers for json used for network scanning */
 static char json_response[4096];
-static char entry[256];
+static char entry[300];
 
 
 static esp_err_t admin_page_handler(httpd_req_t *req) 
@@ -138,8 +135,8 @@ static esp_err_t targets_scan_handler(httpd_req_t *req)
                  "\"channel\":%d,"
                  "\"bssid\":\"%02X:%02X:%02X:%02X:%02X:%02X\","
                  "\"authmode\":\"%s\","
-                 //"\"pairwise_cipher\":\"%s\","
-                 //"\"group_cipher\":\"%s\","
+                 "\"pairwise_cipher\":\"%d\","
+                 "\"group_cipher\":\"%d\","
                  "\"wps\":%d}%s",
                  ap_records[i].ssid,
                  ap_records[i].rssi,
@@ -147,8 +144,8 @@ static esp_err_t targets_scan_handler(httpd_req_t *req)
                  ap_records[i].bssid[0], ap_records[i].bssid[1], ap_records[i].bssid[2],
                  ap_records[i].bssid[3], ap_records[i].bssid[4], ap_records[i].bssid[5],
                  authmode_str[ap_records[i].authmode],
-                 //cipher_str[ap_records[i].pairwise_cipher],
-                 //cipher_str[ap_records[i].group_cipher],
+                 ap_records[i].pairwise_cipher,
+                 ap_records[i].group_cipher,
                  ap_records[i].wps,
                  (i < ap_count - 1) ? "," : "");
         strncat(json_response, entry, sizeof(json_response) - strlen(json_response) - 1);
@@ -171,7 +168,7 @@ static esp_err_t admin_favicon_handler(httpd_req_t *req)
 
 static esp_err_t evil_twin_handler(httpd_req_t *req) 
 {
-    char buffer[256];
+    char buffer[300];
     int ret = httpd_req_recv(req, buffer, sizeof(buffer) - 1);
     if (ret <= 0) {
         if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
@@ -182,7 +179,8 @@ static esp_err_t evil_twin_handler(httpd_req_t *req)
     buffer[ret] = '\0';
     char bssid[64] = {0};
     target_info_t target_info = { 0 };
-    sscanf(buffer,"ssid=%32[^&]&bssid=%17[^&]&channel=%hhu&signal=%hhd&scheme=%hhd", target_info.ssid, bssid, &target_info.channel, &target_info.rssi, &target_info.attack_scheme);
+    sscanf(buffer,"ssid=%32[^&]&bssid=%17[^&]&channel=%hhu&signal=%hhd&pairwise=%hhu&group=%hhu&scheme=%hhd", 
+    target_info.ssid, bssid, &target_info.channel, &target_info.rssi, (unsigned char *)&target_info.pairwise_cipher, (unsigned char *)&target_info.group_cipher, &target_info.attack_scheme);
 
     if (sscanf(bssid, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
                &target_info.bssid[0], &target_info.bssid[1], &target_info.bssid[2],

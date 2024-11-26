@@ -147,7 +147,7 @@ void password_manager_pcap_finalize(void)
         return;
     }
 
-    fwrite(pcap_data, 1, pcap_data, file);
+    fwrite(pcap_data, 1, pcap_size, file);
     fflush(file);
     fclose(file);
 

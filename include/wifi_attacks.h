@@ -2,6 +2,7 @@
 #define _WIFI_ATTACKS_H
 
 #include "esp_system.h"
+#include "esp_wifi.h"
 #include "vendors.h"
 
 /**
@@ -25,7 +26,9 @@ typedef struct {
  */
 typedef struct {
     uint8_t bssid[6];
-    uint8_t ssid[33]; 
+    uint8_t ssid[33];
+    wifi_cipher_type_t pairwise_cipher;
+    wifi_cipher_type_t group_cipher;
     int8_t rssi;
     uint8_t channel;
     vendors_t vendor;
