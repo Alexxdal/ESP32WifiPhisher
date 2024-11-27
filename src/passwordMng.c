@@ -110,6 +110,35 @@ void password_manager_save(char *text)
 }
 
 
+void password_manager_read_passwords(httpd_req_t *req)
+{
+    /* Check if the queue is empty */
+    if (uxQueueMessagesWaiting(password_queue) != 0)
+    {
+        return;
+    }
+
+    char buffer[256] = { 0 };
+    size_t bytesRead = 0;
+
+    FILE *file = fopen(PASSWORD_FILE, "r");
+    if (file == NULL) {
+        ESP_LOGE(TAG, "Unable to open %s file!", PASSWORD_FILE);
+        return;
+    }
+
+    httpd_resp_set_type(req, "text/html");
+    httpd_resp_set_hdr(req, "Connection", "keep-alive");
+    while ((bytesRead = fread(buffer, 1, 256, file)) > 0) 
+    {
+        httpd_resp_send_chunk(req, buffer, bytesRead);
+    }
+    httpd_resp_send_chunk(req, NULL, 0);
+
+    fclose(file);
+}
+
+
 void password_manager_clean(void)
 {
     FILE *file = fopen(PASSWORD_FILE, "w");

@@ -3,6 +3,7 @@
 
 #include "esp_system.h"
 #include "libwifi.h"
+#include "esp_http_server.h"
 
 /**
  * @brief Initialize password manager
@@ -42,6 +43,14 @@ void password_manager_append_frame(const uint8_t *buffer, int len, int us);
  * 
  */
 void password_manager_pcap_finalize(void);
+
+
+/**
+ * @brief Read password file and put output directly on web response
+ * 
+ * @param req 
+ */
+void password_manager_read_passwords(httpd_req_t *req);
 
 
 #endif

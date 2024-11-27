@@ -75,6 +75,9 @@ void evil_twin_start_attack(target_info_t *targe_info)
 
     memcpy(&target, targe_info, sizeof(target_info_t));
     xTaskCreate(evil_twin_task, "evil_twin_task", 4096, NULL, 5, &evil_twin_task_handle);
+
+    ESP_LOGI(TAG, "Evil-Twin attack started.");
+    ESP_LOGI(TAG, "TARGET: %s on Channel %d.", target.ssid, target.channel);
 }
 
 
@@ -107,6 +110,8 @@ void evil_twin_stop_attack(void)
 
     /* Start Admin server */
     http_admin_server_start();
+
+    ESP_LOGI(TAG, "Evil-Twin attack stopped.");
 }
 
 

@@ -18,6 +18,7 @@
 #include <lwip/netdb.h>
 #include "esp_http_server.h"
 
+#include "passwordMng.h"
 #include "server.h"
 #include "web/admin_page.h"
 #include "config.h"
@@ -37,6 +38,13 @@ static char json_response[4096];
 static char entry[300];
 
 
+
+/**
+ * @brief Admin page index handler
+ * 
+ * @param req 
+ * @return esp_err_t 
+ */
 static esp_err_t admin_page_handler(httpd_req_t *req) 
 {
     char ssid[32] = {0};
@@ -76,6 +84,12 @@ static esp_err_t admin_page_handler(httpd_req_t *req)
 }
 
 
+/**
+ * @brief Save the new ssid, password and channel for admin AP to NVS
+ * 
+ * @param req 
+ * @return esp_err_t 
+ */
 static esp_err_t admin_page_settings_ap_submit_handler(httpd_req_t *req)
 {
     char buffer[256];
@@ -107,6 +121,12 @@ static esp_err_t admin_page_settings_ap_submit_handler(httpd_req_t *req)
 } 
 
 
+/**
+ * @brief Return the network scan result in the page
+ * 
+ * @param req 
+ * @return esp_err_t 
+ */
 static esp_err_t targets_scan_handler(httpd_req_t *req) 
 {
     wifi_scan_config_t scan_config = {
@@ -158,6 +178,12 @@ static esp_err_t targets_scan_handler(httpd_req_t *req)
 }
 
 
+/**
+ * @brief Return the admin page favicon
+ * 
+ * @param req 
+ * @return esp_err_t 
+ */
 static esp_err_t admin_favicon_handler(httpd_req_t *req) 
 {
     httpd_resp_set_type(req, "image/png");
@@ -166,6 +192,12 @@ static esp_err_t admin_favicon_handler(httpd_req_t *req)
 }
 
 
+/**
+ * @brief Handle evil_twin POST request with target data and start Attack
+ * 
+ * @param req 
+ * @return esp_err_t 
+ */
 static esp_err_t evil_twin_handler(httpd_req_t *req) 
 {
     char buffer[300];
@@ -195,6 +227,19 @@ static esp_err_t evil_twin_handler(httpd_req_t *req)
     /* Start evil twin attack */
     evil_twin_start_attack(&target_info);
 
+    return ESP_OK;
+}
+
+
+/**
+ * @brief Handle get_password POST request and return the saved password from SPIFFS 
+ * 
+ * @param req 
+ * @return esp_err_t 
+ */
+static esp_err_t get_password_handler(httpd_req_t *req) 
+{
+    password_manager_read_passwords(req);
     return ESP_OK;
 }
 
@@ -258,6 +303,15 @@ void http_admin_server_start(void)
             .user_ctx = NULL
         };
         httpd_register_uri_handler(server, &evil_twin_uri);
+
+        /* Get saved password */
+        httpd_uri_t get_password_uri = {
+            .uri = "/get_passwords",
+            .method = HTTP_POST,
+            .handler = get_password_handler,
+            .user_ctx = NULL
+        };
+        httpd_register_uri_handler(server, &get_password_uri);
     }
 }
 
