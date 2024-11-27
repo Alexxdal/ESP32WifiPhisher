@@ -34,6 +34,8 @@
         "libpcap.h": "c",
         "utils.h": "c",
         "esp_system.h": "c",
-        "esp_random.h": "c"
+        "esp_random.h": "c",
+        "huawei.h": "c",
+        "web_net_manager.h": "c"
     }
 }

