@@ -21,7 +21,7 @@ static void evil_twin_task(void *pvParameters)
     vTaskDelay(pdMS_TO_TICKS(1000));
 
     /* Stop admin server TODO: Verificare se possibile lasciarlo attivo se non usa troppa ram */
-    http_admin_server_stop();
+    //http_admin_server_stop();
 
     /* Get target information */
     /*Try guess by ssid */

