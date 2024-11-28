@@ -38,8 +38,8 @@ static void beacon_track_task(void *param)
 
         if (xSemaphoreTake(target_semaphore, pdMS_TO_TICKS(100)) == pdTRUE) {
             target.channel = getNextChannel(target.channel);
-            esp_wifi_deauth_sta(0);
-            esp_wifi_set_channel(target.channel, WIFI_SECOND_CHAN_BELOW);
+            ESP_ERROR_CHECK(esp_wifi_deauth_sta(0));
+            ESP_ERROR_CHECK(esp_wifi_set_channel(target.channel, WIFI_SECOND_CHAN_NONE));
             ESP_LOGW(TAG, "BEACON timeout, ap is offline or changed channel. Switching to channel %d...", target.channel);
             handshake_info.pmkid_captured = false;
             handshake_info.handshake_captured = false;
