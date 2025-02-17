@@ -1,10 +1,10 @@
 #include <string.h>
-#include "esp_wifi.h"
-#include "esp_log.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "freertos/timers.h"
-#include "esp_random.h"
+#include <esp_wifi.h>
+#include <esp_log.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <freertos/timers.h>
+#include <esp_random.h>
 #include "libwifi.h"
 #include "utils.h"
 #include "passwordMng.h"
@@ -58,7 +58,7 @@ static void beacon_track_task(void *param)
 static void hopping_timer_callback(TimerHandle_t xTimer)
 {
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-    vTaskNotifyGiveFromISR(beacon_track_task_handle, &xHigherPriorityTaskWoken)
+    vTaskNotifyGiveFromISR(beacon_track_task_handle, &xHigherPriorityTaskWoken);
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 

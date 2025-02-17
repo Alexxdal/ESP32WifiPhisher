@@ -5,3 +5,4 @@
 .vscode/ipch
 data/
 spiffs_dump.bin
+build/
