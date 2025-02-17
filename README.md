@@ -29,12 +29,14 @@ Serves customized phishing pages to capture sensitive information, such as login
 - [☑] Add a handshake capture and basic aircrack implementation to check a user input password
 - [ ] Add a telegram/email notification when password is succesfully stealed
 
+## Flash the firmware
+Use the [Online Flasher](https://espwifiphisher.alexxdal.com/) to flash your device.
+
 # WifiPhisher for ESP32
 
 [![GitHub](https://img.shields.io/badge/GitHub-Repository-blue)](https://github.com/Alexxdal/WifiPhisher)
 
 WifiPhisher for ESP32 is a custom implementation of a phishing tool designed for the ESP32 microcontroller. It performs Evil Twin attacks, allowing users to test the security of Wi-Fi networks and execute social engineering phishing scenarios. The project is built using **PlatformIO** and the **ESP-IDF framework**.
-
 
 ## Requirements
 
