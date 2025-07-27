@@ -41,7 +41,6 @@
 #define CAPTIVE_PORTAL_URL "http://192.168.4.1/index.html"
 
 static const char *TAG = "HTTPD";
-static const char *host = "vodafone.station";
 static httpd_handle_t server = NULL;
 static target_info_t target = { 0 };
 
