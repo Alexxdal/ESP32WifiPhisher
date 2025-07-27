@@ -132,6 +132,14 @@ void wifi_attack_deauth_client_negative_tx_power(void);
 
 
 /**
+ * @brief Spam softAP beacon from STA
+ * 
+ * @param target 
+ */
+void wifi_attack_softap_beacon_spam(target_info_t *_target);
+
+
+/**
  * @brief Get captured handshake and pmkid
  * 
  *
