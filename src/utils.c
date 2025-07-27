@@ -50,6 +50,7 @@ void print_handshake(handshake_info_t *handshake)
     print_buffer(handshake->mic, sizeof(handshake->mic));
     printf("\nEAPOL: ");
     print_buffer(handshake->eapol, handshake->eapol_len);
+    printf("\nKey Descriptor Version: %d", handshake->key_decriptor_version);
     printf("\n#####################\n");
 }
 

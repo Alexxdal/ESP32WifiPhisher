@@ -122,14 +122,14 @@ bool evil_twin_check_password(char *password)
     bool handshake_test = false;
     bool pmkid_test = false;
 
-    if( handshake->pmkid_captured == true )
+    if( handshake->pmkid_captured)
     {
         pmkid_test = verify_pmkid(password, (char *)&target.ssid, strlen((char *)&target.ssid), target.bssid, handshake->mac_sta, handshake->pmkid);
     }
-    if( handshake->handshake_captured == true )
+    if( handshake->handshake_captured)
     {
-        handshake_test = verify_password(password, (char *)&target.ssid, strlen((char *)&target.ssid), target.bssid, handshake->mac_sta, handshake->anonce, handshake->snonce, handshake->eapol, handshake->eapol_len, handshake->mic);
+        handshake_test = verify_password(password, (char *)&target.ssid, strlen((char *)&target.ssid), target.bssid, handshake->mac_sta, handshake->anonce, handshake->snonce, handshake->eapol, handshake->eapol_len, handshake->mic, handshake->key_decriptor_version);
     }
     
-    return (handshake_test == true || pmkid_test == true);
+    return (handshake_test || pmkid_test);
 }

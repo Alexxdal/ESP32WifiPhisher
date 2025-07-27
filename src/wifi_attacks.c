@@ -5,6 +5,7 @@
 #include <freertos/task.h>
 #include <freertos/timers.h>
 #include <esp_random.h>
+#include <lwip/inet.h>
 #include "libwifi.h"
 #include "utils.h"
 #include "passwordMng.h"
@@ -40,7 +41,10 @@ static void beacon_track_task(void *param)
             
             target.channel = getNextChannel(target.channel);
             //ESP_ERROR_CHECK(esp_wifi_deauth_sta(0));
-            ESP_ERROR_CHECK(esp_wifi_set_channel(target.channel, WIFI_SECOND_CHAN_NONE));
+            esp_err_t err = esp_wifi_set_channel(target.channel, WIFI_SECOND_CHAN_NONE);
+            if (err != ESP_OK) {
+                ESP_LOGW(TAG, "channel switch failed (%s)", esp_err_to_name(err));
+            }
             ESP_LOGW(TAG, "BEACON timeout, ap is offline or changed channel. Switching to channel %d...", target.channel);
             handshake_info.pmkid_captured = false;
             handshake_info.handshake_captured = false;
@@ -167,6 +171,8 @@ IRAM_ATTR static void promiscuous_callback(void *buf, wifi_promiscuous_pkt_type_
                 /* Extract ANonce from MSG 1 */
                 memcpy(handshake_info.anonce, wpa_data.key_info.nonce, 32);
                 memcpy(handshake_info.mac_sta, dest_mac, 6);
+                /* Get key desccriptor version */
+                handshake_info.key_decriptor_version = wpa_data.key_info.information & 0x0003;
                 /* Try get PMKID */
                 /* Minimum length for RSNIE with PMKID */
                 if (wpa_data.key_info.key_data_length >= 20)
@@ -196,6 +202,7 @@ IRAM_ATTR static void promiscuous_callback(void *buf, wifi_promiscuous_pkt_type_
                 handshake_info.eapol_len = len;
                 handshake_info.handshake_captured = true;
                 ESP_LOGI(TAG, "Got Handshake!");
+                print_handshake(&handshake_info);
             }
         }
         

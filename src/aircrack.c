@@ -1,6 +1,7 @@
 #include <mbedtls/md.h>
 #include <mbedtls/aes.h>
 #include <mbedtls/sha1.h>
+#include <mbedtls/cmac.h>
 #include <mbedtls/pkcs5.h>
 #include <string.h>
 #include <stdio.h>
@@ -21,7 +22,7 @@ static const char *TAG = "AIRCRACK";
 static void calculate_pmk(const char *passphrase, const char *ssid, size_t ssid_len, uint8_t *pmk);
 static void calculate_ptk(const uint8_t *pmk, const uint8_t *mac_ap, const uint8_t *mac_sta,
                    const uint8_t *anonce, const uint8_t *snonce, uint8_t *ptk);
-static void calculate_mic(const uint8_t *ptk, const uint8_t *eapol, size_t eapol_len, uint8_t *mic);
+static void calculate_mic(const uint8_t *ptk, const uint8_t *eapol, size_t eapol_len, uint8_t *mic, uint8_t key_descriptor);
 static void calculate_pmkid(const uint8_t *pmk, const uint8_t *mac_ap, const uint8_t *mac_sta, uint8_t *pmkid);
 
 
@@ -90,18 +91,45 @@ static void calculate_ptk(const uint8_t *pmk, const uint8_t *mac_ap, const uint8
 }
 
 
-static void calculate_mic(const uint8_t *ptk, const uint8_t *eapol, size_t eapol_len, uint8_t *mic) 
+static void calculate_mic(const uint8_t *ptk, const uint8_t *eapol, size_t eapol_len, uint8_t *mic, uint8_t key_descriptor) 
 {
-    uint8_t hmac_output[20] = { 0 };
-    mbedtls_md_context_t ctx;
-    const mbedtls_md_info_t *info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA1);
-    mbedtls_md_init(&ctx);
-    mbedtls_md_setup(&ctx, info, 1);
-    mbedtls_md_hmac_starts(&ctx, ptk, 16);
-    mbedtls_md_hmac_update(&ctx, eapol, eapol_len);
-    mbedtls_md_hmac_finish(&ctx, hmac_output);
-    mbedtls_md_free(&ctx);
-    memcpy(mic, hmac_output, 16);
+    /* TKIP: HMAC‑MD5 */
+    if (key_descriptor == 1) {
+        mbedtls_md_context_t ctx;
+        const mbedtls_md_info_t *info = mbedtls_md_info_from_type(MBEDTLS_MD_MD5);
+        mbedtls_md_init(&ctx);
+        mbedtls_md_setup(&ctx, info, 1);
+        mbedtls_md_hmac_starts(&ctx, ptk, 16);
+        mbedtls_md_hmac_update(&ctx, eapol, eapol_len);
+        mbedtls_md_hmac_finish(&ctx, mic);
+        mbedtls_md_free(&ctx);
+    }
+    /* CCMP: HMAC‑SHA1 */
+    else if (key_descriptor == 2) {
+        uint8_t sha1[20];
+        mbedtls_md_context_t ctx;
+        const mbedtls_md_info_t *info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA1);
+        mbedtls_md_init(&ctx);
+        mbedtls_md_setup(&ctx, info, 1);
+        mbedtls_md_hmac_starts(&ctx, ptk, 16);
+        mbedtls_md_hmac_update(&ctx, eapol, eapol_len);
+        mbedtls_md_hmac_finish(&ctx, sha1);
+        mbedtls_md_free(&ctx);
+        memcpy(mic, sha1, 16);
+    } 
+    /* CCMP+PMF: AES‑CMAC */
+    else if (key_descriptor == 3) {
+        uint8_t cmac[16];
+        mbedtls_cipher_context_t ctx;
+        const mbedtls_cipher_info_t *info = mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_128_ECB);
+        mbedtls_cipher_init(&ctx);
+        mbedtls_cipher_setup(&ctx, info);
+        mbedtls_cipher_cmac_starts(&ctx, ptk, 128);
+        mbedtls_cipher_cmac_update(&ctx, eapol, eapol_len);
+        mbedtls_cipher_cmac_finish(&ctx, cmac);
+        mbedtls_cipher_free(&ctx);
+        memcpy(mic, cmac, 16);
+    }
 }
 
 
@@ -130,7 +158,7 @@ bool verify_password(const char *passphrase, const char *ssid, size_t ssid_len,
                      const uint8_t *mac_ap, const uint8_t *mac_sta,
                      const uint8_t *anonce, const uint8_t *snonce,
                      const uint8_t *eapol, size_t eapol_len,
-                     const uint8_t *expected_mic) 
+                     const uint8_t *expected_mic, uint8_t key_descriptor) 
 {
     uint8_t pmk[32] = { 0 }; /* Master key */
     uint8_t ptk[WPA_PTK_LEN] = { 0 }; /* Transient key */
@@ -138,7 +166,7 @@ bool verify_password(const char *passphrase, const char *ssid, size_t ssid_len,
 
     calculate_pmk(passphrase, ssid, ssid_len, pmk);
     calculate_ptk(pmk, mac_ap, mac_sta, anonce, snonce, ptk);
-    calculate_mic(ptk, eapol, eapol_len, calculated_mic);
+    calculate_mic(ptk, eapol, eapol_len, calculated_mic, key_descriptor);
     
     bool ret = memcmp(calculated_mic, expected_mic, 16) == 0;
     if(ret == true)
