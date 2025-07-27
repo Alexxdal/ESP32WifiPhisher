@@ -20,7 +20,7 @@ static void fatal_error_handler(void)
     while(true)
     {
         ESP_LOGE("FATAL_ERROR:", "Fatal error occurs, system is blocked.");
-        vTaskDelay(5000);
+        vTaskDelay(pdMS_TO_TICKS(5000));
     } 
 }
 

