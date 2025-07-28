@@ -27,6 +27,7 @@ typedef struct {
 typedef struct {
     uint8_t bssid[6];
     uint8_t ssid[33];
+    wifi_auth_mode_t authmode;
     wifi_cipher_type_t pairwise_cipher;
     wifi_cipher_type_t group_cipher;
     int8_t rssi;

