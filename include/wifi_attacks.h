@@ -97,6 +97,16 @@ void wifi_attack_deauth_client_bad_msg1(void);
 
 
 /**
+ * @brief Client sends spoofed association request to the AP with the sleep bit set.
+ * networks with PMF enabled sends and association failure response to the client and 
+ * and an SA Query Request but becuase the sleep bit this frame is buffered and never sent 
+ * causing a timeout that will cause the client to disconnect.
+ * 
+ */
+void wifi_attack_association_sleep(void);
+
+
+/**
  * @brief Deauthentication using an EAPOL-Logoff.
  * 
  */
