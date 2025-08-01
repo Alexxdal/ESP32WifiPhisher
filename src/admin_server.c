@@ -155,6 +155,7 @@ static esp_err_t targets_scan_handler(httpd_req_t *req)
                  "\"channel\":%d,"
                  "\"bssid\":\"%02X:%02X:%02X:%02X:%02X:%02X\","
                  "\"authmode\":\"%s\","
+                 "\"authmode_code\":%d,"
                  "\"pairwise_cipher\":\"%d\","
                  "\"group_cipher\":\"%d\","
                  "\"wps\":%d}%s",
@@ -164,6 +165,7 @@ static esp_err_t targets_scan_handler(httpd_req_t *req)
                  ap_records[i].bssid[0], ap_records[i].bssid[1], ap_records[i].bssid[2],
                  ap_records[i].bssid[3], ap_records[i].bssid[4], ap_records[i].bssid[5],
                  authmode_str[ap_records[i].authmode],
+                 ap_records[i].authmode,
                  ap_records[i].pairwise_cipher,
                  ap_records[i].group_cipher,
                  ap_records[i].wps,
@@ -201,6 +203,7 @@ static esp_err_t admin_favicon_handler(httpd_req_t *req)
 static esp_err_t evil_twin_handler(httpd_req_t *req) 
 {
     char buffer[300];
+    unsigned int auth_tmp = 0;
     int ret = httpd_req_recv(req, buffer, sizeof(buffer) - 1);
     if (ret <= 0) {
         if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
@@ -211,8 +214,12 @@ static esp_err_t evil_twin_handler(httpd_req_t *req)
     buffer[ret] = '\0';
     char bssid[64] = {0};
     target_info_t target_info = { 0 };
-    sscanf(buffer,"ssid=%32[^&]&bssid=%17[^&]&channel=%hhu&signal=%hhd&pairwise=%hhu&group=%hhu&scheme=%hhd", 
-    target_info.ssid, bssid, &target_info.channel, &target_info.rssi, (unsigned char *)&target_info.pairwise_cipher, (unsigned char *)&target_info.group_cipher, &target_info.attack_scheme);
+    sscanf(buffer,"ssid=%32[^&]&bssid=%17[^&]&channel=%hhu&signal=%hhd&authmode_code=%u&pairwise=%hhu&group=%hhu&scheme=%hhd", 
+    target_info.ssid, bssid, &target_info.channel, &target_info.rssi, &auth_tmp, (unsigned char *)&target_info.pairwise_cipher, (unsigned char *)&target_info.group_cipher, &target_info.attack_scheme);
+
+    target_info.authmode = (wifi_auth_mode_t)auth_tmp;
+    ESP_LOGI(TAG, "Starting Evil Twin attack on SSID: %s, BSSID: %s, Channel: %d, Signal: %d, Authmode: %s",
+             target_info.ssid, bssid, target_info.channel, target_info.rssi, authmode_str[target_info.authmode]);
 
     if (sscanf(bssid, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
                &target_info.bssid[0], &target_info.bssid[1], &target_info.bssid[2],

