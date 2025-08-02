@@ -35,7 +35,7 @@ static const char *authmode_str[] = {
 };
 /* Buffers for json used for network scanning */
 static char json_response[4096];
-static char entry[300];
+static char entry[512];
 
 
 
@@ -136,7 +136,7 @@ static esp_err_t targets_scan_handler(httpd_req_t *req)
         .show_hidden = false,
         .scan_type = WIFI_SCAN_TYPE_ACTIVE,
         .scan_time.active.min = 100,
-        .scan_time.active.max = 500,
+        .scan_time.active.max = 300,
     };
 
     ESP_ERROR_CHECK(esp_wifi_scan_start(&scan_config, true));
