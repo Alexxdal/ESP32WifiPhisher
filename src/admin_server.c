@@ -35,7 +35,7 @@ static const char *authmode_str[] = {
 };
 /* Buffers for json used for network scanning */
 static char json_response[4096];
-static char entry[512];
+static char entry[300];
 
 
 
