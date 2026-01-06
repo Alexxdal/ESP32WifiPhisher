@@ -43,11 +43,14 @@ static void evil_twin_task(void *pvParameters)
     strcpy((char *)&wifi_config.ap.ssid, (char *)&target.ssid);
     wifi_ap_clone(&wifi_config, NULL);
 
+    /* Close admin server */
+    http_admin_server_stop();
+
     /* Wait AP to be cloned */
     vTaskDelay(pdMS_TO_TICKS(5000));
 
     /* Start captive portal server */
-    http_attack_server_start((target_info_t * )&target);
+    http_attack_server_start();
 
     /* Start wifi attack engine */
     wifi_attack_engine_start((target_info_t * )&target);

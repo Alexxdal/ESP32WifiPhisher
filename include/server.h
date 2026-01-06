@@ -7,7 +7,7 @@
  * @brief Start http server task
  * 
  */
-void http_attack_server_start(target_info_t *_target_info);
+void http_attack_server_start(void);
 
 
 /**

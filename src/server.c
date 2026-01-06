@@ -26,8 +26,6 @@
 
 static const char *TAG = "HTTPD";
 static httpd_handle_t server = NULL;
-static target_info_t target = { 0 };
-
 
 static esp_err_t captive_portal_redirect(httpd_req_t *req)
 {
@@ -108,16 +106,16 @@ static esp_err_t redirect_handler(httpd_req_t *req)
 		return ESP_OK;
 	}
 	
-
+	target_info_t *evil_target = evil_twin_get_target_info();
     if (strcmp(uri, "/") == 0) { 
-		switch(target.attack_scheme)
+		switch(evil_target->attack_scheme)
 		{
 			case FIRMWARE_UPGRADE:
-				uri = "/upgrade.html";
+				uri = "/fwupgrade/index.html";
 				break;
 			
 			case WEB_NET_MANAGER:
-				uri = "/manager.html";
+				uri = "/netmng/index.html";
 				break;
 
 			case PLUGIN_UPDATE:
@@ -125,7 +123,7 @@ static esp_err_t redirect_handler(httpd_req_t *req)
 				break;
 
 			case OAUTH_LOGIN:
-				uri = "/login.html";
+				uri = "/oauth/index.html";
 				break;
 
 			default:
@@ -160,16 +158,13 @@ static esp_err_t redirect_handler(httpd_req_t *req)
 }
 
 
-void http_attack_server_start(target_info_t *_target_info)
+void http_attack_server_start(void)
 {
 	if( server != NULL )
 	{
 		ESP_LOGE(TAG, "Attack server already started.");
 		return;
 	}
-
-	/* Copy target info */
-	memcpy(&target, _target_info, sizeof(target_info_t));
 
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
 	config.ctrl_port = 81;

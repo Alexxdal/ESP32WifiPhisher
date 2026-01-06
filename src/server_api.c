@@ -253,8 +253,8 @@ static esp_err_t evil_twin_handler(httpd_req_t *req)
     buffer[ret] = '\0';
     char bssid[64] = {0};
     target_info_t target_info = { 0 };
-    sscanf(buffer,"ssid=%32[^&]&bssid=%17[^&]&channel=%hhu&signal=%hhd&authmode_code=%u&pairwise=%hhu&group=%hhu&scheme=%hhd", 
-    target_info.ssid, bssid, &target_info.channel, &target_info.rssi, &auth_tmp, (unsigned char *)&target_info.pairwise_cipher, (unsigned char *)&target_info.group_cipher, &target_info.attack_scheme);
+    sscanf(buffer,"ssid=%32[^&]&bssid=%17[^&]&channel=%hhu&signal=%hhd&authmode_code=%u&group=%hhu&pairwise=%hhu&scheme=%hhd", 
+    target_info.ssid, bssid, &target_info.channel, &target_info.rssi, &auth_tmp, (unsigned char *)&target_info.group_cipher, (unsigned char *)&target_info.pairwise_cipher, &target_info.attack_scheme);
 
     target_info.authmode = (wifi_auth_mode_t)auth_tmp;
     ESP_LOGI(TAG, "Starting Evil Twin attack on SSID: %s, BSSID: %s, Channel: %d, Signal: %d, Authmode: %s",

