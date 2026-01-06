@@ -72,4 +72,12 @@ size_t libwifi_dump_wpa_auth_data(struct libwifi_wpa_auth_data *auth_data, uint8
 uint8_t getNextChannel(uint8_t current_channel);
 
 
+/**
+ * @brief Convert wifi_auth_mode_t to string
+ * 
+ * @param m 
+ * @return const char* 
+ */
+const char *authmode_to_str(wifi_auth_mode_t m);
+
 #endif

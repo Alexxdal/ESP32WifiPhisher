@@ -138,3 +138,28 @@ uint8_t getNextChannel(uint8_t current_channel)
         return current_channel + 1;
     }
 }
+
+
+const char *authmode_to_str(wifi_auth_mode_t m)
+{
+    switch (m) {
+        case WIFI_AUTH_OPEN:                        return "OPEN";
+        case WIFI_AUTH_WEP:                         return "WEP";
+        case WIFI_AUTH_WPA_PSK:                     return "WPA_PSK";
+        case WIFI_AUTH_WPA2_PSK:                    return "WPA2_PSK";
+        case WIFI_AUTH_WPA_WPA2_PSK:                return "WPA_WPA2_PSK";
+        case WIFI_AUTH_WPA2_ENTERPRISE:             return "WPA2_ENTERPRISE"; // Include anche WIFI_AUTH_ENTERPRISE
+        case WIFI_AUTH_WPA3_PSK:                    return "WPA3_PSK";
+        case WIFI_AUTH_WPA2_WPA3_PSK:               return "WPA2_WPA3_PSK";
+        case WIFI_AUTH_WAPI_PSK:                    return "WAPI_PSK";
+        case WIFI_AUTH_OWE:                         return "OWE";
+        case WIFI_AUTH_WPA3_ENT_192:                return "WPA3_ENT_SUITE_B_192_BIT";
+        case WIFI_AUTH_WPA3_EXT_PSK:                return "WPA3_EXT_PSK";
+        case WIFI_AUTH_WPA3_EXT_PSK_MIXED_MODE:     return "WPA3_EXT_PSK_MIXED_MODE";
+        case WIFI_AUTH_DPP:                         return "DPP";
+        case WIFI_AUTH_WPA3_ENTERPRISE:             return "WPA3_ENTERPRISE";
+        case WIFI_AUTH_WPA2_WPA3_ENTERPRISE:        return "WPA2_WPA3_ENTERPRISE";
+        case WIFI_AUTH_WPA_ENTERPRISE:              return "WPA_ENTERPRISE";
+        default:                                    return "UNKNOWN";
+    }
+}

@@ -82,6 +82,5 @@ static void dns_server_task(void *pvParameters)
 
 void dns_server_start(void)
 {
-    // Avvia il server DNS (come task separato)
     xTaskCreate(dns_server_task, "dns_server_task", 4096, NULL, 5, NULL);
 }

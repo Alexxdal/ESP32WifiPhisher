@@ -38,4 +38,12 @@ void evil_twin_stop_attack(void);
  */
 bool evil_twin_check_password(char *password);
 
+
+/** 
+ * @brief Get current target information
+ * 
+ * @return target_info_t* 
+ */
+target_info_t* evil_twin_get_target_info(void);
+
 #endif

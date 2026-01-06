@@ -11,7 +11,7 @@
 
 
 /* Store target information */
-static const char *TAG = "EVIL_TWIN:";
+static const char *TAG = "EVIL_TWIN";
 static target_info_t target = { 0 };
 static TaskHandle_t evil_twin_task_handle = NULL;
 
@@ -19,9 +19,6 @@ static TaskHandle_t evil_twin_task_handle = NULL;
 static void evil_twin_task(void *pvParameters) 
 {
     vTaskDelay(pdMS_TO_TICKS(1000));
-
-    /* Stop admin server TODO: Verificare se possibile lasciarlo attivo se non usa troppa ram */
-    //http_admin_server_stop();
 
     /* Get target information */
     /*Try guess by ssid */
@@ -139,4 +136,10 @@ bool evil_twin_check_password(char *password)
     }
     
     return (handshake_test || pmkid_test);
+}
+
+
+target_info_t* evil_twin_get_target_info(void)
+{
+    return &target;
 }

@@ -37,5 +37,6 @@
         "esp_random.h": "c",
         "huawei.h": "c",
         "web_net_manager.h": "c"
-    }
+    },
+    "idf.pythonInstallPath": "F:\\.espressif\\tools\\idf-python\\3.11.2\\python.exe"
 }
