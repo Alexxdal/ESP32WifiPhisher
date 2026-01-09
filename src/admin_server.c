@@ -14,7 +14,7 @@
 
 /* Server handler */
 static httpd_handle_t server = NULL;
-static const char *TAG = "ADMIN_SERVER:";
+static const char *TAG = "ADMIN_SERVER";
 
 
 static esp_err_t file_get_handler(httpd_req_t *req) 

@@ -205,5 +205,6 @@ void http_attack_server_stop(void)
             ESP_LOGD(TAG, "Failed to stop attack server.");
             return;
         }
+		server = NULL;
     }
 }
