@@ -142,6 +142,8 @@ def _merge_bin():
     # S3, C3, C6, H2 e successivi usano 0x0.
     if chip in ["esp32", "esp32s2"]:
         bootloader_ofs = "0x1000"
+    elif chip in ["esp32c5"]:
+        bootloader_ofs = "0x2000"
     else:
         bootloader_ofs = "0x0"
         

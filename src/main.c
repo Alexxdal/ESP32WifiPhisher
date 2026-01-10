@@ -38,12 +38,12 @@ void app_main()
     ESP_ERROR_CHECK(ret);
 
     /* Config wdt */
+    uint32_t idle_core_mask = (1 << portNUM_PROCESSORS) - 1; // Mask for single and dual core processors
     const esp_task_wdt_config_t wdt_conf = {
-        .idle_core_mask = 0x3,
+        .idle_core_mask = idle_core_mask,
         .timeout_ms = 10000,
         .trigger_panic = false
     };
-    /* Deinit first bugfix for S3 */
     ESP_ERROR_CHECK(esp_task_wdt_deinit());
     ESP_ERROR_CHECK(esp_task_wdt_init(&wdt_conf));
 
