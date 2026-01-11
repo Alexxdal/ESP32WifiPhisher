@@ -313,6 +313,19 @@ static esp_err_t get_evlitwin_target_handler(httpd_req_t *req)
 }
 
 
+void shutdown_task(void *pvParameter)
+{
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    evil_twin_stop_attack();
+
+    /* Enter in deep sleep to preserve battery power */
+    /* Only hardware wakeup (Reset button) */
+    //esp_deep_sleep_start();
+
+    vTaskDelete(NULL);
+}
+
+
 static esp_err_t check_input_password_handler(httpd_req_t *req)
 {
     target_info_t *target = evil_twin_get_target_info();
@@ -343,12 +356,8 @@ static esp_err_t check_input_password_handler(httpd_req_t *req)
 		httpd_resp_send(req, "ok", HTTPD_RESP_USE_STRLEN);
 		httpd_resp_send(req, NULL, 0);
 
-		/* Stop attack */
-		evil_twin_stop_attack();
-		vTaskDelay(pdMS_TO_TICKS(1000));
-		/* Enter in deep sleep to preserve battery power */
-		/* Only hardware wakeup (Reset button) */
-		esp_deep_sleep_start();
+        /* Stop attack and restore */
+        xTaskCreate(shutdown_task, "shutdown_task", 4096, NULL, 5, NULL);
 	}
 	else
 	{

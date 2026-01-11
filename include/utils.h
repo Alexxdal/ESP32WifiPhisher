@@ -91,4 +91,15 @@ uint8_t getNextChannel(uint8_t current_channel);
  */
 const char *authmode_to_str(wifi_auth_mode_t m);
 
+
+/**
+ * @brief Find EAPOL frame in buffer
+ * 
+ * @param buffer 
+ * @param len 
+ * @param eapol_len 
+ * @return uint8_t
+ */
+uint8_t *find_eapol_frame(uint8_t *buffer, uint16_t len, uint16_t *eapol_len);
+
 #endif

