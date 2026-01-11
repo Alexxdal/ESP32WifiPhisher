@@ -27,6 +27,17 @@ bool isMacZero(uint8_t *mac);
 
 
 /**
+ * @brief Check if two MAC Addresses are equal
+ * 
+ * @param mac1 
+ * @param mac2 
+ * @return true 
+ * @return false 
+ */
+bool isMacEqual(const uint8_t *mac1, const uint8_t *mac2);
+
+
+/**
  * @brief Print packet bytes
  * 
  * @param data 
@@ -71,5 +82,24 @@ size_t libwifi_dump_wpa_auth_data(struct libwifi_wpa_auth_data *auth_data, uint8
  */
 uint8_t getNextChannel(uint8_t current_channel);
 
+
+/**
+ * @brief Convert wifi_auth_mode_t to string
+ * 
+ * @param m 
+ * @return const char* 
+ */
+const char *authmode_to_str(wifi_auth_mode_t m);
+
+
+/**
+ * @brief Find EAPOL frame in buffer
+ * 
+ * @param buffer 
+ * @param len 
+ * @param eapol_len 
+ * @return uint8_t
+ */
+uint8_t *find_eapol_frame(uint8_t *buffer, uint16_t len, uint16_t *eapol_len);
 
 #endif

@@ -32,20 +32,20 @@ void app_main()
     /* Initialize NVS */
     ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-      ESP_ERROR_CHECK(nvs_flash_erase());
-      ret = nvs_flash_init();
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
 
     /* Config wdt */
+    uint32_t idle_core_mask = (1 << portNUM_PROCESSORS) - 1; // Mask for single and dual core processors
     const esp_task_wdt_config_t wdt_conf = {
-      .idle_core_mask = 0x3,
-      .timeout_ms = 10000,
-      .trigger_panic = false
+        .idle_core_mask = idle_core_mask,
+        .timeout_ms = 10000,
+        .trigger_panic = false
     };
-    /* Deinit first bugfix for S3 */
-    esp_task_wdt_deinit();
-    esp_task_wdt_init(&wdt_conf);
+    ESP_ERROR_CHECK(esp_task_wdt_deinit());
+    ESP_ERROR_CHECK(esp_task_wdt_init(&wdt_conf));
 
     /* Init password manager */
     if(password_manager_init())

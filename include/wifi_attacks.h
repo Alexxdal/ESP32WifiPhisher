@@ -10,6 +10,7 @@
  * 
  */
 #define MAX_CLIENTS 20
+#define PACKET_MAX_PAYLOAD_LEN 352
 
 /**
  * @brief List of associated client to the target AP
@@ -18,6 +19,16 @@
 typedef struct {
     uint8_t mac[6];
 } client_t;
+
+
+/**
+ * @brief Struct containing a sniffed packet
+ */
+typedef struct {
+    uint8_t payload[PACKET_MAX_PAYLOAD_LEN];
+    uint16_t length;
+    int8_t rssi;
+} sniffer_packet_t;
 
 
 /**

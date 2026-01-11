@@ -1,0 +1,22 @@
+{
+  "build": {
+    "core": "esp32",
+    "f_cpu": "160000000L",
+    "f_flash": "40000000L",
+    "mcu": "esp32c3",
+    "variant": "esp32c3"
+  },
+  "connectivity": ["wifi", "bluetooth", "ble"],
+  "debug": { "openocd_target": "esp32c3.cfg" },
+  "frameworks": ["espidf"],
+  "name": "Espressif ESP32-C5-DevKitM-1 (custom, RISC-V toolchain)",
+  "upload": {
+    "flash_size": "8MB",
+    "maximum_size": 8388608,
+    "require_upload_port": true,
+    "wait_for_upload_port": true,
+    "speed": 460800
+  },
+  "url": "https://www.espressif.com/",
+  "vendor": "Espressif"
+}

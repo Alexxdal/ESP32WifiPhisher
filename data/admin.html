@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 Configuration</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        .tabs {
+            display: flex;
+            cursor: pointer;
+            background-color: #333;
+            color: white;
+            justify-content: space-around;
+            padding: 10px 0;
+        }
+
+        .tabs div {
+            flex: 1;
+            text-align: center;
+            padding: 10px;
+        }
+
+        .tabs div:hover {
+            background-color: #555;
+        }
+
+        .tabs .active {
+            background-color: #555;
+            font-weight: bold;
+        }
+
+        .tab-content {
+            display: none;
+            padding: 20px;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        input[type="text"],
+        input[type="password"],
+        select {
+            width: 95%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        button {
+            padding: 10px 20px;
+            background-color: #333;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #555;
+        }
+
+        textarea {
+            width: 100%;
+            height: 80vh;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 1rem;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        .wifi-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        .wifi-table th,
+        .wifi-table td {
+            border: 1px solid #ccc;
+            padding: 10px;
+            text-align: left;
+        }
+
+        .wifi-table th {
+            background-color: #f4f4f4;
+            font-weight: bold;
+        }
+
+        .wifi-table tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        .wifi-table tr:hover {
+            background-color: #f1f1f1;
+        }
+
+        .select-btn {
+            background-color: #333;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+
+        .select-btn:hover {
+            background-color: #555;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="tabs">
+        <div id="tab-settings" class="active">Hotspot Settings</div>
+        <div id="tab-eviltwin">EVIL TWIN</div>
+        <div id="tab-passwords">Passwords</div>
+    </div>
+
+    <div id="content-settings" class="tab-content active">
+        <h2>Hotspot Settings</h2>
+        <form id="hotspot-form" action="/api/ap_settings/set" method="post">
+            <label for="ssid">SSID:</label><br>
+            <input type="text" id="ssid" name="ssid" placeholder="Enter SSID" required><br>
+            <label for="password">Password:</label><br>
+            <input type="text" id="password" name="password" placeholder="Enter Password"><br>
+            <label for="channel">Channel:</label><br>
+            <input type="text" id="channel" name="channel" placeholder="Enter Channel (1-13)" required><br>
+            <button type="submit">Save Settings</button>
+        </form>
+    </div>
+
+    <div id="content-eviltwin" class="tab-content">
+        <h2>EVIL TWIN</h2>
+        <p>Scan for Wi-Fi networks and select a target for the attack.</p>
+        <div>
+            <label for="attack-scenario">Select Attack Scenario:</label>
+            <select id="attack-scenario" name="attack-scenario">
+                <option value="0">Firmware Upgrade</option>
+                <option value="1">Fake web-based network manager</option>
+                <option value="2">Plugin Update</option>
+                <option value="3">OAuth Login</option>
+            </select>
+        </div>
+        <button id="scan-btn">Scan Networks</button>
+        <div id="network-list">
+            <h3>Available Networks:</h3>
+            <table class="wifi-table">
+                <thead>
+                    <tr>
+                        <th>SSID</th>
+                        <th>Signal</th>
+                        <th>Channel</th>
+                        <th>BSSID</th>
+                        <th>Auth Mode</th>
+                        <!--<th>Pairwise Cipher</th>-->
+                        <!--<th>Group Cipher</th>-->
+                        <th>WPS</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="wifi-networks">
+                    <!-- Populated dynamically -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="content-passwords" class="tab-content">
+        <h2>PASSWORDS</h2>
+        <textarea id="passwords-textarea" readonly>Loading passwords...</textarea>
+        <button onclick="fetchPasswords()">UPDATE</button>
+    </div>
+
+    <script>
+        function selectTarget(ssid, bssid, channel, signal, authmode_code, pairwise_cipher, group_cipher) {
+            const attackScenario = document.getElementById('attack-scenario').value;
+            const targetData = `ssid=${ssid}&bssid=${bssid}&channel=${channel}&signal=${signal}&authmode_code=${authmode_code}&group=${group_cipher}&pairwise=${pairwise_cipher}&scheme=${attackScenario}`;
+            fetch('/api/evil_twin', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: targetData
+            })
+                .then(response => {
+                    if (response.ok) {
+                        alert(`Target ${ssid} selezionato e inviato al server.`);
+                    } else {
+                        alert('Errore invio del target al server.');
+                    }
+                })
+                .catch(error => {
+                    console.error('Errore durante la richiesta POST:', error);
+                    alert('Errore durante la richiesta POST.');
+                });
+        }
+        async function fetchPasswords() {
+            const textarea = document.getElementById('passwords-textarea');
+            textarea.value = "Loading passwords...";
+            try {
+                const response = await fetch('/get_passwords', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ action: 'fetch_passwords' })
+                });
+                if (response.ok) {
+                    const data = await response.text();
+                    textarea.value = data;
+                } else {
+                    textarea.value = 'Error fetching passwords.';
+                }
+            } catch (error) {
+                console.error('Error fetching passwords:', error);
+                textarea.value = 'Failed to fetch passwords.';
+            }
+        }
+        const tabs = document.querySelectorAll('.tabs div');
+        const contents = document.querySelectorAll('.tab-content');
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                tabs.forEach(t => t.classList.remove('active'));
+                contents.forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                const contentId = `content-${tab.id.split('-')[1]}`;
+                document.getElementById(contentId).classList.add('active');
+                if (tab.id === 'tab-passwords') {
+                    fetchPasswords();
+                }
+            });
+        });
+        document.getElementById('scan-btn').addEventListener('click', () => {
+            fetch('/api/wifi_scan')
+                .then(response => response.json())
+                .then(data => {
+                    const networkList = document.getElementById('wifi-networks');
+                    networkList.innerHTML = '';
+                    data.forEach(network => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${network.ssid}</td>
+                            <td>${network.signal} dBm</td>
+                            <td>${network.channel}</td>
+                            <td>${network.bssid}</td>
+                            <td>${network.authmode}</td>
+                            <td style="display:none;">${network.authmode_code}</td>
+                            <td style="display:none;">${network.pairwise_cipher}</td>
+                            <td style="display:none;">${network.group_cipher}</td>
+                            <td>${network.wps ? 'Yes' : 'No'}</td>
+                            <td><button class='select-btn' onclick='selectTarget("${network.ssid}", "${network.bssid}", "${network.channel}", "${network.signal}", "${network.authmode_code}", "${network.pairwise_cipher}", "${network.group_cipher}")'>Select</button></td>
+                        `;
+                        networkList.appendChild(row);
+                    });
+                })
+                .catch(error => {
+                    console.error('Error scanning networks:', error);
+                });
+        });
+        async function loadApSettings() {
+            try {
+                const res = await fetch('/api/ap_settings/get', { method: 'GET' });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+                const data = await res.json();
+
+                document.getElementById('ssid').value = data.ssid ?? '';
+                document.getElementById('password').value = data.password ?? '';
+                document.getElementById('channel').value = (data.channel ?? 1).toString();
+            } catch (e) {
+                console.error('Failed to load AP settings:', e);
+            }
+        }
+        document.addEventListener('DOMContentLoaded', () => {
+            loadApSettings();
+        });
+    </script>
+</body>
+
+</html>

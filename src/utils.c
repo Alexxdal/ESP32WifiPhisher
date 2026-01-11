@@ -17,6 +17,12 @@ bool isMacZero(uint8_t *mac)
 }
 
 
+bool isMacEqual(const uint8_t *mac1, const uint8_t *mac2)
+{
+    return memcmp(mac1, mac2, 6) == 0;
+}
+
+
 void print_packet(uint8_t *data, size_t len)
 {
     printf("\nPACKET DATA: ############\n");
@@ -137,4 +143,49 @@ uint8_t getNextChannel(uint8_t current_channel)
     {
         return current_channel + 1;
     }
+}
+
+
+const char *authmode_to_str(wifi_auth_mode_t m)
+{
+    switch (m) {
+        case WIFI_AUTH_OPEN:                        return "OPEN";
+        case WIFI_AUTH_WEP:                         return "WEP";
+        case WIFI_AUTH_WPA_PSK:                     return "WPA_PSK";
+        case WIFI_AUTH_WPA2_PSK:                    return "WPA2_PSK";
+        case WIFI_AUTH_WPA_WPA2_PSK:                return "WPA_WPA2_PSK";
+        case WIFI_AUTH_WPA2_ENTERPRISE:             return "WPA2_ENTERPRISE"; // Include anche WIFI_AUTH_ENTERPRISE
+        case WIFI_AUTH_WPA3_PSK:                    return "WPA3_PSK";
+        case WIFI_AUTH_WPA2_WPA3_PSK:               return "WPA2_WPA3_PSK";
+        case WIFI_AUTH_WAPI_PSK:                    return "WAPI_PSK";
+        case WIFI_AUTH_OWE:                         return "OWE";
+        case WIFI_AUTH_WPA3_ENT_192:                return "WPA3_ENT_SUITE_B_192_BIT";
+        case WIFI_AUTH_WPA3_EXT_PSK:                return "WPA3_EXT_PSK";
+        case WIFI_AUTH_WPA3_EXT_PSK_MIXED_MODE:     return "WPA3_EXT_PSK_MIXED_MODE";
+        case WIFI_AUTH_DPP:                         return "DPP";
+        case WIFI_AUTH_WPA3_ENTERPRISE:             return "WPA3_ENTERPRISE";
+        case WIFI_AUTH_WPA2_WPA3_ENTERPRISE:        return "WPA2_WPA3_ENTERPRISE";
+        case WIFI_AUTH_WPA_ENTERPRISE:              return "WPA_ENTERPRISE";
+        default:                                    return "UNKNOWN";
+    }
+}
+
+
+uint8_t *find_eapol_frame(uint8_t *buffer, uint16_t len, uint16_t *eapol_len) 
+{
+    // Cerca pattern LLC/SNAP: AA AA 03 00 00 00 88 8E
+    for (int i = 0; i < len - 8; i++) {
+        if (buffer[i] == 0xAA && buffer[i+1] == 0xAA && 
+            buffer[i+2] == 0x03 && buffer[i+6] == 0x88 && buffer[i+7] == 0x8E) 
+        {
+            uint8_t *eapol_start = &buffer[i + 8];
+            // Header EAPOL: [Vers(1)][Type(1)][Len(2)]
+            uint16_t data_len = (eapol_start[2] << 8) | eapol_start[3];
+            *eapol_len = 4 + data_len;
+            
+            if (i + 8 + *eapol_len > len) return NULL; // Safety check
+            return eapol_start;
+        }
+    }
+    return NULL;
 }
