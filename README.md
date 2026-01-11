@@ -40,14 +40,6 @@ WifiPhisher for ESP32 is a custom implementation of a phishing tool designed for
 
 ## Requirements
 
-### Hardware
-
-- **ESP32 Development Board**:  
-  Any ESP32 board with Wi-Fi capability (e.g., ESP32-WROOM-32).
-
-- **Power Source**:  
-  A USB connection or battery to power the ESP32.
-
 ### Software
 
 - **PlatformIO**:  
@@ -66,32 +58,15 @@ git clone https://github.com/Alexxdal/WifiPhisher.git
 cd WifiPhisher
 ```
 
-### 2. Configure PlatformIO
+### 2. Build and Upload
 
-Open the project in your IDE (e.g., Visual Studio Code) and ensure that PlatformIO is correctly set up:
+Open the project with Visual Studio Code and ensure that PlatformIO is correctly set up.
 
-1. Check the `platformio.ini` file in the project root:
-   - Verify that the `platform`, `board`, and `framework` match your ESP32 development board.
-   - Example configuration in `platformio.ini`:
-     ```ini
-     [env:esp32dev]
-     platform = espressif32
-     board = esp32dev
-     framework = espidf
-     ```
-2. Install necessary dependencies by allowing PlatformIO to resolve them during the first build.
+1. Select your target device (e.g. esp32s3 )
+2. Connect your ESP32 board to your computer via USB.
+3. Click "Upload"
 
-### 3. Build and Upload
-
-To build and upload the firmware to your ESP32:
-
-1. Connect your ESP32 board to your computer via USB.
-2. In the PlatformIO terminal, run the following command:
-   ```bash
-   pio run --target upload
-   ```
-
-### 4. Monitor Logs
+### 3. Monitor Logs
 
 To debug or monitor the ESP32's output logs:
 1. Use PlatformIO serial monitor:
@@ -105,7 +80,7 @@ To debug or monitor the ESP32's output logs:
 ## Usage
 
 #### 1. Access Web Interface
-1. Connect to the ESP32 rogue AP (default: "MagicWifi").
+1. Connect to the ESP32 rogue AP (default: "MagicWifi" password: "MagicWifi1234" ).
 2. Open a browser and go to `http://192.168.4.1:8080/`.
 
 #### 2. Configure the Attack
