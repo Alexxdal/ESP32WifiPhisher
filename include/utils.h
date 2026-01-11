@@ -27,6 +27,17 @@ bool isMacZero(uint8_t *mac);
 
 
 /**
+ * @brief Check if two MAC Addresses are equal
+ * 
+ * @param mac1 
+ * @param mac2 
+ * @return true 
+ * @return false 
+ */
+bool isMacEqual(const uint8_t *mac1, const uint8_t *mac2);
+
+
+/**
  * @brief Print packet bytes
  * 
  * @param data 

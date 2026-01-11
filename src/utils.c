@@ -17,6 +17,12 @@ bool isMacZero(uint8_t *mac)
 }
 
 
+bool isMacEqual(const uint8_t *mac1, const uint8_t *mac2)
+{
+    return memcmp(mac1, mac2, 6) == 0;
+}
+
+
 void print_packet(uint8_t *data, size_t len)
 {
     printf("\nPACKET DATA: ############\n");
