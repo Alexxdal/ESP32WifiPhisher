@@ -15,7 +15,8 @@
 
 #define CLIENT_SEM_WAIT 10
 #define TARGET_SEM_WAIT 10
-#define BEACON_RX_TIMEOUT 3000
+#define BEACON_RX_TIMEOUT_MS 5000
+#define HANDSHAKE_TIMEOUT_MS 5000
 
 static const char *TAG = "WIFI_ATTACKS";
 
@@ -52,7 +53,6 @@ static void packet_parsing_task(void *param)
 {
     sniffer_packet_t sniffer_pkt = { 0 };
     uint32_t last_m1_timestamp = 0;
-    const uint32_t HANDSHAKE_TIMEOUT_MS = 5000;
     uint64_t temp_replay_counter= 0;
 
     while (1) 
@@ -239,7 +239,7 @@ static void beacon_track_task(void *param)
 
 
 /**
- * @brief If no beacond is received from ap for BEACON_RX_TIMEOUT ms switch channel
+ * @brief If no beacond is received from ap for BEACON_RX_TIMEOUT_MS switch channel
  * 
  * @param TimerHandle_t xTimer 
  */
@@ -380,7 +380,7 @@ void wifi_attack_engine_start(target_info_t *_target)
 
     /* Start beacon timer for channel tracking */
     if (beacon_track_timer_handle == NULL) {
-        beacon_track_timer_handle = xTimerCreate("beacon_track_timer", pdMS_TO_TICKS(BEACON_RX_TIMEOUT), pdTRUE, NULL, hopping_timer_callback);
+        beacon_track_timer_handle = xTimerCreate("beacon_track_timer", pdMS_TO_TICKS(BEACON_RX_TIMEOUT_MS), pdTRUE, NULL, hopping_timer_callback);
     }
 
     if (beacon_track_timer_handle == NULL) {

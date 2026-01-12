@@ -1,7 +1,7 @@
 ### Features
 
 - **Aircrack**:  
-Capture client handshake and check the user input password (Only WPA/WPA2).
+Capture client handshake and check the user input password (WPA/WPA2/WPA3).
 
 - **Evil Twin Attack**:  
 Creates a rogue access point (AP) mimicking the target network, thus tricking clients into connecting to it.
