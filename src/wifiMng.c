@@ -123,6 +123,13 @@ void wifi_ap_clone(wifi_config_t *wifi_config, uint8_t *bssid)
 
 esp_err_t wifi_set_channel_safe(uint8_t new_channel)
 {
+    uint8_t current_channel = 0;
+    wifi_second_chan_t second = WIFI_SECOND_CHAN_NONE;
+    esp_wifi_get_channel(&current_channel, &second);
+    if(current_channel == new_channel) {
+        return ESP_OK; // No need to switch
+    }
+
     wifi_sta_list_t station_list;
     esp_err_t err_list = esp_wifi_ap_get_sta_list(&station_list);
     if (err_list == ESP_OK && station_list.num > 0) {
