@@ -8,8 +8,10 @@
 #include <lwip/inet.h>
 #include "libwifi.h"
 #include "utils.h"
+#include "libwifi_extension.h"
 #include "passwordMng.h"
 #include "wifi_attacks.h"
+#include "wifiMng.h"
 
 #define CLIENT_SEM_WAIT 10
 #define TARGET_SEM_WAIT 10
@@ -84,6 +86,17 @@ static void packet_parsing_task(void *param)
                     if( beacon_track_timer_handle != NULL )
                     {
                         xTimerReset(beacon_track_timer_handle, 0);
+                    }
+                    struct libwifi_bss bss = {0};
+                    if (libwifi_parse_beacon(&bss, &frame) == 0) 
+                    {
+                        csa_event_t csa;
+                        if (libwifi_extract_csa(&bss, &csa)) 
+                        {
+                            ESP_LOGI(TAG, "CSA detected from target AP, new_channel=%u count=%u", csa.new_channel, csa.count);
+                            if (csa.count <= 1) wifi_set_channel_safe(csa.new_channel);
+                        }
+                        libwifi_free_bss(&bss);
                     }
                 }
             }
@@ -211,21 +224,12 @@ static void beacon_track_task(void *param)
         if (xSemaphoreTake(target_semaphore, pdMS_TO_TICKS(100)) == pdTRUE) 
         {    
             uint8_t new_channel = getNextChannel(target.channel);
-            wifi_sta_list_t station_list;
-            esp_err_t err_list = esp_wifi_ap_get_sta_list(&station_list);
-            if (err_list == ESP_OK && station_list.num > 0) {
-                ESP_LOGW(TAG, "Forcing deauth of %d clients to switch channel", station_list.num);
-                esp_wifi_deauth_sta(0); 
-                vTaskDelay(pdMS_TO_TICKS(100)); 
-            }
-            target.channel = new_channel;
-            esp_err_t err = esp_wifi_set_channel(target.channel, WIFI_SECOND_CHAN_NONE);
-            if (err != ESP_OK) {
-                ESP_LOGW(TAG, "Channel switch failed (%s) - Radio locked", esp_err_to_name(err));
-            } else {
-                 ESP_LOGI(TAG, "Hopping to channel %d", target.channel);
-                 handshake_info.pmkid_captured = false;
-                 handshake_info.handshake_captured = false;
+            esp_err_t err = wifi_set_channel_safe(new_channel);
+            if (err == ESP_OK) {
+                target.channel = new_channel;
+                ESP_LOGI(TAG, "Hopping to channel %d", target.channel);
+                handshake_info.pmkid_captured = false;
+                handshake_info.handshake_captured = false;
             }
             xSemaphoreGive(target_semaphore);
         }

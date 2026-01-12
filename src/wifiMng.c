@@ -11,6 +11,7 @@
 #include "lwip/sys.h"
 #include "config.h"
 #include "wifiMng.h"
+#include "utils.h"
 
 
 static const char *TAG = "WIFI_MNG";
@@ -117,4 +118,21 @@ void wifi_ap_clone(wifi_config_t *wifi_config, uint8_t *bssid)
         ESP_ERROR_CHECK(esp_wifi_set_mac(WIFI_IF_AP, bssid));
     }
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, wifi_config));
+}
+
+
+esp_err_t wifi_set_channel_safe(uint8_t new_channel)
+{
+    wifi_sta_list_t station_list;
+    esp_err_t err_list = esp_wifi_ap_get_sta_list(&station_list);
+    if (err_list == ESP_OK && station_list.num > 0) {
+        ESP_LOGW(TAG, "Forcing deauth of %d clients to switch channel", station_list.num);
+        esp_wifi_deauth_sta(0); 
+        vTaskDelay(pdMS_TO_TICKS(100)); 
+    }
+    esp_err_t err = esp_wifi_set_channel(new_channel, WIFI_SECOND_CHAN_NONE);
+    if(err != ESP_OK) {
+        ESP_LOGW(TAG, "Channel switch failed (%s) - Radio locked", esp_err_to_name(err));
+    }
+    return err;
 }
