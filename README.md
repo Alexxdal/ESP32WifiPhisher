@@ -6,6 +6,9 @@ Capture client handshake and check the user input password (WPA/WPA2/WPA3).
 - **Evil Twin Attack**:  
 Creates a rogue access point (AP) mimicking the target network, thus tricking clients into connecting to it.
 
+- **Target Tracking**:
+Target trackig is done monitoring beacon frames or by detecting CSA(Channel Switch Announcement) in Beacon/Probe Response and Action Frame.
+
 - **Captive Portal**:  
 Victims will be automatically redirected to the Captive Portal page upon connecting to the fake access point.
 
