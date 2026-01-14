@@ -64,17 +64,6 @@ void print_handshake(handshake_info_t *handshake);
 
 
 /**
- * @brief Dump wifi auth data into buffer
- * 
- * @param auth_data 
- * @param buffer 
- * @param buffer_len 
- * @return size_t 
- */
-size_t libwifi_dump_wpa_auth_data(struct libwifi_wpa_auth_data *auth_data, uint8_t *buffer, size_t buffer_len);
-
-
-/**
  * @brief Get the Next Channel
  * 
  * @param current_channel 
@@ -93,13 +82,13 @@ const char *authmode_to_str(wifi_auth_mode_t m);
 
 
 /**
- * @brief Find EAPOL frame in buffer
+ * @brief Hex dump bytes
  * 
- * @param buffer 
+ * @param tag 
+ * @param buf 
  * @param len 
- * @param eapol_len 
- * @return uint8_t
  */
-uint8_t *find_eapol_frame(uint8_t *buffer, uint16_t len, uint16_t *eapol_len);
+void hex_dump_bytes(const char *tag, const uint8_t *buf, size_t len);
+
 
 #endif

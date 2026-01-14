@@ -41,7 +41,7 @@ static void dns_server_task(void *pvParameters)
         0x00, 0x00, // ARCOUNT
         // Risposta dinamica aggiunta qui sotto
     };
-    uint8_t ip_address[] = RESPONSE_IP_ADDR;
+    const uint8_t ip_address[] = RESPONSE_IP_ADDR;
 
     while (1) 
     {

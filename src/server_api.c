@@ -151,6 +151,7 @@ static esp_err_t targets_scan_handler(httpd_req_t *req)
         .scan_type = WIFI_SCAN_TYPE_ACTIVE,
         .scan_time.active.min = 100,
         .scan_time.active.max = 300,
+        .home_chan_dwell_time = 100,
     };
 
     esp_err_t err = esp_wifi_scan_start(&scan_config, true);

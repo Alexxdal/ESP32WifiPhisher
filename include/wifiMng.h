@@ -25,4 +25,13 @@ void wifi_start_softap(void);
  */
 void wifi_ap_clone(wifi_config_t *wifi_config, uint8_t *bssid);
 
+
+/**
+ * @brief Safely set wifi channel, deauth connected stations if needed
+ * 
+ * @param new_channel 
+ * @return esp_err_t 
+ */
+esp_err_t wifi_set_channel_safe(uint8_t new_channel);
+
 #endif

@@ -8,12 +8,15 @@
 #include <lwip/inet.h>
 #include "libwifi.h"
 #include "utils.h"
+#include "libwifi_extension.h"
 #include "passwordMng.h"
 #include "wifi_attacks.h"
+#include "wifiMng.h"
 
 #define CLIENT_SEM_WAIT 10
 #define TARGET_SEM_WAIT 10
-#define BEACON_RX_TIMEOUT 3000
+#define BEACON_RX_TIMEOUT_MS 5000
+#define HANDSHAKE_TIMEOUT_MS 5000
 
 static const char *TAG = "WIFI_ATTACKS";
 
@@ -50,7 +53,6 @@ static void packet_parsing_task(void *param)
 {
     sniffer_packet_t sniffer_pkt = { 0 };
     uint32_t last_m1_timestamp = 0;
-    const uint32_t HANDSHAKE_TIMEOUT_MS = 5000;
     uint64_t temp_replay_counter= 0;
 
     while (1) 
@@ -75,20 +77,9 @@ static void packet_parsing_task(void *param)
             const uint8_t *src_mac = (uint8_t *)&frame.header.mgmt_ordered.addr2;  // Source MAC address
             const uint8_t *bssid = (uint8_t *)&frame.header.mgmt_ordered.addr3;    // BSSID
 
-            /* Capture beacon frames */
-            if (frame.frame_control.type == TYPE_MANAGEMENT && frame.frame_control.subtype == SUBTYPE_BEACON)
-            {
-                if( isMacBroadcast(dest_mac) == true && isMacEqual(src_mac, target.bssid) )
-                {
-                    /* Reset beacon timeout timer */
-                    if( beacon_track_timer_handle != NULL )
-                    {
-                        xTimerReset(beacon_track_timer_handle, 0);
-                    }
-                }
-            }
+            
             /* Check frame type data for EAPOLs */
-            else if (frame.frame_control.type == TYPE_DATA)
+            if (frame.frame_control.type == TYPE_DATA)
             {
                 if (isMacEqual(bssid, target.bssid) || isMacEqual(src_mac, target.bssid) || isMacEqual(dest_mac, target.bssid))
                 {
@@ -186,6 +177,59 @@ static void packet_parsing_task(void *param)
                     }
                 }
             }
+            /* Check for management frames */
+            else if (frame.frame_control.type == TYPE_MANAGEMENT)
+            {
+                /* Capture beacon frames */
+                if(frame.frame_control.subtype == SUBTYPE_BEACON)
+                {
+                    if( isMacBroadcast(dest_mac) == true && isMacEqual(src_mac, target.bssid) )
+                    {
+                        /* Reset beacon timeout timer */
+                        if( beacon_track_timer_handle != NULL )
+                        {
+                            xTimerReset(beacon_track_timer_handle, 0);
+                        }
+                        struct libwifi_bss bss = {0};
+                        if (libwifi_parse_beacon(&bss, &frame) == 0) 
+                        {
+                            csa_event_t csa;
+                            if (libwifi_extract_csa(&bss, &csa)) 
+                            {
+                                ESP_LOGI(TAG, "BEACON: CSA detected from target AP, new_channel=%u count=%u", csa.new_channel, csa.count);
+                                if (csa.count <= 1) wifi_set_channel_safe(csa.new_channel);
+                            }
+                            libwifi_free_bss(&bss);
+                        }
+                    }
+                }
+                /* Capture probe response frames */
+                if (frame.frame_control.subtype == SUBTYPE_PROBE_RESP) 
+                {
+                    if (isMacEqual(src_mac, target.bssid)) 
+                    {
+                        struct libwifi_bss bss = {0};
+                        if (libwifi_parse_probe_resp(&bss, &frame) == 0) {
+                            csa_event_t csa;
+                            if (libwifi_extract_csa(&bss, &csa)) {
+                                ESP_LOGI(TAG, "PROBE_RESP: CSA detected from target AP, new_channel=%u count=%u", csa.new_channel, csa.count);
+                                if (csa.count <= 1) wifi_set_channel_safe(csa.new_channel);
+                            }
+                            libwifi_free_bss(&bss);
+                        }
+                    }
+                }
+                /* Capture action frames */
+                else if(frame.frame_control.subtype == SUBTYPE_ACTION)
+                {
+                    csa_event_t csa;
+                    if (libwifi_extract_csa_from_action_frame(&frame, &csa)) 
+                    {
+                        ESP_LOGI(TAG, "ACTION_FRAME: CSA detected from target AP, new_channel=%u count=%u", csa.new_channel, csa.count);
+                        if (csa.count <= 1) wifi_set_channel_safe(csa.new_channel);
+                    }
+                }
+            }
 
         cleanup:
             /* Cleanup allocated resources */
@@ -211,21 +255,12 @@ static void beacon_track_task(void *param)
         if (xSemaphoreTake(target_semaphore, pdMS_TO_TICKS(100)) == pdTRUE) 
         {    
             uint8_t new_channel = getNextChannel(target.channel);
-            wifi_sta_list_t station_list;
-            esp_err_t err_list = esp_wifi_ap_get_sta_list(&station_list);
-            if (err_list == ESP_OK && station_list.num > 0) {
-                ESP_LOGW(TAG, "Forcing deauth of %d clients to switch channel", station_list.num);
-                esp_wifi_deauth_sta(0); 
-                vTaskDelay(pdMS_TO_TICKS(100)); 
-            }
-            target.channel = new_channel;
-            esp_err_t err = esp_wifi_set_channel(target.channel, WIFI_SECOND_CHAN_NONE);
-            if (err != ESP_OK) {
-                ESP_LOGW(TAG, "Channel switch failed (%s) - Radio locked", esp_err_to_name(err));
-            } else {
-                 ESP_LOGI(TAG, "Hopping to channel %d", target.channel);
-                 handshake_info.pmkid_captured = false;
-                 handshake_info.handshake_captured = false;
+            esp_err_t err = wifi_set_channel_safe(new_channel);
+            if (err == ESP_OK) {
+                target.channel = new_channel;
+                ESP_LOGI(TAG, "Hopping to channel %d", target.channel);
+                handshake_info.pmkid_captured = false;
+                handshake_info.handshake_captured = false;
             }
             xSemaphoreGive(target_semaphore);
         }
@@ -235,7 +270,7 @@ static void beacon_track_task(void *param)
 
 
 /**
- * @brief If no beacond is received from ap for BEACON_RX_TIMEOUT ms switch channel
+ * @brief If no beacond is received from ap for BEACON_RX_TIMEOUT_MS switch channel
  * 
  * @param TimerHandle_t xTimer 
  */
@@ -376,7 +411,7 @@ void wifi_attack_engine_start(target_info_t *_target)
 
     /* Start beacon timer for channel tracking */
     if (beacon_track_timer_handle == NULL) {
-        beacon_track_timer_handle = xTimerCreate("beacon_track_timer", pdMS_TO_TICKS(BEACON_RX_TIMEOUT), pdTRUE, NULL, hopping_timer_callback);
+        beacon_track_timer_handle = xTimerCreate("beacon_track_timer", pdMS_TO_TICKS(BEACON_RX_TIMEOUT_MS), pdTRUE, NULL, hopping_timer_callback);
     }
 
     if (beacon_track_timer_handle == NULL) {

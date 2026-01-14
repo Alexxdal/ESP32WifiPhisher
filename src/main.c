@@ -59,6 +59,14 @@ void app_main()
         fatal_error_handler();
     }
 
+    #ifdef DEBUG
+    esp_log_level_set("wifi", ESP_LOG_DEBUG);
+    esp_log_level_set("esp_netif_lwip", ESP_LOG_DEBUG);
+    #else
+    esp_log_level_set("wifi", ESP_LOG_WARN);
+    esp_log_level_set("esp_netif_lwip", ESP_LOG_WARN);
+    #endif
+
     /* Start wifi AP */
     wifi_start_softap();
 
