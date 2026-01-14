@@ -4,6 +4,7 @@
 #include <esp_system.h>
 #include "libwifi.h"
 
+
 /**
  * @brief Channel Switch Announcement event structure
  * 
@@ -37,5 +38,14 @@ bool libwifi_extract_csa(const struct libwifi_bss *bss, csa_event_t *out);
  */
 uint8_t *find_eapol_frame(uint8_t *buffer, uint16_t len, uint16_t *eapol_len);
 
+
+/**
+ * @brief Extract CSA/ECSA from a management action frame
+ * 
+ * @param f Pointer to libwifi_frame structure
+ * @param out Pointer to csa_event_t structure to store the extracted information
+ * @return true if CSA/ECSA found and extracted, false otherwise
+ */
+bool libwifi_extract_csa_from_action_frame(const struct libwifi_frame *f, csa_event_t *out);
 
 #endif /* _LIBWIFI_EXTENSION_H_ */

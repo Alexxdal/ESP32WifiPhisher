@@ -77,31 +77,9 @@ static void packet_parsing_task(void *param)
             const uint8_t *src_mac = (uint8_t *)&frame.header.mgmt_ordered.addr2;  // Source MAC address
             const uint8_t *bssid = (uint8_t *)&frame.header.mgmt_ordered.addr3;    // BSSID
 
-            /* Capture beacon frames */
-            if (frame.frame_control.type == TYPE_MANAGEMENT && frame.frame_control.subtype == SUBTYPE_BEACON)
-            {
-                if( isMacBroadcast(dest_mac) == true && isMacEqual(src_mac, target.bssid) )
-                {
-                    /* Reset beacon timeout timer */
-                    if( beacon_track_timer_handle != NULL )
-                    {
-                        xTimerReset(beacon_track_timer_handle, 0);
-                    }
-                    struct libwifi_bss bss = {0};
-                    if (libwifi_parse_beacon(&bss, &frame) == 0) 
-                    {
-                        csa_event_t csa;
-                        if (libwifi_extract_csa(&bss, &csa)) 
-                        {
-                            ESP_LOGI(TAG, "CSA detected from target AP, new_channel=%u count=%u", csa.new_channel, csa.count);
-                            if (csa.count <= 1) wifi_set_channel_safe(csa.new_channel);
-                        }
-                        libwifi_free_bss(&bss);
-                    }
-                }
-            }
+            
             /* Check frame type data for EAPOLs */
-            else if (frame.frame_control.type == TYPE_DATA)
+            if (frame.frame_control.type == TYPE_DATA)
             {
                 if (isMacEqual(bssid, target.bssid) || isMacEqual(src_mac, target.bssid) || isMacEqual(dest_mac, target.bssid))
                 {
@@ -196,6 +174,59 @@ static void packet_parsing_task(void *param)
                                 ESP_LOGI(TAG, "Handshake Captured (M1+M2)!");
                             }
                         }
+                    }
+                }
+            }
+            /* Check for management frames */
+            else if (frame.frame_control.type == TYPE_MANAGEMENT)
+            {
+                /* Capture beacon frames */
+                if(frame.frame_control.subtype == SUBTYPE_BEACON)
+                {
+                    if( isMacBroadcast(dest_mac) == true && isMacEqual(src_mac, target.bssid) )
+                    {
+                        /* Reset beacon timeout timer */
+                        if( beacon_track_timer_handle != NULL )
+                        {
+                            xTimerReset(beacon_track_timer_handle, 0);
+                        }
+                        struct libwifi_bss bss = {0};
+                        if (libwifi_parse_beacon(&bss, &frame) == 0) 
+                        {
+                            csa_event_t csa;
+                            if (libwifi_extract_csa(&bss, &csa)) 
+                            {
+                                ESP_LOGI(TAG, "BEACON: CSA detected from target AP, new_channel=%u count=%u", csa.new_channel, csa.count);
+                                if (csa.count <= 1) wifi_set_channel_safe(csa.new_channel);
+                            }
+                            libwifi_free_bss(&bss);
+                        }
+                    }
+                }
+                /* Capture probe response frames */
+                if (frame.frame_control.subtype == SUBTYPE_PROBE_RESP) 
+                {
+                    if (isMacEqual(src_mac, target.bssid)) 
+                    {
+                        struct libwifi_bss bss = {0};
+                        if (libwifi_parse_probe_resp(&bss, &frame) == 0) {
+                            csa_event_t csa;
+                            if (libwifi_extract_csa(&bss, &csa)) {
+                                ESP_LOGI(TAG, "PROBE_RESP: CSA detected from target AP, new_channel=%u count=%u", csa.new_channel, csa.count);
+                                if (csa.count <= 1) wifi_set_channel_safe(csa.new_channel);
+                            }
+                            libwifi_free_bss(&bss);
+                        }
+                    }
+                }
+                /* Capture action frames */
+                else if(frame.frame_control.subtype == SUBTYPE_ACTION)
+                {
+                    csa_event_t csa;
+                    if (libwifi_extract_csa_from_action_frame(&frame, &csa)) 
+                    {
+                        ESP_LOGI(TAG, "ACTION_FRAME: CSA detected from target AP, new_channel=%u count=%u", csa.new_channel, csa.count);
+                        if (csa.count <= 1) wifi_set_channel_safe(csa.new_channel);
                     }
                 }
             }

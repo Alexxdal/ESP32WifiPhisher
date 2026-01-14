@@ -41,7 +41,10 @@ static esp_err_t set_wifi_region() {
         .cc = "CN",      // Codice paese (EU per Europa)
         .schan = 1,      // Canale iniziale
         .nchan = 14,     // Numero di canali (1-13 per EU)
-        .policy = WIFI_COUNTRY_POLICY_MANUAL // Configurazione manual
+        .policy = WIFI_COUNTRY_POLICY_MANUAL, // Configurazione manual
+        #if CONFIG_SOC_WIFI_SUPPORT_5G
+        .wifi_5g_channel_mask = 0
+        #endif
     };
 
     esp_err_t err = esp_wifi_set_country(&country);
@@ -57,17 +60,19 @@ esp_err_t wifi_init(void)
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     esp_netif_create_default_wifi_ap();
+    esp_netif_create_default_wifi_sta();
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
+/*#ifndef CONFIG_IDF_TARGET_ESP32C5
+ #endif*/
+    ESP_ERROR_CHECK(set_wifi_region());
     ESP_ERROR_CHECK(esp_wifi_start());
     ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
     ESP_ERROR_CHECK(esp_wifi_set_max_tx_power(84));
-#ifndef CONFIG_IDF_TARGET_ESP32C5
-    ESP_ERROR_CHECK(esp_wifi_set_bandwidth(WIFI_IF_AP, WIFI_BW_HT20));
-    ESP_ERROR_CHECK(esp_wifi_set_bandwidth(WIFI_IF_STA, WIFI_BW_HT20));
- #endif
-    ESP_ERROR_CHECK(set_wifi_region());
+#if CONFIG_SOC_WIFI_SUPPORT_5G
+    ESP_ERROR_CHECK(esp_wifi_set_band_mode(WIFI_BAND_MODE_AUTO));
+#endif
     ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL));
     return ESP_OK;
 }
@@ -82,7 +87,7 @@ void wifi_start_softap(void)
             .ssid_len = strlen(DEFAULT_WIFI_SSID),
             .channel = DEFAULT_WIFI_CHAN,
             .authmode = DEFAULT_WIFI_AUTH,
-            .beacon_interval = 500,
+            .beacon_interval = 100,
             .max_connection = DEFAULT_WIFI_MAX_CONN,
             .pmf_cfg = {
                     /* Cannot set pmf to required when in wpa-wpa2 mixed mode! Setting pmf to optional mode. */
@@ -123,6 +128,17 @@ void wifi_ap_clone(wifi_config_t *wifi_config, uint8_t *bssid)
 
 esp_err_t wifi_set_channel_safe(uint8_t new_channel)
 {
+    if( new_channel < 1 ) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    #if !CONFIG_SOC_WIFI_SUPPORT_5G
+    if( new_channel > 14 ) {
+        ESP_LOGW(TAG, "CSA Target channel=%d, This device does not support 5G channels", new_channel);
+        return ESP_ERR_INVALID_ARG;
+    }
+    #endif
+
     uint8_t current_channel = 0;
     wifi_second_chan_t second = WIFI_SECOND_CHAN_NONE;
     esp_wifi_get_channel(&current_channel, &second);

@@ -81,4 +81,14 @@ uint8_t getNextChannel(uint8_t current_channel);
 const char *authmode_to_str(wifi_auth_mode_t m);
 
 
+/**
+ * @brief Hex dump bytes
+ * 
+ * @param tag 
+ * @param buf 
+ * @param len 
+ */
+void hex_dump_bytes(const char *tag, const uint8_t *buf, size_t len);
+
+
 #endif

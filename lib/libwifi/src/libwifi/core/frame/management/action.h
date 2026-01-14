@@ -57,6 +57,11 @@ enum libwifi_actions {
     // Error 128-255
 };
 
+enum libwifi_action_spectrum_mgmt_tags {
+    SPECTRUM_ACTION_CSA            = 4,
+    SPECTRUM_ACTION_EXT_CSA        = 5    
+};
+
 /**
  *                Action Layout
  *   ─────────────────────────────────────

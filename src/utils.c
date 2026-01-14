@@ -97,3 +97,24 @@ const char *authmode_to_str(wifi_auth_mode_t m)
         default:                                    return "UNKNOWN";
     }
 }
+
+
+void hex_dump_bytes(const char *tag, const uint8_t *buf, size_t len)
+{
+    if (!buf || len == 0) return;
+
+    printf("%s (%u bytes)\n", tag, (unsigned)len);
+
+    for (size_t i = 0; i < len; i += 16) {
+        printf("%04u: ", (unsigned)i);
+        for (size_t j = 0; j < 16 && (i + j) < len; j++) {
+            printf("%02X ", buf[i + j]);
+        }
+        printf(" |");
+        for (size_t j = 0; j < 16 && (i + j) < len; j++) {
+            uint8_t c = buf[i + j];
+            printf("%c", (c >= 32 && c <= 126) ? (char)c : '.');
+        }
+        printf("|\n");
+    }
+}
