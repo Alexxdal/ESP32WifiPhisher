@@ -314,7 +314,7 @@ static esp_err_t get_evlitwin_target_handler(httpd_req_t *req)
 }
 
 
-void shutdown_task(void *pvParameter)
+static void shutdown_task(void *pvParameter)
 {
     vTaskDelay(pdMS_TO_TICKS(1000));
     evil_twin_stop_attack();

@@ -384,30 +384,8 @@ void wifi_attack_engine_start(target_info_t *_target)
     memset(clients[0].mac, 0xFF, 6);
     memset(&handshake_info, 0, sizeof(handshake_info_t)); 
 
-    /* Initialize packet queue */
-    if (packet_queue == NULL) {
-        packet_queue = xQueueCreate(PACKET_QUEUE_LEN, sizeof(sniffer_packet_t));
-        if( packet_queue == NULL ) {
-            ESP_LOGE(TAG, "Errore nella creazione della coda dei pacchetti");
-            return;
-        }
-    }
-
-    /* Create packet parsing task */
-    if (packet_parsing_task_handle == NULL) {
-        xTaskCreate(packet_parsing_task, "packet_parsing_task", 8192, NULL, PACKET_PARSING_TASK_PRIO, &packet_parsing_task_handle);
-    }
-
-    /* Start wifi promiscuos mode */
-    esp_wifi_set_promiscuous(true);
-    wifi_promiscuous_filter_t filter = {
-        .filter_mask = WIFI_PROMIS_FILTER_MASK_DATA | WIFI_PROMIS_FILTER_MASK_MGMT
-    };
-
-    esp_wifi_set_promiscuous_filter(&filter);
-    filter.filter_mask = 0;
-    esp_wifi_set_promiscuous_ctrl_filter(&filter);
-    esp_wifi_set_promiscuous_rx_cb(promiscuous_callback);
+    /* Start packet sniffing */
+    wifi_attack_start_sniffing();
 
     /* Start beacon timer for channel tracking */
     if (beacon_track_timer_handle == NULL) {
@@ -429,8 +407,8 @@ void wifi_attack_engine_start(target_info_t *_target)
 
 void wifi_attack_engine_stop(void)
 {
-    /* Disable promiscuous mode */
-    ESP_ERROR_CHECK(esp_wifi_set_promiscuous(false));
+    /* Stop packet sniffing */
+    wifi_attack_stop_sniffing();
     
     /* Delete semaphore */
     if (clients_semaphore != NULL) 
@@ -459,11 +437,58 @@ void wifi_attack_engine_stop(void)
     {
         vTaskDelete(beacon_track_task_handle);
     }
-    /* Stop packet parsing task */
+}
+
+
+void wifi_attack_start_sniffing(void)
+{
+    /* Initialize packet queue */
+    if (packet_queue == NULL) {
+        packet_queue = xQueueCreate(PACKET_QUEUE_LEN, sizeof(sniffer_packet_t));
+        if( packet_queue == NULL ) {
+            ESP_LOGE(TAG, "Errore nella creazione della coda dei pacchetti");
+            return;
+        }
+    }
+
+    /* Create packet parsing task */
+    if (packet_parsing_task_handle == NULL) {
+        xTaskCreate(packet_parsing_task, "packet_parsing_task", 8192, NULL, PACKET_PARSING_TASK_PRIO, &packet_parsing_task_handle);
+    }
+
+    bool en = false;
+    ESP_ERROR_CHECK(esp_wifi_get_promiscuous(&en));
+    /* Start wifi promiscuos mode */
+    if (en == false) {
+        ESP_ERROR_CHECK(esp_wifi_set_promiscuous(true));
+    }
+    wifi_promiscuous_filter_t filter = {
+        .filter_mask = WIFI_PROMIS_FILTER_MASK_DATA | WIFI_PROMIS_FILTER_MASK_MGMT
+    };
+    ESP_ERROR_CHECK(esp_wifi_set_promiscuous_filter(&filter));
+    filter.filter_mask = 0;
+    ESP_ERROR_CHECK(esp_wifi_set_promiscuous_ctrl_filter(&filter));
+    ESP_ERROR_CHECK(esp_wifi_set_promiscuous_rx_cb(promiscuous_callback));
+}
+
+
+void wifi_attack_stop_sniffing(void)
+{
+    bool en = false;
+    ESP_ERROR_CHECK(esp_wifi_get_promiscuous(&en));
+
+    /* Disable promiscuous mode */
+    if (en == true) {
+        ESP_ERROR_CHECK(esp_wifi_set_promiscuous(false));
+    }
+
+    /* Delete packet parsing task */
     if( packet_parsing_task_handle != NULL )
     {
         vTaskDelete(packet_parsing_task_handle);
+        packet_parsing_task_handle = NULL;
     }
+
     /* Delete packet queue */
     if( packet_queue != NULL )
     {

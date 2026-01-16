@@ -81,6 +81,20 @@ void wifi_attack_engine_stop(void);
 
 
 /**
+ * @brief Start packet sniffing
+ * 
+ */
+void wifi_attack_start_sniffing(void);
+
+
+/**
+ * @brief Stop packet sniffing
+ * 
+ */
+void wifi_attack_stop_sniffing(void);
+
+
+/**
  * @brief Deauth attack by sending deauth frames 
  * 
  * @param bssid 
