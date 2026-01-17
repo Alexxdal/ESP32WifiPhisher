@@ -1,4 +1,5 @@
 #include <string.h>
+#include <esp_timer.h>
 #include "esp_http_server.h"
 #include "esp_log.h"
 #include "cJSON.h"
@@ -369,6 +370,54 @@ static esp_err_t check_input_password_handler(httpd_req_t *req)
 }
 
 
+static esp_err_t get_system_status_handler(httpd_req_t *req)
+{
+    /* Uptime calculation (Formato HH:MM:SS) */
+    int64_t time_us = esp_timer_get_time();
+    int64_t time_s = time_us / 1000000;
+    int hours = time_s / 3600;
+    int minutes = (time_s % 3600) / 60;
+    int seconds = time_s % 60;
+    char uptime_str[16];
+    snprintf(uptime_str, sizeof(uptime_str), "%02d:%02d:%02d", hours, minutes, seconds);
+
+    /* Get RAM Usage percentage */
+    size_t total_ram = heap_caps_get_total_size(MALLOC_CAP_DEFAULT);
+    size_t free_ram = heap_caps_get_free_size(MALLOC_CAP_DEFAULT);
+    int ram_usage = 0;
+    if (total_ram > 0) {
+        ram_usage = 100 - ((free_ram * 100) / total_ram);
+    }
+
+    cJSON *root = cJSON_CreateObject();
+    if (root == NULL) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "JSON init failed");
+        return ESP_FAIL;
+    }
+    cJSON_AddStringToObject(root, "uptime", uptime_str);
+    cJSON_AddNumberToObject(root, "ram", ram_usage);
+    cJSON_AddNumberToObject(root, "packets", 0);
+    cJSON_AddBoolToObject(root, "sd", false);
+    bool attack_running = false;//evil_twin_is_attack_running();
+    cJSON_AddBoolToObject(root, "evil_twin_running", attack_running);
+
+    char *json_response = cJSON_PrintUnformatted(root);
+    if (json_response == NULL) {
+        cJSON_Delete(root);
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "JSON print failed");
+        return ESP_FAIL;
+    }
+
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_send(req, json_response, HTTPD_RESP_USE_STRLEN);
+
+    free(json_response);
+    cJSON_Delete(root);
+
+    return ESP_OK;
+}
+
+
 esp_err_t register_server_api_handlers(httpd_handle_t server)
 {
     /* Handler for CORS preflight requests */
@@ -441,6 +490,15 @@ esp_err_t register_server_api_handlers(httpd_handle_t server)
         .user_ctx = NULL
     };
     ESP_ERROR_CHECK(httpd_register_uri_handler(server, &check_input_password));
+
+    /* Get system status */
+    httpd_uri_t get_system_status = {
+        .uri = "/api/sys_status",
+        .method = HTTP_GET,
+        .handler = get_system_status_handler,
+        .user_ctx = NULL
+    };
+    ESP_ERROR_CHECK(httpd_register_uri_handler(server, &get_system_status));
 
     return ESP_OK;
 }
