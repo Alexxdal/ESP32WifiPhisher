@@ -9,7 +9,7 @@
 /* Tasks Priority and queue len */
 #define BEACON_TRACK_TASK_PRIO        10
 #define PACKET_PARSING_TASK_PRIO      5
-#define PACKET_QUEUE_LEN              25
+#define PACKET_QUEUE_LEN              30
 
 #define CLIENT_SEM_WAIT 10
 #define TARGET_SEM_WAIT 10
@@ -19,6 +19,20 @@
  * 
  */
 #define MAX_CLIENTS 20
+
+
+/**
+ * @brief Sniffer operating modes
+ * 
+ */
+typedef enum {
+    SNIFF_MODE_IDLE = 0,        // Sniffer fermo o promiscuo disabilitato
+    SNIFF_MODE_GLOBAL_MONITOR,  // Ascolta tutto (Scan, statistiche generali)
+    SNIFF_MODE_TARGET_ONLY,     // Ascolta SOLO il target (Handshake/PMKID capture, no attacchi)
+    SNIFF_MODE_ATTACK_KARMA,    // Risponde alle Probe Requests (Karma)
+    SNIFF_MODE_ATTACK_EVIL_TWIN // Logica Evil Twin (Deauth + Monitoraggio specifico)
+} sniffer_mode_t;
+
 
 /**
  * @brief List of associated client to the target AP
@@ -72,6 +86,14 @@ esp_err_t wifi_start_sniffing(target_info_t *_target);
  * @return esp_err_t 
  */
 esp_err_t wifi_stop_sniffing(void);
+
+
+/**
+ * @brief Set sniffer operating mode
+ * 
+ * @param mode 
+ */
+void wifi_sniffer_set_mode(sniffer_mode_t mode);
 
 
 /**

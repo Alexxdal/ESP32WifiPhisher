@@ -56,6 +56,7 @@ static void evil_twin_task(void *pvParameters)
     http_attack_server_start();
 
     /* Start wifi attack engine */
+    wifi_sniffer_set_mode(SNIFF_MODE_ATTACK_EVIL_TWIN);
     wifi_start_sniffing(&target);
     wifi_start_beacon_tracking();
     
@@ -108,6 +109,7 @@ void evil_twin_stop_attack(void)
     /* Stop sniffer and beacon tracking */
     wifi_stop_beacon_tracking();
     wifi_stop_sniffing();
+    wifi_sniffer_set_mode(SNIFF_MODE_IDLE);
 
     /* Wait engine stop */
     vTaskDelay(pdMS_TO_TICKS(1000));
