@@ -1,8 +1,6 @@
 #ifndef _PASSWORD_MNG_H
 #define _PASSWORD_MNG_H
 
-#include "esp_system.h"
-#include "libwifi.h"
 #include "esp_http_server.h"
 
 /**

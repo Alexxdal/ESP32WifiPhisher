@@ -5,7 +5,6 @@
 #include <freertos/task.h>
 #include "wifi_attacks.h"
 #include "sniffer.h"
-#include "libwifi.h"
 #include "libwifi_extension.h"
 #include "wifiMng.h"
 #include "utils.h"

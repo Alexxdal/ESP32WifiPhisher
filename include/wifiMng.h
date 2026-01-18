@@ -1,7 +1,8 @@
 #ifndef _WIFI_MNG_H
 #define _WIFI_MNG_H
 
-#include "esp_wifi.h"
+#include <esp_err.h>
+#include <esp_wifi.h>
 
 /**
  * @brief Init Wifi interface

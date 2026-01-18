@@ -1,6 +1,4 @@
 #include <string.h>
-#include "esp_log.h"
-#include "arpa/inet.h"
 #include "utils.h"
 
 bool isMacBroadcast(const uint8_t *mac)

@@ -1,8 +1,7 @@
 #ifndef _TARGET_H
 #define _TARGET_H
 
-#include "esp_system.h"
-#include "esp_wifi.h"
+#include <esp_wifi.h>
 #include "vendors.h"
 
 

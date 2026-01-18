@@ -1,10 +1,6 @@
 #ifndef _KARMA_ATTACK_H
 #define _KARMA_ATTACK_H
 
-#include "esp_wifi.h"
-#include "esp_system.h"
-#include "vendors.h"
-#include "wifi_attacks.h"
 #include "target.h"
 
 /**

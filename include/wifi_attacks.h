@@ -1,11 +1,6 @@
 #ifndef _WIFI_ATTACKS_H
 #define _WIFI_ATTACKS_H
 
-#include "esp_system.h"
-#include "esp_wifi.h"
-#include "vendors.h"
-
-
 /**
  * @brief Basic Deauthentication Attack.
  * 

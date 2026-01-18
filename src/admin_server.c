@@ -2,13 +2,9 @@
 #include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "esp_wifi.h"
 #include "esp_log.h"
-#include "nvs_flash.h"
 #include <lwip/sockets.h>
 #include "esp_http_server.h"
-#include "passwordMng.h"
-#include "server.h"
 #include "server_api.h"
 
 

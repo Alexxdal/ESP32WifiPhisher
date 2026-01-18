@@ -1,9 +1,8 @@
-#include <string.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "esp_task_wdt.h"
-#include "esp_log.h"
-#include "nvs_flash.h"
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <esp_task_wdt.h>
+#include <esp_log.h>
+#include <nvs_flash.h>
 #include "server.h"
 #include "admin_server.h"
 #include "wifiMng.h"

@@ -1,13 +1,7 @@
 #include <string.h>
 #include "esp_log.h"
-#include "esp_task_wdt.h"
-#include "utils.h"
 #include "wifiMng.h"
-#include "admin_server.h"
-#include "server.h"
 #include "karma_attack.h"
-#include "aircrack.h"
-#include "wifi_attacks.h"
 #include "sniffer.h"
 #include "target.h"
 

@@ -1,8 +1,6 @@
 #ifndef _SNIFFER_H
 #define _SNIFFER_H
 
-#include "esp_system.h"
-#include "wifi_attacks.h"
 #include "target.h"
 
 #define PACKET_MAX_PAYLOAD_LEN 352

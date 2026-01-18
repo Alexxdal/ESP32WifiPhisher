@@ -2,7 +2,6 @@
 #define _UTILS_H
 
 #include <esp_system.h>
-#include "libwifi.h"
 #include "sniffer.h"
 
 

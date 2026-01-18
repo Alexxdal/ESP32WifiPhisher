@@ -1,13 +1,10 @@
 #include <string.h>
-#include "esp_log.h"
-#include "esp_task_wdt.h"
-#include "utils.h"
+#include <esp_log.h>
 #include "wifiMng.h"
-#include "admin_server.h"
-#include "server.h"
 #include "evil_twin.h"
 #include "aircrack.h"
 #include "sniffer.h"
+#include "wifi_attacks.h"
 
 
 #define EVIL_TWIN_TASK_PRIO 5

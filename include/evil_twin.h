@@ -1,12 +1,7 @@
 #ifndef _EVIL_TWIN_H
 #define _EVIL_TWIN_H
 
-#include "esp_wifi.h"
-#include "esp_system.h"
-#include "vendors.h"
-#include "wifi_attacks.h"
 #include "target.h"
-
 
 /**
  * @brief Start EVIL TWIN attack, before lauching be sure to fill target struct

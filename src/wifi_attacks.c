@@ -6,13 +6,8 @@
 #include <freertos/timers.h>
 #include <esp_random.h>
 #include <lwip/inet.h>
-#include "libwifi.h"
-#include "utils.h"
-#include "libwifi_extension.h"
-#include "passwordMng.h"
 #include "wifi_attacks.h"
-#include "wifiMng.h"
-#include "sniffer.h"
+#include "libwifi.h"
 
 static const char *TAG = "WIFI_ATTACKS";
 

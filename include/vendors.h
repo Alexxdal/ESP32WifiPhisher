@@ -1,9 +1,6 @@
 #ifndef _VENDORS_H
 #define _VENDORS_H
 
-
-#include "esp_system.h"
-
 typedef enum {
     GENERIC = 0x00,
     VODAFONE,

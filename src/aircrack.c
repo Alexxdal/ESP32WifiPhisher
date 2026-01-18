@@ -6,7 +6,6 @@
 #include <string.h>
 #include <stdio.h>
 #include "esp_log.h"
-#include "utils.h"
 #include "aircrack.h"
 
 
