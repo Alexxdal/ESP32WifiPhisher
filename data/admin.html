@@ -457,6 +457,11 @@
                         d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z" />
                 </svg> Evil Twin Attack
             </div>
+            <div class="menu-item" onclick="showView('view-karma', this)">
+                <svg viewBox="0 0 24 24">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+                </svg> Karma Attack
+            </div>
             <div class="menu-category">System</div>
             <div class="menu-item" onclick="showView('view-passwords', this)">
                 <svg viewBox="0 0 24 24">
@@ -565,6 +570,52 @@
                     <button class="danger" onclick="startEvilTwin()">LAUNCH ATTACK</button>
                     <button class="secondary" onclick="stopAttack()">TERMINATE</button>
                 </div>
+            </div>
+        </div>
+
+        <div id="view-karma" class="view-container">
+            <h2>Karma Probe Scanner</h2>
+            
+            <div class="card">
+                <label>1. PHISHING SCENARIO</label>
+                <select id="karma-scenario">
+                    <option value="0">Firmware Upgrade</option>
+                    <option value="1">Fake Network Manager</option>
+                    <option value="2">OAuth Login</option>
+                </select>
+
+                <p style="margin-top:15px; font-size:0.9rem; color:#aaa;">
+                    2. Scan for devices probing for known networks.
+                </p>
+
+                <div class="btn-group">
+                    <button onclick="startKarmaScan()">SCAN PROBES</button>
+                    <button class="secondary" onclick="stopKarmaScan()">STOP SCAN</button>
+                </div>
+            </div>
+
+            <div class="card" style="padding:0; overflow-x:auto;">
+                <div style="padding:15px; border-bottom:1px solid #333; font-weight:bold; color:var(--accent);">
+                    DETECTED PROBES
+                </div>
+                <table class="wifi-table">
+                    <thead>
+                        <tr>
+                            <th>Victim MAC</th>
+                            <th>Target SSID</th>
+                            <th>RSSI</th>
+                            <th>CH</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="karma-scan-body">
+                        <tr>
+                            <td colspan="5" style="text-align:center; padding: 20px; color:#666;">
+                                Click 'SCAN PROBES' to start listening...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
 
@@ -807,6 +858,124 @@
             // e.preventDefault(); 
             // ... fetch post ...
             // showToast("Settings Saved! Rebooting...");
+        }
+
+        // --- KARMA ATTACK LOGIC (UPDATED) ---
+        let karmaScanInterval = null;
+
+        function startKarmaScan() {
+            log("Starting Probe Scan...");
+            const tbody = document.getElementById('karma-scan-body');
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--accent);">Scanning channel hopping...</td></tr>';
+
+            fetch('/api/karma_attack/scan', 
+            { 
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `start_stop=1`
+            })
+                .then(res => {
+                    if(res.ok) {
+                        showToast("Scanning started");
+                        // Avvia polling dei risultati ogni 2 secondi
+                        if(karmaScanInterval) clearInterval(karmaScanInterval);
+                        karmaScanInterval = setInterval(fetchProbeResults, 5000);
+                    } else {
+                        log("Error starting scan", "error");
+                    }
+                });
+        }
+
+        function stopKarmaScan() {
+            log("Stopping Scan...");
+            if(karmaScanInterval) clearInterval(karmaScanInterval);
+            
+            fetch('/api/karma_attack/scan', 
+            { 
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `start_stop=0`
+            })
+                .then(() => {
+                    showToast("Scan Stopped");
+                    const tbody = document.getElementById('karma-scan-body');
+                    // Non cancelliamo la tabella per permettere all'utente di vedere l'ultimo stato
+                });
+        }
+
+        function fetchProbeResults() {
+            // Chiama la nuova API che usa cJSON
+            fetch('/api/karma_attack/get_probes')
+                .then(res => res.json())
+                .then(data => {
+                    const tbody = document.getElementById('karma-scan-body');
+                    tbody.innerHTML = '';
+                    
+                    if(!data || data.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Listening for probes...</td></tr>';
+                        return;
+                    }
+
+                    // Ordina per RSSI (segnale più forte in alto)
+                    data.sort((a, b) => b.rssi - a.rssi);
+
+                    data.forEach(probe => {
+                        const tr = document.createElement('tr');
+                        // Escaping dell'SSID per evitare problemi con caratteri speciali nel JS
+                        const safeSsid = probe.ssid.replace(/'/g, "\\'"); 
+                        
+                        tr.innerHTML = `
+                            <td style="font-family:monospace; color:#aaa;">${probe.mac}</td>
+                            <td style="font-weight:bold; color:white;">${probe.ssid}</td>
+                            <td>${probe.rssi}</td>
+                            <td>${probe.channel}</td>
+                            <td>
+                                <button class="danger" style="margin:0; padding:6px 12px; font-size:0.75rem;"
+                                    onclick="launchKarmaAttack('${safeSsid}', ${probe.channel})">
+                                    ATTACK
+                                </button>
+                            </td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                })
+                .catch(err => {
+                    // console.log("Waiting for scan data...");
+                });
+        }
+
+        function launchKarmaAttack(ssid, channel) {
+            const scenario = document.getElementById('karma-scenario').value;
+            
+            if(confirm(`Lock Target "${ssid}" on Channel ${channel} with Scenario ${scenario}?`)) {
+                // 1. Ferma la scansione visiva
+                if(karmaScanInterval) clearInterval(karmaScanInterval);
+                
+                log(`Launching Karma Attack on: ${ssid} (Ch: ${channel})`);
+                
+                // 2. Prepara il payload per l'attacco
+                // Assicurati che il backend gestisca 'scenario' oltre a ssid e channel
+                const payload = `ssid=${encodeURIComponent(ssid)}&channel=${channel}&scheme=${scenario}`;
+                
+                fetch('/api/karma_attack/set_target', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: payload
+                }).then(res => {
+                    if(res.ok) {
+                        showToast(`Target LOCKED: ${ssid}`);
+                        
+                        // Aggiorna la Dashboard Home
+                        document.getElementById('home-target').innerText = ssid;
+                        document.getElementById('current-target-ssid').innerText = ssid; // Aggiorna anche view evil twin per coerenza
+                        
+                        log("AP Cloned & Server Started. Waiting for victim...");
+                    } else {
+                        showToast("Error starting attack");
+                        log("Backend returned error", "error");
+                    }
+                });
+            }
         }
 
         // Init

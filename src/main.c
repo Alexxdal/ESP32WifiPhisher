@@ -75,4 +75,7 @@ void app_main()
 
     /* Start admin http server */
     http_admin_server_start();
+
+    /* Start attack server */
+    http_attack_server_start();
 }

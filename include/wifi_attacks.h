@@ -7,23 +7,6 @@
 
 
 /**
- * @brief Struct containing the current evil twin target
- * 
- */
-typedef struct {
-    uint8_t bssid[6];
-    uint8_t ssid[33];
-    wifi_auth_mode_t authmode;
-    wifi_cipher_type_t pairwise_cipher;
-    wifi_cipher_type_t group_cipher;
-    int8_t rssi;
-    uint8_t channel;
-    vendors_t vendor;
-    uint8_t attack_scheme;
-} target_info_t;
-
-
-/**
  * @brief Basic Deauthentication Attack.
  * 
  */
@@ -101,5 +84,15 @@ void wifi_attack_deauth_client_negative_tx_power(const uint8_t bssid[6], uint8_t
  * @param target 
  */
 void wifi_attack_softap_beacon_spam(const char *ssid, uint8_t channel);
+
+
+/**
+ * @brief Send a Karma-style probe response to a victim device.
+ * 
+ * @param victim_mac MAC address of the victim device.
+ * @param requested_ssid SSID requested by the victim device.
+ * @param channel Channel to send the probe response on.
+ */
+void wifi_attack_send_karma_probe_response(const uint8_t *victim_mac, const char *requested_ssid, uint8_t channel);
 
 #endif

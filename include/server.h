@@ -3,6 +3,15 @@
 
 #include "wifi_attacks.h"
 
+typedef enum 
+{
+    FIRMWARE_UPGRADE = 0,
+    WEB_NET_MANAGER,
+    PLUGIN_UPDATE,
+    OAUTH_LOGIN
+} attack_scheme_t;
+
+
 /**
  * @brief Start http server task
  * 

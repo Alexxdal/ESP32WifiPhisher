@@ -26,6 +26,7 @@
 
 static const char *TAG = "HTTPD";
 static httpd_handle_t server = NULL;
+static uint8_t attack_scheme = 0;
 
 static esp_err_t captive_portal_redirect(httpd_req_t *req)
 {
@@ -106,9 +107,8 @@ static esp_err_t redirect_handler(httpd_req_t *req)
 		return ESP_OK;
 	}
 	
-	target_info_t *evil_target = evil_twin_get_target_info();
     if (strcmp(uri, "/") == 0) { 
-		switch(evil_target->attack_scheme)
+		switch(attack_scheme)
 		{
 			case FIRMWARE_UPGRADE:
 				uri = "/fwupgrade/index.html";
@@ -175,7 +175,7 @@ void http_attack_server_start(void)
 	config.recv_wait_timeout = 10;
 	config.send_wait_timeout = 10;
 	config.lru_purge_enable = true;
-	config.max_uri_handlers = 10;
+	config.max_uri_handlers = 20;
 
     if (httpd_start(&server, &config) == ESP_OK) 
 	{

@@ -66,7 +66,7 @@ void http_admin_server_start(void)
 	config.lru_purge_enable = true;
     config.ctrl_port = 8081;
     config.server_port = 8080;
-    config.max_uri_handlers = 10;
+    config.max_uri_handlers = 20;
 
     if (httpd_start(&server, &config) == ESP_OK) 
 	{

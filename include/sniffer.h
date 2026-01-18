@@ -3,16 +3,13 @@
 
 #include "esp_system.h"
 #include "wifi_attacks.h"
+#include "target.h"
 
 #define PACKET_MAX_PAYLOAD_LEN 352
 
-/* Tasks Priority and queue len */
-#define BEACON_TRACK_TASK_PRIO        10
-#define PACKET_PARSING_TASK_PRIO      5
-#define PACKET_QUEUE_LEN              30
-
 #define CLIENT_SEM_WAIT 10
 #define TARGET_SEM_WAIT 10
+#define MAX_PROBE_REQ   30
 
 /**
  * @brief Number of max client to store
@@ -30,7 +27,8 @@ typedef enum {
     SNIFF_MODE_GLOBAL_MONITOR,  // Ascolta tutto (Scan, statistiche generali)
     SNIFF_MODE_TARGET_ONLY,     // Ascolta SOLO il target (Handshake/PMKID capture, no attacchi)
     SNIFF_MODE_ATTACK_KARMA,    // Risponde alle Probe Requests (Karma)
-    SNIFF_MODE_ATTACK_EVIL_TWIN // Logica Evil Twin (Deauth + Monitoraggio specifico)
+    SNIFF_MODE_ATTACK_EVIL_TWIN, // Logica Evil Twin (Deauth + Monitoraggio specifico)
+    SNIFF_MODE_MAX
 } sniffer_mode_t;
 
 
@@ -68,16 +66,40 @@ typedef struct {
     uint8_t payload[PACKET_MAX_PAYLOAD_LEN];
     uint16_t length;
     int8_t rssi;
+    uint8_t channel;
 } sniffer_packet_t;
+
+
+/**
+ * @brief Struct containing captured probe request info
+ * 
+ */
+typedef struct {
+    uint8_t mac[6];
+    char ssid[33];
+    int8_t rssi;
+    uint8_t channel;
+} probe_request_t;
+
+
+/**
+ * @brief Struct containing list of captured probe requests
+ * 
+ */
+typedef struct {
+    uint8_t num_probes;
+    probe_request_t probes[MAX_PROBE_REQ];
+} probe_request_list_t;
 
 
 /**
  * @brief Start packet sniffing in promiscuous mode
  * 
  * @param _target 
+ * @param mode 
  * @return esp_err_t 
  */
-esp_err_t wifi_start_sniffing(target_info_t *_target);
+esp_err_t wifi_start_sniffing(target_info_t * _target, sniffer_mode_t mode);
 
 
 /**
@@ -110,6 +132,30 @@ esp_err_t wifi_start_beacon_tracking(void);
  * @return esp_err_t 
  */
 esp_err_t wifi_stop_beacon_tracking(void);
+
+
+/**
+ * @brief Start channel hopping task
+ * 
+ * @return esp_err_t 
+ */
+esp_err_t wifi_sniffer_start_channel_hopping(void);
+
+
+/**
+ * @brief Stop channel hopping task
+ * 
+ * @return esp_err_t 
+ */
+esp_err_t wifi_sniffer_stop_channel_hopping(void);
+
+
+/**
+ * @brief Get pointer to captured probe requests
+ * 
+ * @return const probe_request_list_t*
+ */
+const probe_request_list_t *wifi_sniffer_get_captured_probes(void);
 
 
 /**

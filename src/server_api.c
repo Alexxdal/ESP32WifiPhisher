@@ -6,10 +6,12 @@
 #include "utils.h"
 #include "config.h"
 #include "evil_twin.h"
+#include "karma_attack.h"
 #include "server_api.h"
 #include "passwordMng.h"
 #include "esp_sleep.h"
 #include "vendors.h"
+#include "target.h"
 
 
 static const char *TAG = "SERVER_API";
@@ -288,7 +290,7 @@ static esp_err_t get_password_handler(httpd_req_t *req)
 
 static esp_err_t get_evlitwin_target_handler(httpd_req_t *req)
 {
-    target_info_t *target = evil_twin_get_target_info();
+    target_info_t *target = target_get(TARGET_INFO_EVIL_TWIN);
 
     /* Logo path */
     char path[64];
@@ -330,7 +332,7 @@ static void shutdown_task(void *pvParameter)
 
 static esp_err_t check_input_password_handler(httpd_req_t *req)
 {
-    target_info_t *target = evil_twin_get_target_info();
+    target_info_t *target = target_get(TARGET_INFO_EVIL_TWIN);
 
 	char buffer[256] = { 0 };
     int ret = 0;
@@ -418,6 +420,94 @@ static esp_err_t get_system_status_handler(httpd_req_t *req)
 }
 
 
+static esp_err_t karma_attack_scan_handler(httpd_req_t *req)
+{
+    char buffer[16];
+    int ret = httpd_req_recv(req, buffer, sizeof(buffer) - 1);
+    if (ret <= 0) {
+        if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
+            httpd_resp_send_408(req);
+        }
+        return ESP_FAIL;
+    }
+    buffer[ret] = '\0';
+    uint8_t start_stop = 0;
+    sscanf(buffer,"start_stop=%hhd", &start_stop);
+
+    if(start_stop == 1)
+    {
+        karma_attack_probes_scan_start();
+        httpd_resp_sendstr(req, "Karma attack probe scan started.");
+    }
+    else if(start_stop == 0)
+    {
+        karma_attack_probes_scan_stop();
+        httpd_resp_sendstr(req, "Karma attack probe scan stopped.");
+    }
+    httpd_resp_send(req, NULL, 0);
+    return ESP_OK;
+}
+
+
+static esp_err_t http_get_karma_probes_handler(httpd_req_t *req)
+{
+    const probe_request_list_t *list = wifi_sniffer_get_captured_probes();
+    
+    if (list == NULL) {
+        httpd_resp_send_500(req);
+        return ESP_FAIL;
+    }
+
+    cJSON *root = cJSON_CreateArray();
+    for (int i = 0; i < list->num_probes; i++) 
+    {
+        cJSON *item = cJSON_CreateObject();
+        char mac_str[18];
+        snprintf(mac_str, sizeof(mac_str), "%02x:%02x:%02x:%02x:%02x:%02x",
+                 list->probes[i].mac[0], list->probes[i].mac[1], list->probes[i].mac[2],
+                 list->probes[i].mac[3], list->probes[i].mac[4], list->probes[i].mac[5]);
+
+        cJSON_AddStringToObject(item, "mac", mac_str);
+        cJSON_AddStringToObject(item, "ssid", list->probes[i].ssid);
+        cJSON_AddNumberToObject(item, "rssi", list->probes[i].rssi);
+        cJSON_AddNumberToObject(item, "channel", list->probes[i].channel);
+        cJSON_AddItemToArray(root, item);
+    }
+    char *json_string = cJSON_PrintUnformatted(root);
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_send(req, json_string, strlen(json_string));
+
+    free(json_string);
+    cJSON_Delete(root);
+    return ESP_OK;
+}
+
+
+static esp_err_t karma_attack_set_target_handler(httpd_req_t *req) 
+{
+    char buffer[300];
+    int ret = httpd_req_recv(req, buffer, sizeof(buffer) - 1);
+    if (ret <= 0) {
+        if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
+            httpd_resp_send_408(req);
+        }
+        return ESP_FAIL;
+    }
+    buffer[ret] = '\0';
+    target_info_t target_info = { 0 };
+    sscanf(buffer,"ssid=%32[^&]&channel=%hhu&scheme=%hhd", 
+    target_info.ssid, &target_info.channel, &target_info.attack_scheme);
+
+    httpd_resp_sendstr(req, "Karma target selected.");
+    httpd_resp_send(req, NULL, 0);
+
+    /* Set karma attack target */
+    karma_attack_set_target(&target_info);
+
+    return ESP_OK;
+}
+
+
 esp_err_t register_server_api_handlers(httpd_handle_t server)
 {
     /* Handler for CORS preflight requests */
@@ -499,6 +589,33 @@ esp_err_t register_server_api_handlers(httpd_handle_t server)
         .user_ctx = NULL
     };
     ESP_ERROR_CHECK(httpd_register_uri_handler(server, &get_system_status));
+
+    /* Start karma attack scan probes */
+    httpd_uri_t karma_attack_scan = {
+        .uri = "/api/karma_attack/scan",
+        .method = HTTP_POST,
+        .handler = karma_attack_scan_handler,
+        .user_ctx = NULL
+    };
+    ESP_ERROR_CHECK(httpd_register_uri_handler(server, &karma_attack_scan));
+
+    /* URI configuration for getting karma probes */
+    httpd_uri_t karma_probes_uri = {
+        .uri       = "/api/karma_attack/get_probes",
+        .method    = HTTP_GET,
+        .handler   = http_get_karma_probes_handler,
+        .user_ctx  = NULL
+    };
+    ESP_ERROR_CHECK(httpd_register_uri_handler(server, &karma_probes_uri));
+
+    /* Set karma attack target */
+    httpd_uri_t karma_attack_set_target_uri = {
+        .uri = "/api/karma_attack/set_target",
+        .method = HTTP_POST,
+        .handler = karma_attack_set_target_handler,
+        .user_ctx = NULL
+    };
+    ESP_ERROR_CHECK(httpd_register_uri_handler(server, &karma_attack_set_target_uri));
 
     return ESP_OK;
 }
