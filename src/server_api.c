@@ -1,19 +1,24 @@
 #include <string.h>
 #include <esp_timer.h>
-#include <esp_http_server.h>
 #include <esp_log.h>
-#include "cJSON.h"
+#include <cJSON.h>
 #include "utils.h"
 #include "config.h"
 #include "evil_twin.h"
 #include "karma_attack.h"
 #include "server_api.h"
+#include "server.h"
 #include "passwordMng.h"
 #include "vendors.h"
 #include "target.h"
 #include "nvs_keys.h"
 
 static const char *TAG = "SERVER_API";
+
+typedef struct {
+    api_commant_t cmd;
+    esp_err_t (*handler)(httpd_ws_frame_t *req);
+} api_cmd_t;
 
 
 const char* mime_from_path(const char* path) {
@@ -25,15 +30,6 @@ const char* mime_from_path(const char* path) {
     if (strstr(path, ".ico"))  return "image/x-icon";
     if (strstr(path, ".svg"))  return "image/svg+xml";
     return "text/plain";
-}
-
-
-static esp_err_t cors_prevention_handler(httpd_req_t *req)
-{
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Methods", "POST, OPTIONS");
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Headers", "Content-Type");
-    return httpd_resp_send(req, NULL, 0);
 }
 
 
@@ -509,15 +505,6 @@ static esp_err_t karma_attack_set_target_handler(httpd_req_t *req)
 
 esp_err_t register_server_api_handlers(httpd_handle_t server)
 {
-    /* Handler for CORS preflight requests */
-    httpd_uri_t cors_preflight_uri = {
-        .uri = "/*",
-        .method = HTTP_OPTIONS,
-        .handler = cors_prevention_handler,
-        .user_ctx = NULL
-    };
-    ESP_ERROR_CHECK(httpd_register_uri_handler(server, &cors_preflight_uri));
-
     /* Handler for get AP settings */
     httpd_uri_t get_ap_settings_uri = {
         .uri = "/api/ap_settings/get",
@@ -617,4 +604,81 @@ esp_err_t register_server_api_handlers(httpd_handle_t server)
     ESP_ERROR_CHECK(httpd_register_uri_handler(server, &karma_attack_set_target_uri));
 
     return ESP_OK;
+}
+
+//############################################ NEW WEB SOCKETS API HANDLERS ############################################
+static esp_err_t api_get_status(httpd_ws_frame_t *req)
+{
+    int64_t time_us = esp_timer_get_time();
+    int64_t time_s = time_us / 1000000;
+    int hours = time_s / 3600;
+    int minutes = (time_s % 3600) / 60;
+    int seconds = time_s % 60;
+    char uptime_str[16];
+    snprintf(uptime_str, sizeof(uptime_str), "%02d:%02d:%02d", hours, minutes, seconds);
+
+    /* Get RAM Usage percentage */
+    size_t total_ram = heap_caps_get_total_size(MALLOC_CAP_DEFAULT);
+    size_t free_ram = heap_caps_get_free_size(MALLOC_CAP_DEFAULT);
+    int ram_usage = 0;
+    if (total_ram > 0) {
+        ram_usage = 100 - ((free_ram * 100) / total_ram);
+    }
+
+    cJSON *root = cJSON_CreateObject();
+    if (root == NULL) {
+        return ESP_FAIL;
+    }
+    cJSON_AddStringToObject(root, "uptime", uptime_str);
+    cJSON_AddNumberToObject(root, "ram", ram_usage);
+    cJSON_AddNumberToObject(root, "packets", 0);
+    cJSON_AddBoolToObject(root, "sd", false);
+    bool attack_running = false;
+    cJSON_AddBoolToObject(root, "evil_twin_running", attack_running);
+
+    char *json_response = cJSON_PrintUnformatted(root);
+    if (json_response == NULL) {
+        cJSON_Delete(root);
+        return ESP_FAIL;
+    }
+
+    ws_send_req_t cmd;
+    cmd.hd = req->hd;
+    cmd.fd = req->fd;
+    strncpy(cmd.payload, json_response, sizeof(cmd.payload) - 1);
+    cmd.payload[sizeof(cmd.payload) - 1] = '\0';
+    ws_send_command(&cmd, json_response);
+    free(json_response);
+    cJSON_Delete(root);
+
+    return ESP_OK;
+}
+
+
+static const api_cmd_t api_cmd_list[] = {
+    { API_GET_STATUS, api_get_status }
+    // { API_SET_AP_SETTINGS, admin_set_ap_settings },
+    // { API_GET_AP_SETTINGS, admin_get_ap_settings },
+    // { API_WIFI_SCAN, targets_scan_handler },
+    // { API_START_EVILTWIN, evil_twin_handler },
+    // { API_GET_EVILTWIN_TARGET, get_evlitwin_target_handler },
+    // { API_CHECK_INPUT_PASSWORD, check_input_password_handler },
+    // { API_GET_PASSWORDS, get_password_handler },
+};
+
+void http_api_parse(httpd_ws_frame_t *req)
+{
+    cJSON *root = cJSON_Parse(req->payload);
+    if (root == NULL) {
+        ESP_LOGE(TAG, "Invalid JSON received");
+        return;
+    }
+    int cmd = cJSON_GetObjectItemCaseSensitive(root, "cmd")->valueint;
+    for (size_t i = 0; i < sizeof(api_cmd_list) / sizeof(api_cmd_t); i++) {
+        if (api_cmd_list[i].cmd == cmd) {
+            api_cmd_list[i].handler(req);
+            break;
+        }
+    }
+    cJSON_Delete(root);
 }

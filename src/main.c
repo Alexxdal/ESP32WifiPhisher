@@ -4,7 +4,6 @@
 #include <esp_log.h>
 #include <nvs_flash.h>
 #include "server.h"
-#include "admin_server.h"
 #include "wifiMng.h"
 #include "dns.h"
 #include "passwordMng.h"
@@ -65,11 +64,8 @@ void app_main()
     /* Start dns server */
     dns_server_start();
 
-    /* Start admin http server */
-    http_admin_server_start();
-
-    /* Start attack server */
-    http_attack_server_start();
+    /* Start web server */
+    http_server_start();
 
     /* Config wdt */
     uint32_t idle_core_mask = (1 << portNUM_PROCESSORS) - 1; // Mask for single and dual core processors

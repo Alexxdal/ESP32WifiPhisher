@@ -1,6 +1,8 @@
 #ifndef _SERVER_H
 #define _SERVER_H
 
+#include <esp_http_server.h>
+
 typedef enum 
 {
     FIRMWARE_UPGRADE = 0,
@@ -11,16 +13,39 @@ typedef enum
 
 
 /**
+ * @brief HTTP websocket send request structure
+ * 
+ * @param hd HTTP server handle
+ * @param fd Websocket file descriptor
+ * @param payload Payload to send
+ */
+typedef struct {
+    httpd_handle_t hd;
+    int fd;
+    char payload[256];
+} ws_send_req_t;
+
+
+/**
+ * @brief Send command over websocket
+ * 
+ * @param _req Websocket send request structure
+ * @param payload Payload to send
+ */
+void ws_send_command(ws_send_req_t *_req, const char *payload);
+
+
+/**
  * @brief Start http server task
  * 
  */
-void http_attack_server_start(void);
+void http_server_start(void);
 
 
 /**
  * @brief Stop http server
  * 
  */
-void http_attack_server_stop(void);
+void http_server_stop(void);
 
 #endif
