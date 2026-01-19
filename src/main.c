@@ -28,6 +28,9 @@ void app_main()
 {
     esp_err_t ret = ESP_OK;
 
+    /* Deinit WDT (Error can be ignored) */
+    esp_task_wdt_deinit();
+
     /* Initialize NVS */
     ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -35,16 +38,6 @@ void app_main()
         ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
-
-    /* Config wdt */
-    uint32_t idle_core_mask = (1 << portNUM_PROCESSORS) - 1; // Mask for single and dual core processors
-    const esp_task_wdt_config_t wdt_conf = {
-        .idle_core_mask = idle_core_mask,
-        .timeout_ms = 10000,
-        .trigger_panic = false
-    };
-    ESP_ERROR_CHECK(esp_task_wdt_deinit());
-    ESP_ERROR_CHECK(esp_task_wdt_init(&wdt_conf));
 
     /* Init password manager */
     if(password_manager_init())
@@ -77,4 +70,16 @@ void app_main()
 
     /* Start attack server */
     http_attack_server_start();
+
+    /* Config wdt */
+    uint32_t idle_core_mask = (1 << portNUM_PROCESSORS) - 1; // Mask for single and dual core processors
+    const esp_task_wdt_config_t wdt_conf = {
+        .idle_core_mask = idle_core_mask,
+        .timeout_ms = 10000,
+        .trigger_panic = false
+    };
+    ESP_ERROR_CHECK(esp_task_wdt_init(&wdt_conf));
+
+    /* Suspend main task */
+    vTaskSuspend(NULL); 
 }

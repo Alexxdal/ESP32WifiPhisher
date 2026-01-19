@@ -50,9 +50,6 @@ static esp_err_t set_wifi_region() {
 
 esp_err_t wifi_init(void)
 {
-    /* Disable wifi logs */
-    esp_log_level_set("wifi", ESP_LOG_WARN);
-    
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     esp_netif_create_default_wifi_ap();
