@@ -7,7 +7,6 @@
 #include "evil_twin.h"
 #include "karma_attack.h"
 #include "server_api.h"
-#include "server.h"
 #include "passwordMng.h"
 #include "vendors.h"
 #include "target.h"
@@ -17,7 +16,7 @@ static const char *TAG = "SERVER_API";
 
 typedef struct {
     api_commant_t cmd;
-    esp_err_t (*handler)(httpd_ws_frame_t *req);
+    esp_err_t (*handler)(ws_frame_req_t *req);
 } api_cmd_t;
 
 
@@ -607,7 +606,7 @@ esp_err_t register_server_api_handlers(httpd_handle_t server)
 }
 
 //############################################ NEW WEB SOCKETS API HANDLERS ############################################
-static esp_err_t api_get_status(httpd_ws_frame_t *req)
+static esp_err_t api_get_status(ws_frame_req_t *req)
 {
     int64_t time_us = esp_timer_get_time();
     int64_t time_s = time_us / 1000000;
@@ -642,12 +641,12 @@ static esp_err_t api_get_status(httpd_ws_frame_t *req)
         return ESP_FAIL;
     }
 
-    ws_send_req_t cmd;
+    ws_frame_req_t cmd;
     cmd.hd = req->hd;
     cmd.fd = req->fd;
     strncpy(cmd.payload, json_response, sizeof(cmd.payload) - 1);
     cmd.payload[sizeof(cmd.payload) - 1] = '\0';
-    ws_send_command(&cmd, json_response);
+    ws_send_command_to_queue(&cmd, json_response);
     free(json_response);
     cJSON_Delete(root);
 
@@ -666,14 +665,21 @@ static const api_cmd_t api_cmd_list[] = {
     // { API_GET_PASSWORDS, get_password_handler },
 };
 
-void http_api_parse(httpd_ws_frame_t *req)
+
+void http_api_parse(ws_frame_req_t *req)
 {
     cJSON *root = cJSON_Parse(req->payload);
     if (root == NULL) {
         ESP_LOGE(TAG, "Invalid JSON received");
         return;
     }
-    int cmd = cJSON_GetObjectItemCaseSensitive(root, "cmd")->valueint;
+    cJSON *jcmd = cJSON_GetObjectItemCaseSensitive(root, "cmd");
+    if (!cJSON_IsNumber(jcmd)) {
+        ESP_LOGE(TAG, "Missing/invalid cmd");
+        cJSON_Delete(root);
+        return;
+    }
+    int cmd = jcmd->valueint;
     for (size_t i = 0; i < sizeof(api_cmd_list) / sizeof(api_cmd_t); i++) {
         if (api_cmd_list[i].cmd == cmd) {
             api_cmd_list[i].handler(req);

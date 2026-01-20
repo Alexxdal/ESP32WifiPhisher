@@ -12,20 +12,17 @@
 /* Pages include */
 #include "web/passwords.h"
 
-#define COMMANDS_QUEUE_LENGTH 15
-
 static const char *TAG = "WEBSERVER";
 static httpd_handle_t server = NULL;
 static uint8_t attack_scheme = 0;
-static QueueHandle_t send_command_queue = NULL;
-static QueueHandle_t receive_command_queue = NULL;
-static TaskHandle_t ws_send_task_handle = NULL;
-static TaskHandle_t ws_receive_task_handle = NULL;
+static QueueHandle_t ws_frame_queue = NULL;
+static TaskHandle_t ws_frame_process_task_handle = NULL;
+static uint8_t ws_frame_buffer[WS_FRAME_BUFFER_SIZE] = {0};
 
 
 static void ws_send_work(void *arg)
 {
-    ws_send_req_t *r = (ws_send_req_t *)arg;
+    ws_frame_req_t *r = (ws_frame_req_t *)arg;
     httpd_ws_frame_t out = {
         .final = true,
         .fragmented = false,
@@ -41,39 +38,37 @@ static void ws_send_work(void *arg)
 }
 
 
-static void ws_send_task(void *pvParameter)
+static void ws_frame_process_task(void *pvParameter)
 {
 	(void)pvParameter;
-	ws_send_req_t ws_send_req;
+	ws_frame_req_t ws_frame;
 	while (1) 
 	{
-		if (xQueueReceive(send_command_queue, &ws_send_req, portMAX_DELAY) == pdTRUE) 
+		if (xQueueReceive(ws_frame_queue, &ws_frame, 100) == pdTRUE) 
 		{
-			httpd_ws_frame_t ws_frame = {
-				.final = true,
-				.fragmented = false,
-				.type = HTTPD_WS_TYPE_TEXT,
-				.payload = (uint8_t *)ws_send_req.payload,
-				.len = strlen(ws_send_req.payload)
-			};
-			ws_send_req_t *heap = malloc(sizeof(ws_send_req_t));
-            if (!heap) continue;
-            *heap = ws_send_req;
-            httpd_queue_work(ws_send_req.hd, ws_send_work, heap);
-		}
-	}
-}
-
-
-static void ws_receive_task(void *pvParameter)
-{
-	(void)pvParameter;
-	ws_send_req_t ws_receive_req;
-	while (1) 
-	{
-		if (xQueueReceive(receive_command_queue, &ws_receive_req, portMAX_DELAY) == pdTRUE) 
-		{
-			// Handle received WebSocket messages if needed
+			switch (ws_frame.frame_type)
+			{
+			case WS_RX_FRAME:
+			{
+				/* Process received frame */
+				http_api_parse(&ws_frame);
+				break;
+			}
+			
+			case WS_TX_FRAME:
+			{
+				/* Process transmit frame */
+				ws_frame_req_t *heap = malloc(sizeof(ws_frame_req_t));
+				if (!heap) continue;
+				*heap = ws_frame;
+				httpd_queue_work(ws_frame.hd, ws_send_work, heap);
+				break;
+			}
+			
+			default:
+				break;
+			}
+			
 		}
 	}
 }
@@ -108,48 +103,39 @@ static esp_err_t ws_handler(httpd_req_t *req)
         return ESP_OK;
     }
 
-    httpd_ws_frame_t frame = {
-        .final = true,
-        .fragmented = false,
-        .type = HTTPD_WS_TYPE_TEXT,
-        .payload = NULL,
-        .len = 0
-    };
+    httpd_ws_frame_t frame = {0};
+	frame.type = HTTPD_WS_TYPE_TEXT;
 
-    esp_err_t ret = httpd_ws_recv_frame(req, &frame, 0);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "httpd_ws_recv_frame (len) failed: %s", esp_err_to_name(ret));
-        return ret;
-    }
+	// 1) prendi la lunghezza
+	ESP_ERROR_CHECK(httpd_ws_recv_frame(req, &frame, 0));
+	if (frame.len >= WS_FRAME_BUFFER_SIZE) {
+		ESP_LOGW(TAG, "Frame too big: %u", (unsigned)frame.len);
+		return ESP_FAIL;
+	}
 
-    uint8_t buf[1025];
-    memset(buf, 0, sizeof(buf));
-    frame.payload = buf;
-    ret = httpd_ws_recv_frame(req, &frame, frame.len);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "httpd_ws_recv_frame (data) failed: %s", esp_err_to_name(ret));
-        return ret;
-    }
+	frame.payload = ws_frame_buffer;
+	ESP_ERROR_CHECK(httpd_ws_recv_frame(req, &frame, frame.len));
+	ws_frame_buffer[frame.len] = 0;
 
     int client_fd = httpd_req_to_sockfd(req);
-
+	/* Put received frame in queue */
     if (frame.type == HTTPD_WS_TYPE_TEXT) {
-		cJSON *root = cJSON_Parse((char *)frame.payload);
-		if (root == NULL) {
-			ESP_LOGE(TAG, "Invalid JSON received");
+		if (ws_frame_queue == NULL) {
+			ESP_LOGE(TAG, "Receive command queue is not initialized!");
 			return ESP_FAIL;
 		}
+		ws_frame_req_t ws_req;
+		ws_req.hd = req->handle;
+		ws_req.fd = client_fd;
+		strncpy(ws_req.payload, (char *)frame.payload, sizeof(ws_req.payload) - 1);
+		ws_req.payload[sizeof(ws_req.payload) - 1] = '\0';
+		ws_req.frame_type = WS_RX_FRAME;
 
-		http_api_parse(&ws_receive_req);
-        // Echo di risposta
-        httpd_ws_frame_t out = {
-            .final = true,
-            .fragmented = false,
-            .type = HTTPD_WS_TYPE_TEXT,
-            .payload = frame.payload,
-            .len = frame.len
-        };
-        return httpd_ws_send_frame(req, &out);
+		if (xQueueSend(ws_frame_queue, &ws_req, 100) != pdTRUE) {
+			ESP_LOGE(TAG, "Failed to send command to queue!");
+			return ESP_FAIL;
+		}
+        return ESP_OK;
     }
 
     if (frame.type == HTTPD_WS_TYPE_PING) {
@@ -157,7 +143,6 @@ static esp_err_t ws_handler(httpd_req_t *req)
         httpd_ws_frame_t pong = {.type = HTTPD_WS_TYPE_PONG, .payload = NULL, .len = 0};
         return httpd_ws_send_frame(req, &pong);
     }
-
     if (frame.type == HTTPD_WS_TYPE_CLOSE) {
         ESP_LOGI(TAG, "CLOSE (fd=%d)", client_fd);
         return ESP_OK;
@@ -258,18 +243,19 @@ static esp_err_t redirect_handler(httpd_req_t *req)
 }
 
 
-void ws_send_command(ws_send_req_t *_req, const char *payload)
+void ws_send_command_to_queue(ws_frame_req_t *_req, const char *payload)
 {
-	if (send_command_queue == NULL) {
-		ESP_LOGE(TAG, "Send command queue is not initialized!");
+	if (ws_frame_queue == NULL) {
+		ESP_LOGE(TAG, "Websocket frame queue is not initialized!");
 		return;
 	}
-	ws_send_req_t req;
+	ws_frame_req_t req;
+	req.frame_type = WS_TX_FRAME;
 	req.hd = _req->hd;
 	req.fd = _req->fd;
 	strncpy(req.payload, payload, sizeof(req.payload) - 1);
 	req.payload[sizeof(req.payload) - 1] = '\0';
-	if (xQueueSend(send_command_queue, &req, portMAX_DELAY) != pdTRUE) {
+	if (xQueueSend(ws_frame_queue, &req, portMAX_DELAY) != pdTRUE) {
 		ESP_LOGE(TAG, "Failed to send command to queue!");
 	}
 }
@@ -292,7 +278,7 @@ void http_server_start(void)
 	config.recv_wait_timeout = 10;
 	config.send_wait_timeout = 10;
 	config.lru_purge_enable = true;
-	config.max_uri_handlers = 20;
+	config.max_uri_handlers = 15;
 
 	esp_err_t ret = httpd_start(&server, &config);
 	if (ret != ESP_OK) {
@@ -300,19 +286,12 @@ void http_server_start(void)
 		return;
 	}
 
-	send_command_queue = xQueueCreate(COMMANDS_QUEUE_LENGTH, sizeof(ws_send_req_t));
-	if (send_command_queue == NULL) {
-		ESP_LOGE(TAG, "Failed to create send command queue!");
+	ws_frame_queue = xQueueCreate(WS_FRAME_QUEUE_LENGTH, sizeof(ws_frame_req_t));
+	if (ws_frame_queue == NULL) {
+		ESP_LOGE(TAG, "Failed to create websocket frame queue!");
 		return;
 	}
-	xTaskCreate(ws_send_task, "ws_send_task", 4096, &ws_send_task_handle, 5, NULL);
-
-	receive_command_queue = xQueueCreate(COMMANDS_QUEUE_LENGTH, sizeof(ws_send_req_t));
-	if (receive_command_queue == NULL) {
-		ESP_LOGE(TAG, "Failed to create receive command queue!");
-		return;
-	}
-	xTaskCreate(ws_receive_task, "ws_receive_task", 4096, &ws_receive_task_handle, 5, NULL);
+	xTaskCreate(ws_frame_process_task, "ws_frame_process_task", 4096, NULL, 5, &ws_frame_process_task_handle);
 
 	ESP_ERROR_CHECK(register_server_api_handlers(server));
 
@@ -347,24 +326,14 @@ void http_server_start(void)
 
 void http_server_stop(void)
 {
-	if( send_command_queue != NULL ) {
-		vQueueDelete(send_command_queue);
-		send_command_queue = NULL;
+	if( ws_frame_queue != NULL ) {
+		vQueueDelete(ws_frame_queue);
+		ws_frame_queue = NULL;
 	}
 
-	if( receive_command_queue != NULL ) {
-		vQueueDelete(receive_command_queue);
-		receive_command_queue = NULL;
-	}
-
-	if( ws_send_task_handle != NULL ) {
-		vTaskDelete(ws_send_task_handle);
-		ws_send_task_handle = NULL;
-	}
-
-	if( ws_receive_task_handle != NULL ) {
-		vTaskDelete(ws_receive_task_handle);
-		ws_receive_task_handle = NULL;
+	if( ws_frame_process_task_handle != NULL ) {
+		vTaskDelete(ws_frame_process_task_handle);
+		ws_frame_process_task_handle = NULL;
 	}
 
 	if( server != NULL ) {

@@ -3,6 +3,7 @@
 
 #include <esp_err.h>
 #include <esp_http_server.h>
+#include "server.h"
 
 typedef enum {
     API_GET_STATUS = 0,
@@ -36,7 +37,7 @@ esp_err_t register_server_api_handlers(httpd_handle_t server) __attribute((depre
  * 
  * @param req Websocket frame request
  */
-void http_api_parse(httpd_ws_frame_t *req);
+void http_api_parse(ws_frame_req_t *req);
 
 
 #endif /* _SERVER_API_H_ */

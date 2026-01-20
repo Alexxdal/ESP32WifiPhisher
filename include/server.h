@@ -12,6 +12,19 @@ typedef enum
 } attack_scheme_t;
 
 
+#define WS_FRAME_BUFFER_SIZE 1024
+#define WS_FRAME_QUEUE_LENGTH 15
+
+/**
+ * @brief Websocket frame type
+ */
+typedef enum {
+    WS_RX_FRAME = 0,
+    WS_TX_FRAME,
+    WS_MAX_FRAME
+} ws_frame_type_t;
+
+
 /**
  * @brief HTTP websocket send request structure
  * 
@@ -20,10 +33,12 @@ typedef enum
  * @param payload Payload to send
  */
 typedef struct {
+    ws_frame_type_t frame_type;
     httpd_handle_t hd;
     int fd;
-    char payload[256];
-} ws_send_req_t;
+    size_t payload_len;
+    char payload[WS_FRAME_BUFFER_SIZE];
+} ws_frame_req_t;
 
 
 /**
@@ -32,7 +47,7 @@ typedef struct {
  * @param _req Websocket send request structure
  * @param payload Payload to send
  */
-void ws_send_command(ws_send_req_t *_req, const char *payload);
+void ws_send_command_to_queue(ws_frame_req_t *_req, const char *payload);
 
 
 /**
