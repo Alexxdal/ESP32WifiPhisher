@@ -17,7 +17,6 @@ static httpd_handle_t server = NULL;
 static uint8_t attack_scheme = 0;
 static QueueHandle_t ws_frame_queue = NULL;
 static TaskHandle_t ws_frame_process_task_handle = NULL;
-static uint8_t ws_frame_buffer[WS_FRAME_BUFFER_SIZE] = {0};
 
 
 static void ws_send_work(void *arg)
@@ -28,11 +27,11 @@ static void ws_send_work(void *arg)
         .fragmented = false,
         .type = HTTPD_WS_TYPE_TEXT,
         .payload = (uint8_t *)r->payload,
-        .len = strlen(r->payload)
+        .len = r->len ? r->len : strlen(r->payload)
     };
-    esp_err_t err = httpd_ws_send_frame_async(r->hd, r->fd, &out);
-    if (err != ESP_OK) {
-        ESP_LOGW(TAG, "Send async failed fd=%d: %s", r->fd, esp_err_to_name(err));
+	httpd_ws_send_frame_async(r->hd, r->fd, &out);
+    if (r->need_free && r->payload) {
+        free(r->payload);
     }
     free(r);
 }
@@ -44,7 +43,7 @@ static void ws_frame_process_task(void *pvParameter)
 	ws_frame_req_t ws_frame;
 	while (1) 
 	{
-		if (xQueueReceive(ws_frame_queue, &ws_frame, 100) == pdTRUE) 
+		if (xQueueReceive(ws_frame_queue, &ws_frame, portMAX_DELAY) == pdTRUE) 
 		{
 			switch (ws_frame.frame_type)
 			{
@@ -52,16 +51,20 @@ static void ws_frame_process_task(void *pvParameter)
 			{
 				/* Process received frame */
 				http_api_parse(&ws_frame);
+				if (ws_frame.payload) free(ws_frame.payload);
 				break;
 			}
 			
 			case WS_TX_FRAME:
 			{
 				/* Process transmit frame */
-				ws_frame_req_t *heap = malloc(sizeof(ws_frame_req_t));
-				if (!heap) continue;
-				*heap = ws_frame;
-				httpd_queue_work(ws_frame.hd, ws_send_work, heap);
+				ws_frame_req_t *heap_req = malloc(sizeof(ws_frame_req_t));
+				if (heap_req) {
+                    memcpy(heap_req, &ws_frame, sizeof(ws_frame_req_t));
+                    httpd_queue_work(ws_frame.hd, ws_send_work, heap_req);
+                } else {
+                    if(ws_frame.payload && ws_frame.need_free) free(ws_frame.payload);
+                }
 				break;
 			}
 			
@@ -106,45 +109,44 @@ static esp_err_t ws_handler(httpd_req_t *req)
     httpd_ws_frame_t frame = {0};
 	frame.type = HTTPD_WS_TYPE_TEXT;
 
-	// 1) prendi la lunghezza
-	ESP_ERROR_CHECK(httpd_ws_recv_frame(req, &frame, 0));
-	if (frame.len >= WS_FRAME_BUFFER_SIZE) {
-		ESP_LOGW(TAG, "Frame too big: %u", (unsigned)frame.len);
-		return ESP_FAIL;
-	}
+	esp_err_t ret = httpd_ws_recv_frame(req, &frame, 0);
+    if (ret != ESP_OK) return ret;
 
-	frame.payload = ws_frame_buffer;
-	ESP_ERROR_CHECK(httpd_ws_recv_frame(req, &frame, frame.len));
-	ws_frame_buffer[frame.len] = 0;
+	if (frame.len > 0) {
+        char *buf = malloc(frame.len + 1);
+        if (!buf) {
+            ESP_LOGE(TAG, "No mem for WS frame");
+            return ESP_ERR_NO_MEM;
+        }
+        frame.payload = (uint8_t *)buf;
+        ret = httpd_ws_recv_frame(req, &frame, frame.len);
+        if (ret != ESP_OK) {
+            free(buf);
+            return ret;
+        }
+        buf[frame.len] = 0;
 
-    int client_fd = httpd_req_to_sockfd(req);
-	/* Put received frame in queue */
-    if (frame.type == HTTPD_WS_TYPE_TEXT) {
-		if (ws_frame_queue == NULL) {
-			ESP_LOGE(TAG, "Receive command queue is not initialized!");
-			return ESP_FAIL;
-		}
-		ws_frame_req_t ws_req;
-		ws_req.hd = req->handle;
-		ws_req.fd = client_fd;
-		strncpy(ws_req.payload, (char *)frame.payload, sizeof(ws_req.payload) - 1);
-		ws_req.payload[sizeof(ws_req.payload) - 1] = '\0';
-		ws_req.frame_type = WS_RX_FRAME;
+        ws_frame_req_t ws_req;
+        ws_req.hd = req->handle;
+        ws_req.fd = httpd_req_to_sockfd(req);
+        ws_req.frame_type = WS_RX_FRAME;
+        ws_req.payload = buf;
+        ws_req.len = frame.len;
+        ws_req.need_free = true;
 
-		if (xQueueSend(ws_frame_queue, &ws_req, 100) != pdTRUE) {
-			ESP_LOGE(TAG, "Failed to send command to queue!");
-			return ESP_FAIL;
-		}
-        return ESP_OK;
+        if (xQueueSend(ws_frame_queue, &ws_req, 100) != pdTRUE) {
+            free(buf);
+            return ESP_FAIL;
+        }
     }
 
     if (frame.type == HTTPD_WS_TYPE_PING) {
-        ESP_LOGI(TAG, "PING (fd=%d)", client_fd);
+        ESP_LOGI(TAG, "PING (fd=%d)", httpd_req_to_sockfd(req));
         httpd_ws_frame_t pong = {.type = HTTPD_WS_TYPE_PONG, .payload = NULL, .len = 0};
         return httpd_ws_send_frame(req, &pong);
     }
     if (frame.type == HTTPD_WS_TYPE_CLOSE) {
-        ESP_LOGI(TAG, "CLOSE (fd=%d)", client_fd);
+        ESP_LOGI(TAG, "CLOSE (fd=%d)", httpd_req_to_sockfd(req));
         return ESP_OK;
     }
 
@@ -243,21 +245,22 @@ static esp_err_t redirect_handler(httpd_req_t *req)
 }
 
 
-void ws_send_command_to_queue(ws_frame_req_t *_req, const char *payload)
+esp_err_t ws_send_command_to_queue(ws_frame_req_t *_req)
 {
 	if (ws_frame_queue == NULL) {
 		ESP_LOGE(TAG, "Websocket frame queue is not initialized!");
-		return;
+		return ESP_FAIL;
 	}
-	ws_frame_req_t req;
-	req.frame_type = WS_TX_FRAME;
-	req.hd = _req->hd;
-	req.fd = _req->fd;
-	strncpy(req.payload, payload, sizeof(req.payload) - 1);
-	req.payload[sizeof(req.payload) - 1] = '\0';
-	if (xQueueSend(ws_frame_queue, &req, portMAX_DELAY) != pdTRUE) {
+
+	/* Enforce frame type */
+	_req->frame_type = WS_TX_FRAME;
+
+	if (xQueueSend(ws_frame_queue, _req, 100) != pdTRUE) {
 		ESP_LOGE(TAG, "Failed to send command to queue!");
+		return ESP_FAIL;
 	}
+
+	return ESP_OK;
 }
 
 

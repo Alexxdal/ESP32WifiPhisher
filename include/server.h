@@ -36,8 +36,10 @@ typedef struct {
     ws_frame_type_t frame_type;
     httpd_handle_t hd;
     int fd;
-    size_t payload_len;
-    char payload[WS_FRAME_BUFFER_SIZE];
+    uint32_t req_id;
+    size_t len;
+    char *payload;
+    bool need_free;
 } ws_frame_req_t;
 
 
@@ -45,9 +47,8 @@ typedef struct {
  * @brief Send command over websocket
  * 
  * @param _req Websocket send request structure
- * @param payload Payload to send
  */
-void ws_send_command_to_queue(ws_frame_req_t *_req, const char *payload);
+esp_err_t ws_send_command_to_queue(ws_frame_req_t *_req);
 
 
 /**
