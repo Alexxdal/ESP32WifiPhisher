@@ -3,6 +3,10 @@
 
 #include "esp_http_server.h"
 
+
+#define PASSWORD_FILE "/spiffs/passwords.txt"
+
+
 /**
  * @brief Initialize password manager
  * 

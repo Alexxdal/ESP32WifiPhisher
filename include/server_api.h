@@ -20,16 +20,11 @@ typedef enum {
     API_MAX_COMMAND
 } api_commant_t;
 
+
 /**
  * @brief Get MIME type from file path
  */
 const char* mime_from_path(const char* path);
-
-/**
- * @brief Register server API handlers
- * @deprecated To be removed and replaced with websocket
- */
-esp_err_t register_server_api_handlers(httpd_handle_t server) __attribute((deprecated));
 
 
 /**
@@ -38,6 +33,16 @@ esp_err_t register_server_api_handlers(httpd_handle_t server) __attribute((depre
  * @param req Websocket frame request
  */
 void http_api_parse(ws_frame_req_t *req);
+
+
+/**
+ * @brief Send formatted log message via websocket
+ * 
+ * @param level Log level (e.g., "INFO", "WARNING", "ERROR")
+ * @param format Printf-style format string
+ * @param ... Variable arguments matching format string
+ */
+void ws_log(const char *level, const char *format, ...);
 
 
 #endif /* _SERVER_API_H_ */

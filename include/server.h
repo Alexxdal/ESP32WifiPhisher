@@ -13,7 +13,7 @@ typedef enum
 
 
 #define WS_FRAME_BUFFER_SIZE 1024
-#define WS_FRAME_QUEUE_LENGTH 15
+#define WS_FRAME_QUEUE_LENGTH 18
 
 /**
  * @brief Websocket frame type
@@ -52,6 +52,14 @@ esp_err_t ws_send_command_to_queue(ws_frame_req_t *_req);
 
 
 /**
+ * @brief Send broadcast message to all connected websocket clients
+ * 
+ * @param _req Websocket send request structure
+ */
+esp_err_t ws_send_broadcast_to_queue(ws_frame_req_t *_req);
+
+
+/**
  * @brief Start http server task
  * 
  */
@@ -63,5 +71,12 @@ void http_server_start(void);
  * 
  */
 void http_server_stop(void);
+
+
+/**
+ * @brief Get Server Handler
+ * 
+ */
+httpd_handle_t get_web_server_handle(void);
 
 #endif

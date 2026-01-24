@@ -99,13 +99,19 @@ Once configured, the ESP32 will execute the Evil Twin attack and serve the phish
 
 Here are some visual examples of the tool in action:
 
-### 1. Settings Page
-![Settings Page](./screenshots/settings_page.png)
+### 1. Dashboard
+![Settings Page](./screenshots/dashboard_page.png)
 
-### 2. EvilTwin Page
-![EvilTwin Page](./screenshots/elivtwin_page.png)
+### 2. Scan & Sniff
+![Settings Page](./screenshots/scan_page.png)
 
-### 3. Example Phishing Page
+### 3. EvilTwin Page
+![EvilTwin Page](./screenshots/elivtwin_page_new.png)
+
+### 4. Karma Attack Page
+![EvilTwin Page](./screenshots/karmaattack_page.png)
+
+### 5. Example Phishing Page
 ![Phishing Page Example](./screenshots/phishing_page_example.png)
 
 ---

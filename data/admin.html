@@ -321,6 +321,7 @@
             border-collapse: collapse;
             font-size: 0.9rem;
             color: #ccc;
+            white-space: nowrap;
         }
 
         .wifi-table th {
@@ -374,6 +375,16 @@
 
         .log-error {
             color: #ff5252;
+        }
+
+        .log-success {
+            color: #00e676;
+            font-weight: bold;
+            text-shadow: 0 0 5px rgba(0, 230, 118, 0.5);
+        }
+        
+        .log-warning {
+            color: #ffab40;
         }
 
         /* --- TOAST NOTIFICATION (New) --- */
@@ -635,7 +646,7 @@
         <div id="view-settings" class="view-container">
             <h2>Configuration</h2>
             <div class="card">
-                <form id="hotspot-form" action="/api/ap_settings/set" method="post" onsubmit="handleSettings(event)">
+                <form id="hotspot-form" onsubmit="handleSettings(event)">
                     <label>Management AP SSID</label>
                     <input type="text" id="ssid" name="ssid">
                     <label>Password</label>
@@ -665,7 +676,14 @@
             GET_STATUS: 0,
             SET_AP_SETTINGS: 1,
             GET_AP_SETTINGS: 2,
-            WIFI_SCAN: 3
+            WIFI_SCAN: 3,
+            START_EVILTWIN: 4,
+            GET_EVILTWIN_TARGET: 5,
+            CHECK_INPUT_PASSWORD: 6,
+            GET_PASSWORDS: 7,
+            KARMA_ATTACK_SCAN: 8,
+            GET_KARMA_PROBES: 9,
+            KARMA_ATTACK_START: 10
         };
 
         // Stato globale
@@ -675,6 +693,7 @@
         let isConnected = false;
         let statusInterval = null;
         let currentTarget = null;
+        let karmaInterval = null;
 
         // ==========================================
         // LOGGER & UI UTILS
@@ -683,12 +702,20 @@
             const term = document.getElementById('terminal');
             const entry = document.createElement('div');
             entry.className = 'log-entry';
+            
+            // Mappa i livelli del C alle classi CSS
+            let colorClass = 'log-info';
+            if (type === 'error') colorClass = 'log-error';
+            else if (type === 'success') colorClass = 'log-success';
+            else if (type === 'warning') colorClass = 'log-warning';
+
             const time = new Date().toLocaleTimeString().split(' ')[0];
-            const colorClass = type === 'error' ? 'log-error' : 'log-info';
-            // Scrivi [SYS] per messaggi di sistema
             entry.innerHTML = `<span class="log-time">[${time}]</span> <span class="${colorClass}">${msg}</span>`;
+            
             term.appendChild(entry);
-            term.scrollTop = term.scrollHeight; 
+            if (term.scrollHeight - term.scrollTop <= term.clientHeight + 50) {
+                term.scrollTop = term.scrollHeight; 
+            }
         }
 
         function showToast(msg) {
@@ -703,7 +730,6 @@
         }
 
         function showView(viewId, menuItem) {
-            // UI Switch
             document.querySelectorAll('.view-container').forEach(el => el.classList.remove('active'));
             document.getElementById(viewId).classList.add('active');
             document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active'));
@@ -713,6 +739,11 @@
             if (window.innerWidth <= 768) document.getElementById('sidebar').classList.remove('open');
             if (viewId === 'view-settings') loadApSettings();
             if (viewId === 'view-passwords') fetchPasswords();
+
+            if (viewId !== 'view-karma' && karmaInterval) {
+                clearInterval(karmaInterval);
+                karmaInterval = null;
+            }
         }
 
         // ==========================================
@@ -733,7 +764,6 @@
             ws.onclose = () => {
                 isConnected = false;
                 log("WebSocket Disconnected. Reconnecting in 3s...", "error");
-                showToast("Connection Lost");
                 setTimeout(connectWS, 3000);
             };
 
@@ -745,21 +775,20 @@
             ws.onmessage = (event) => {
                 try {
                     const msg = JSON.parse(event.data);
+                    // Server log
+                    if (msg.type === 'log') {
+                        log(msg.msg, msg.level);
+                        return;
+                    }
                     if (msg.req_id && pendingRequests.has(msg.req_id)) {
                         const { resolve, reject } = pendingRequests.get(msg.req_id);
-                        
                         if (msg.status === 'error') {
                             reject(msg.message || "Unknown error");
                         } else {
                             resolve(msg);
                         }
                         pendingRequests.delete(msg.req_id);
-                        return;
                     }
-
-                    // 2. Gestione Messaggi Push (senza req_id o non richiesti)
-                    // (Qui potremmo gestire log in tempo reale dall'ESP32 se li implementi)
-
                 } catch (e) {
                     console.error("JSON Parse Error:", e);
                 }
@@ -776,61 +805,47 @@
                     reject("WebSocket not connected");
                     return;
                 }
-
                 const id = ++reqIdCounter;
                 pendingRequests.set(id, { resolve, reject });
-
                 const payload = JSON.stringify({
                     cmd: cmdId,
                     req_id: id,
                     ...params
                 });
-
                 ws.send(payload);
-
                 // Timeout di sicurezza: se l'ESP non risponde in 15 secondi, annulla
                 setTimeout(() => {
                     if (pendingRequests.has(id)) {
                         pendingRequests.delete(id);
                         reject("Timeout waiting for ESP32");
                     }
-                }, 15000); 
+                }, 10000); 
             });
         }
 
         // ==========================================
         // FUNZIONI API (STATUS, SCAN, ETC.)
         // ==========================================
-
-        // 1. SYSTEM STATUS (Via WebSocket)
         async function requestSystemStatus() {
             if (!isConnected) return;
             try {
                 const data = await sendCommand(CMD.GET_STATUS);
-                
-                // Update UI
                 if (data.uptime) document.getElementById('uptime-val').innerText = data.uptime;
                 if (data.packets !== undefined) document.getElementById('packets-val').innerText = data.packets;
-                
                 if (data.ram !== undefined) {
                     document.getElementById('ram-text-val').innerText = data.ram + '%';
                     const bar = document.getElementById('ram-bar');
                     bar.style.width = data.ram + '%';
                     bar.style.backgroundColor = data.ram > 85 ? 'var(--danger)' : 'var(--accent)';
                 }
-
                 const sdEl = document.getElementById('status-sd');
                 if (data.sd !== undefined) {
                     sdEl.innerText = data.sd ? "OK" : "ERR";
                     sdEl.style.color = data.sd ? "var(--accent)" : "var(--danger)";
                 }
-
-            } catch (e) {
-                // do nothing
-            }
+            } catch (e) {}
         }
 
-        // 2. WIFI SCANNER (Via WebSocket)
         async function scanNetworks() {
             log("Starting WiFi Scan (WS)...");
             const tbody = document.getElementById('wifi-networks-body');
@@ -872,7 +887,6 @@
             }
         }
 
-        // 3. IMPOSTAZIONI AP (Via WebSocket)
         async function loadApSettings() {
             try {
                 const data = await sendCommand(CMD.GET_AP_SETTINGS);
@@ -903,52 +917,40 @@
             }
         }
 
-        // ==========================================
-        // FUNZIONI DI ATTACCO (Via HTTP POST Legacy)
-        // Queste rimangono via HTTP perché nel C usano httpd_req_recv standard
-        // ==========================================
         function selectTarget(ssid, bssid, channel, signal, authmode) {
             currentTarget = { ssid, bssid, channel, signal, authmode };
-            
-            // Aggiorna UI Evil Twin
             document.getElementById('current-target-ssid').innerText = ssid;
             document.getElementById('current-target-bssid').innerText = bssid;
             document.getElementById('home-target').innerText = ssid;
-
             showToast(`Target Selected: ${ssid}`);
             
-            // Vai alla pagina Evil Twin
             const evilTwinMenu = document.querySelectorAll('.menu-item')[2];
             showView('view-eviltwin', evilTwinMenu);
         }
 
-        function startEvilTwin() {
+        async function startEvilTwin() {
             if (!currentTarget) {
                 showToast("No target selected!");
                 return;
             }
-
             log(`Launching Evil Twin on ${currentTarget.ssid}...`);
-            const scenario = document.getElementById('attack-scenario').value;
-            
-            // Payload x-www-form-urlencoded (compatibile con il tuo sscanf in C)
-            const t = currentTarget;
-            const body = `ssid=${encodeURIComponent(t.ssid)}&bssid=${t.bssid}&channel=${t.channel}&signal=${t.signal}&authmode_code=${t.authmode}&group=0&pairwise=0&scheme=${scenario}`;
+            const params = {
+                ssid: currentTarget.ssid,
+                bssid: currentTarget.bssid,
+                channel: currentTarget.channel,
+                signal: currentTarget.signal,
+                authmode_code: currentTarget.authmode,
+                scheme: parseInt(document.getElementById('attack-scenario').value)
+            };
 
-            fetch('/api/evil_twin', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: body
-            })
-            .then(res => {
-                if(res.ok) { 
-                    showToast("Evil Twin Started!"); 
-                    log("Attack active.");
-                } else {
-                    showToast("Server Error");
+            try {
+                const res = await sendCommand(CMD.START_EVILTWIN, params);
+                if(res.status === 'ok') {
+                    showToast("Evil Twin Started!");
                 }
-            })
-            .catch(e => log("Connection Error: " + e, "error"));
+            } catch(e) {
+                log("Error starting Attack: " + e, "error");
+            }
         }
 
         function stopAttack() {
@@ -959,41 +961,30 @@
             }
         }
 
-        // ==========================================
-        // KARMA & PASSWORDS (HTTP Misto)
-        // ==========================================
-        
-        let karmaInterval = null;
-
-        function startKarmaScan() {
+        async function startKarmaScan() {
             log("Starting Karma Scan...");
-            fetch('/api/karma_attack/scan', {
-                method: 'POST', 
-                body: 'start_stop=1'
-            }).then(() => {
+            try {
+                await sendCommand(CMD.KARMA_ATTACK_SCAN, { start_stop: 1 });
                 showToast("Scanning Probes...");
-                // Avvia polling ogni 4 secondi
                 if(karmaInterval) clearInterval(karmaInterval);
                 karmaInterval = setInterval(fetchKarmaProbes, 4000);
-            });
+            } catch(e) {
+                log("Error starting scan: " + e, "error");
+            }
         }
 
-        function stopKarmaScan() {
-            fetch('/api/karma_attack/scan', {
-                method: 'POST', 
-                body: 'start_stop=0'
-            }).then(() => {
+        async function stopKarmaScan() {
+            try {
+                await sendCommand(CMD.KARMA_ATTACK_SCAN, { start_stop: 0 });
                 showToast("Scan Stopped");
                 if(karmaInterval) clearInterval(karmaInterval);
-            });
+            } catch(e) { log("Error stopping scan: " + e, "error"); }
         }
 
         async function fetchKarmaProbes() {
             try {
-                // Nota: questo usa GET, quindi fetch va bene. 
-                // Se volessi spostarlo su WS, dovresti aggiungere un CMD.GET_KARMA_PROBES
-                const res = await fetch('/api/karma_attack/get_probes');
-                const data = await res.json();
+                const res = await sendCommand(CMD.GET_KARMA_PROBES);
+                const data = res.data;
                 
                 const tbody = document.getElementById('karma-scan-body');
                 tbody.innerHTML = '';
@@ -1018,22 +1009,22 @@
                      `;
                      tbody.appendChild(tr);
                 });
-            } catch(e) {
-                // Ignore errors during poll
-            }
+            } catch(e) { }
         }
 
-        function launchKarmaAttack(ssid, channel) {
-            const scenario = document.getElementById('karma-scenario').value;
+        async function launchKarmaAttack(ssid, channel) {
+            const scenario = parseInt(document.getElementById('karma-scenario').value);
             if(confirm(`Attack ${ssid}?`)) {
-                const body = `ssid=${encodeURIComponent(ssid)}&channel=${channel}&scheme=${scenario}`;
-                fetch('/api/karma_attack/set_target', {
-                    method: 'POST',
-                    body: body
-                }).then(() => {
+                try {
+                    await sendCommand(CMD.KARMA_ATTACK_START, {
+                        ssid: ssid,
+                        channel: channel,
+                        scheme: scenario
+                    });
                     showToast(`Karma Started on ${ssid}`);
-                    log(`Karma attack active on ${ssid}`);
-                });
+                } catch(e) {
+                    log("Error launching Karma: " + e, "error");
+                }
             }
         }
 
@@ -1041,14 +1032,14 @@
             const area = document.getElementById('passwords-textarea');
             area.value = "Fetching...";
             try {
-                const res = await fetch('/get_passwords', { method: 'POST' });
-                if(res.ok) {
-                    area.value = await res.text();
+                const res = await sendCommand(CMD.GET_PASSWORDS);
+                if(res.content) {
+                    area.value = res.content;
                 } else {
-                    area.value = "Error fetching passwords";
+                    area.value = "(No passwords found or file empty)";
                 }
             } catch(e) {
-                area.value = "Connection Error";
+                area.value = "Connection Error: " + e;
             }
         }
 

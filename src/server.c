@@ -29,7 +29,23 @@ static void ws_send_work(void *arg)
         .payload = (uint8_t *)r->payload,
         .len = r->len ? r->len : strlen(r->payload)
     };
-	httpd_ws_send_frame_async(r->hd, r->fd, &out);
+	/* BROADCAST */
+	if (r->fd == -1) {
+        size_t fds = 10;
+        int client_fds[10];
+        if (httpd_get_client_list(r->hd, &fds, client_fds) == ESP_OK) {
+            for (int i = 0; i < fds; i++) {
+                if (httpd_ws_get_fd_info(r->hd, client_fds[i]) == HTTPD_WS_CLIENT_WEBSOCKET) {
+                    httpd_ws_send_frame_async(r->hd, client_fds[i], &out);
+                }
+            }
+        }
+    } 
+	/* UNICAST */
+    else {
+        httpd_ws_send_frame_async(r->hd, r->fd, &out);
+    }
+
     if (r->need_free && r->payload) {
         free(r->payload);
     }
@@ -264,6 +280,23 @@ esp_err_t ws_send_command_to_queue(ws_frame_req_t *_req)
 }
 
 
+esp_err_t ws_send_broadcast_to_queue(ws_frame_req_t *_req)
+{
+    if (ws_frame_queue == NULL) {
+		ESP_LOGE(TAG, "Websocket frame queue is not initialized!");
+		return ESP_FAIL;
+	}
+    _req->frame_type = WS_TX_FRAME;
+    
+
+    if (xQueueSend(ws_frame_queue, _req, 0) != pdTRUE) {
+        return ESP_FAIL; 
+    }
+
+    return ESP_OK;
+}
+
+
 void http_server_start(void)
 {
 	if( server != NULL )
@@ -295,8 +328,6 @@ void http_server_start(void)
 		return;
 	}
 	xTaskCreate(ws_frame_process_task, "ws_frame_process_task", 4096, NULL, 5, &ws_frame_process_task_handle);
-
-	ESP_ERROR_CHECK(register_server_api_handlers(server));
 
 	/* Handler for CORS preflight requests */
 	httpd_uri_t cors_preflight_uri = {
@@ -346,4 +377,10 @@ void http_server_stop(void)
         }
 		server = NULL;
     }
+}
+
+
+httpd_handle_t get_web_server_handle(void) 
+{
+    return server;
 }

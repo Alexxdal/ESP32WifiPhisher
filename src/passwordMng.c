@@ -12,7 +12,6 @@
 static const char *TAG = "PASSWORD_MANAGER";
 static QueueHandle_t password_queue = NULL;
 static uint8_t *pcap_pointer = NULL;
-#define PASSWORD_FILE "/spiffs/passwords.txt"
 #define QUEUE_LENGTH 4
 #define PASSWORD_ITEM_SIZE 128
 
