@@ -4,287 +4,1053 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ESP32 Configuration</title>
+    <title>ESP32WifiPhisher</title>
     <style>
+        :root {
+            --bg-color: #0f0f0f;
+            --sidebar-bg: #141414;
+            --card-bg: #1e1e1e;
+            --text-main: #e0e0e0;
+            --text-muted: #6c757d;
+            --accent: #00e676;
+            --accent-dim: rgba(0, 230, 118, 0.1);
+            --danger: #ff5252;
+            --border: #333;
+            --terminal-bg: #000000;
+        }
+
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
             margin: 0;
             padding: 0;
-        }
-
-        .tabs {
+            background-color: var(--bg-color);
+            color: var(--text-main);
             display: flex;
-            cursor: pointer;
-            background-color: #333;
-            color: white;
-            justify-content: space-around;
-            padding: 10px 0;
+            height: 100vh;
+            overflow: hidden;
         }
 
-        .tabs div {
+        /* --- SIDEBAR --- */
+        .sidebar {
+            width: 260px;
+            background-color: var(--sidebar-bg);
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid var(--border);
+            z-index: 1000;
+            transition: transform 0.3s ease;
+        }
+
+        .brand {
+            padding: 25px 20px;
+            font-size: 1.4rem;
+            font-weight: 800;
+            color: var(--accent);
+            letter-spacing: 1px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-shadow: 0 0 10px rgba(0, 230, 118, 0.4);
+        }
+
+        .menu {
             flex: 1;
-            text-align: center;
-            padding: 10px;
+            overflow-y: auto;
+            padding: 20px 0;
         }
 
-        .tabs div:hover {
-            background-color: #555;
+        .menu-category {
+            padding: 20px 25px 8px 25px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            letter-spacing: 1.2px;
+            user-select: none;
         }
 
-        .tabs .active {
-            background-color: #555;
+        .menu-item {
+            padding: 12px 25px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            color: #bbb;
+            transition: all 0.2s ease;
+            border-left: 3px solid transparent;
+        }
+
+        .menu-item:hover {
+            background-color: rgba(255, 255, 255, 0.05);
+            color: white;
+        }
+
+        .menu-item.active {
+            background-color: var(--accent-dim);
+            color: var(--accent);
+            border-left: 3px solid var(--accent);
+        }
+
+        .menu-item svg {
+            width: 20px;
+            height: 20px;
+            margin-right: 15px;
+            fill: currentColor;
+        }
+
+        /* --- MAIN CONTENT --- */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background-color: var(--bg-color);
+            position: relative;
+        }
+
+        /* --- TOP BAR --- */
+        .top-bar {
+            height: 60px;
+            background-color: var(--sidebar-bg);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 25px;
+        }
+
+        .page-title {
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .status-indicators {
+            display: flex;
+            gap: 15px;
+            font-size: 0.9rem;
+            align-items: center;
+        }
+
+        /* RAM Bar Style */
+        .ram-container {
+            display: flex;
+            flex-direction: column;
+            width: 100px;
+        }
+
+        .ram-text {
+            font-size: 0.75rem;
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 2px;
+            color: #aaa;
+        }
+
+        .progress-bg {
+            width: 100%;
+            height: 4px;
+            background: #333;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--accent);
+            width: 0%;
+            transition: width 0.5s ease;
+            box-shadow: 0 0 8px var(--accent);
+        }
+
+        .status-badge {
+            background: #333;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            border: 1px solid #444;
+        }
+
+        .status-value {
+            color: var(--accent);
             font-weight: bold;
         }
 
-        .tab-content {
+        .mobile-toggle {
             display: none;
-            padding: 20px;
+            cursor: pointer;
+            font-size: 1.5rem;
+            color: white;
         }
 
-        .tab-content.active {
+        /* --- VIEWS --- */
+        .view-container {
+            flex: 1;
+            padding: 30px;
+            overflow-y: auto;
+            display: none;
+            padding-bottom: 150px;
+            /* Space for terminal */
+        }
+
+        .view-container.active {
             display: block;
+            animation: fadeIn 0.3s;
         }
 
-        input[type="text"],
-        input[type="password"],
-        select {
-            width: 95%;
-            padding: 10px;
-            margin: 10px 0;
-            border: 1px solid #ccc;
-            border-radius: 5px;
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        h2 {
+            color: white;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 15px;
+            margin-top: 0;
+            font-weight: 300;
+            letter-spacing: 1px;
+        }
+
+        /* --- CARDS & UI --- */
+        .card {
+            background-color: var(--card-bg);
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid var(--border);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: bold;
+            color: white;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+        }
+
+        .stat-label {
+            color: #aaa;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 5px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #aaa;
+            font-size: 0.85rem;
+            margin-top: 15px;
+            text-transform: uppercase;
+        }
+
+        input,
+        select,
+        textarea {
+            width: 100%;
+            padding: 12px;
+            background-color: #121212;
+            border: 1px solid #444;
+            color: white;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-family: 'Courier New', monospace;
+            transition: border 0.2s;
+        }
+
+        input:focus,
+        select:focus,
+        textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
         }
 
         button {
-            padding: 10px 20px;
-            background-color: #333;
-            color: white;
+            background-color: var(--accent);
+            color: #000;
+            padding: 12px 24px;
             border: none;
-            border-radius: 5px;
+            border-radius: 4px;
             cursor: pointer;
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            letter-spacing: 1px;
+            transition: all 0.2s;
         }
 
         button:hover {
-            background-color: #555;
+            filter: brightness(1.1);
+            box-shadow: 0 0 15px var(--accent-dim);
         }
 
-        textarea {
-            width: 100%;
-            height: 80vh;
-            padding: 10px;
-            font-family: monospace;
-            font-size: 1rem;
-            border: 1px solid #ccc;
-            border-radius: 5px;
+        button:active {
+            transform: scale(0.98);
+        }
+
+        button.danger {
+            background-color: var(--danger);
+            color: white;
+        }
+
+        button.danger:hover {
+            box-shadow: 0 0 15px rgba(255, 82, 82, 0.2);
+        }
+
+        button.secondary {
+            background-color: #333;
+            color: white;
+            border: 1px solid #444;
         }
 
         .wifi-table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 20px;
-        }
-
-        .wifi-table th,
-        .wifi-table td {
-            border: 1px solid #ccc;
-            padding: 10px;
-            text-align: left;
+            font-size: 0.9rem;
+            color: #ccc;
+            white-space: nowrap;
         }
 
         .wifi-table th {
-            background-color: #f4f4f4;
-            font-weight: bold;
+            text-align: left;
+            padding: 12px;
+            border-bottom: 2px solid #444;
+            color: #888;
+            text-transform: uppercase;
+            font-size: 0.75rem;
         }
 
-        .wifi-table tr:nth-child(even) {
-            background-color: #f9f9f9;
+        .wifi-table td {
+            border-bottom: 1px solid #333;
+            padding: 12px;
         }
 
         .wifi-table tr:hover {
-            background-color: #f1f1f1;
+            background-color: #2a2a2a;
         }
 
-        .select-btn {
+        /* --- TERMINAL WINDOW (New) --- */
+        .terminal-panel {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 140px;
+            background-color: var(--terminal-bg);
+            border-top: 1px solid var(--accent);
+            padding: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            color: #0f0;
+            overflow-y: auto;
+            z-index: 500;
+            box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .log-entry {
+            margin: 2px 0;
+        }
+
+        .log-time {
+            color: #666;
+            margin-right: 10px;
+        }
+
+        .log-info {
+            color: #00e676;
+        }
+
+        .log-error {
+            color: #ff5252;
+        }
+
+        .log-success {
+            color: #00e676;
+            font-weight: bold;
+            text-shadow: 0 0 5px rgba(0, 230, 118, 0.5);
+        }
+        
+        .log-warning {
+            color: #ffab40;
+        }
+
+        /* --- TOAST NOTIFICATION (New) --- */
+        .toast {
+            position: absolute;
+            top: 80px;
+            right: 20px;
             background-color: #333;
+            border-left: 4px solid var(--accent);
+            padding: 15px 20px;
+            border-radius: 4px;
             color: white;
-            border: none;
-            border-radius: 5px;
-            padding: 5px 10px;
-            cursor: pointer;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+            transform: translateX(200%);
+            transition: transform 0.3s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+            z-index: 2000;
         }
 
-        .select-btn:hover {
-            background-color: #555;
+        .toast.show {
+            transform: translateX(0);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                position: absolute;
+                height: 100%;
+                transform: translateX(-100%);
+                box-shadow: 5px 0 15px rgba(0, 0, 0, 0.5);
+            }
+
+            .sidebar.open {
+                transform: translateX(0);
+            }
+
+            .mobile-toggle {
+                display: block;
+            }
+
+            .view-container {
+                padding: 15px;
+                padding-bottom: 160px;
+            }
+
+            .status-indicators {
+                display: none;
+            }
+
+            /* Hide status on mobile top bar */
         }
     </style>
 </head>
 
 <body>
-    <div class="tabs">
-        <div id="tab-settings" class="active">Hotspot Settings</div>
-        <div id="tab-eviltwin">EVIL TWIN</div>
-        <div id="tab-passwords">Passwords</div>
-    </div>
 
-    <div id="content-settings" class="tab-content active">
-        <h2>Hotspot Settings</h2>
-        <form id="hotspot-form" action="/api/ap_settings/set" method="post">
-            <label for="ssid">SSID:</label><br>
-            <input type="text" id="ssid" name="ssid" placeholder="Enter SSID" required><br>
-            <label for="password">Password:</label><br>
-            <input type="text" id="password" name="password" placeholder="Enter Password"><br>
-            <label for="channel">Channel:</label><br>
-            <input type="text" id="channel" name="channel" placeholder="Enter Channel (1-13)" required><br>
-            <button type="submit">Save Settings</button>
-        </form>
-    </div>
-
-    <div id="content-eviltwin" class="tab-content">
-        <h2>EVIL TWIN</h2>
-        <p>Scan for Wi-Fi networks and select a target for the attack.</p>
-        <div>
-            <label for="attack-scenario">Select Attack Scenario:</label>
-            <select id="attack-scenario" name="attack-scenario">
-                <option value="0">Firmware Upgrade</option>
-                <option value="1">Fake web-based network manager</option>
-                <option value="2">Plugin Update</option>
-                <option value="3">OAuth Login</option>
-            </select>
+    <div class="sidebar" id="sidebar">
+        <div class="brand">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                <path
+                    d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z" />
+            </svg>
+            <span>ESP32 AUDIT</span>
         </div>
-        <button id="scan-btn">Scan Networks</button>
-        <div id="network-list">
-            <h3>Available Networks:</h3>
-            <table class="wifi-table">
-                <thead>
-                    <tr>
-                        <th>SSID</th>
-                        <th>Signal</th>
-                        <th>Channel</th>
-                        <th>BSSID</th>
-                        <th>Auth Mode</th>
-                        <!--<th>Pairwise Cipher</th>-->
-                        <!--<th>Group Cipher</th>-->
-                        <th>WPS</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody id="wifi-networks">
-                    <!-- Populated dynamically -->
-                </tbody>
-            </table>
+        <div class="menu">
+            <div class="menu-category">Dashboard</div>
+            <div class="menu-item active" onclick="showView('view-home', this)">
+                <svg viewBox="0 0 24 24">
+                    <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
+                </svg> Status Overview
+            </div>
+            <div class="menu-category">WiFi Modules</div>
+            <div class="menu-item" onclick="showView('view-scan', this)">
+                <svg viewBox="0 0 24 24">
+                    <path
+                        d="M12.01 21.49L23.64 7c-.45-.34-4.93-4-11.64-4C5.28 3 .81 6.66.36 7l11.63 14.49.01.01.01-.01z" />
+                </svg> Scanner & Sniff
+            </div>
+            <div class="menu-item" onclick="showView('view-eviltwin', this)">
+                <svg viewBox="0 0 24 24">
+                    <path
+                        d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z" />
+                </svg> Evil Twin Attack
+            </div>
+            <div class="menu-item" onclick="showView('view-karma', this)">
+                <svg viewBox="0 0 24 24">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+                </svg> Karma Attack
+            </div>
+            <div class="menu-category">System</div>
+            <div class="menu-item" onclick="showView('view-passwords', this)">
+                <svg viewBox="0 0 24 24">
+                    <path
+                        d="M12.65 10C11.83 7.67 9.61 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.61 0 4.83-1.67 5.65-4H17v4h4v-4h2v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z" />
+                </svg> Captured Creds
+            </div>
+            <div class="menu-item" onclick="showView('view-settings', this)">
+                <svg viewBox="0 0 24 24">
+                    <path
+                        d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.58 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" />
+                </svg> Configuration
+            </div>
         </div>
     </div>
 
-    <div id="content-passwords" class="tab-content">
-        <h2>PASSWORDS</h2>
-        <textarea id="passwords-textarea" readonly>Loading passwords...</textarea>
-        <button onclick="fetchPasswords()">UPDATE</button>
+    <div class="main-content">
+        <div class="top-bar">
+            <div class="mobile-toggle" onclick="toggleSidebar()">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z" />
+                </svg>
+            </div>
+            <div class="page-title" id="page-title">Status Overview</div>
+
+            <div class="status-indicators">
+                <div class="ram-container">
+                    <div class="ram-text"><span>RAM</span> <span id="ram-text-val">0%</span></div>
+                    <div class="progress-bg">
+                        <div class="progress-fill" id="ram-bar" style="width: 0%"></div>
+                    </div>
+                </div>
+                <div class="status-badge">SD <span class="status-value" id="status-sd">--</span></div>
+            </div>
+        </div>
+
+        <div id="toast" class="toast">Notification Message</div>
+
+        <div id="view-home" class="view-container active">
+            <h2>System Dashboard</h2>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px;">
+                <div class="card">
+                    <div class="stat-label">System Uptime</div>
+                    <div class="stat-number" id="uptime-val">--:--:--</div>
+                </div>
+                <div class="card">
+                    <div class="stat-label">Packets Captured</div>
+                    <div class="stat-number" id="packets-val" style="color:var(--accent)">0</div>
+                </div>
+                <div class="card">
+                    <div class="stat-label">Active Target</div>
+                    <div style="font-size:1.4rem; font-weight:bold; color:white;" id="home-target">None</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-scan" class="view-container">
+            <h2>WiFi Scanner</h2>
+            <div class="card">
+                <p style="margin-top:0;">Scan for nearby Access Points to select a target.</p>
+                <div class="btn-group">
+                    <button onclick="scanNetworks()">Start Scan</button>
+                    <button class="secondary">Stop</button>
+                </div>
+            </div>
+            <div id="network-list" class="card" style="padding:0; overflow-x:auto;">
+                <table class="wifi-table">
+                    <thead>
+                        <tr>
+                            <th>SSID</th>
+                            <th>RSSI</th>
+                            <th>CH</th>
+                            <th>BSSID</th>
+                            <th>Sec</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="wifi-networks-body">
+                        <tr>
+                            <td colspan="6" style="text-align:center; padding: 20px;">No scan data</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="view-eviltwin" class="view-container">
+            <h2>Evil Twin Attack</h2>
+            <div class="card">
+                <label>ATTACK SCENARIO</label>
+                <select id="attack-scenario">
+                    <option value="0">Firmware Upgrade</option>
+                    <option value="1">Fake Network Manager</option>
+                    <option value="2">OAuth Login</option>
+                </select>
+
+                <div
+                    style="margin-top: 20px; border: 1px dashed #444; padding: 15px; border-radius: 4px; background:#181818;">
+                    <label style="margin-top:0;">TARGET DETAILS</label>
+                    <div style="font-size: 1.2rem; color: var(--accent); font-weight:bold;" id="current-target-ssid">No
+                        Target Selected</div>
+                    <div style="font-family:monospace; color: #666;" id="current-target-bssid">--:--:--:--:--:--</div>
+                </div>
+
+                <div class="btn-group">
+                    <button class="danger" onclick="startEvilTwin()">LAUNCH ATTACK</button>
+                    <button class="secondary" onclick="stopAttack()">TERMINATE</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-karma" class="view-container">
+            <h2>Karma Probe Scanner</h2>
+            
+            <div class="card">
+                <label>1. PHISHING SCENARIO</label>
+                <select id="karma-scenario">
+                    <option value="0">Firmware Upgrade</option>
+                    <option value="1">Fake Network Manager</option>
+                    <option value="2">OAuth Login</option>
+                </select>
+
+                <p style="margin-top:15px; font-size:0.9rem; color:#aaa;">
+                    2. Scan for devices probing for known networks.
+                </p>
+
+                <div class="btn-group">
+                    <button onclick="startKarmaScan()">SCAN PROBES</button>
+                    <button class="secondary" onclick="stopKarmaScan()">STOP SCAN</button>
+                </div>
+            </div>
+
+            <div class="card" style="padding:0; overflow-x:auto;">
+                <div style="padding:15px; border-bottom:1px solid #333; font-weight:bold; color:var(--accent);">
+                    DETECTED PROBES
+                </div>
+                <table class="wifi-table">
+                    <thead>
+                        <tr>
+                            <th>Victim MAC</th>
+                            <th>Target SSID</th>
+                            <th>RSSI</th>
+                            <th>CH</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="karma-scan-body">
+                        <tr>
+                            <td colspan="5" style="text-align:center; padding: 20px; color:#666;">
+                                Click 'SCAN PROBES' to start listening...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="view-passwords" class="view-container">
+            <h2>Captured Credentials</h2>
+            <div class="card">
+                <textarea id="passwords-textarea" readonly
+                    style="height: 350px; background-color: #000; color:#0f0; border:none;"></textarea>
+                <div class="btn-group">
+                    <button onclick="fetchPasswords()">REFRESH</button>
+                    <button class="secondary"
+                        onclick="document.getElementById('passwords-textarea').value=''">CLEAR</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-settings" class="view-container">
+            <h2>Configuration</h2>
+            <div class="card">
+                <form id="hotspot-form" onsubmit="handleSettings(event)">
+                    <label>Management AP SSID</label>
+                    <input type="text" id="ssid" name="ssid">
+                    <label>Password</label>
+                    <input type="text" id="password" name="password">
+                    <label>Channel</label>
+                    <input type="number" id="channel" name="channel" min="1" max="13">
+                    <div class="btn-group">
+                        <button type="submit">SAVE & REBOOT</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="terminal-panel" id="terminal">
+            <div class="log-entry"><span class="log-time">[SYSTEM]</span> <span class="log-info">Ready.</span></div>
+        </div>
+
     </div>
 
     <script>
-        function selectTarget(ssid, bssid, channel, signal, authmode_code, pairwise_cipher, group_cipher) {
-            const attackScenario = document.getElementById('attack-scenario').value;
-            const targetData = `ssid=${ssid}&bssid=${bssid}&channel=${channel}&signal=${signal}&authmode_code=${authmode_code}&group=${group_cipher}&pairwise=${pairwise_cipher}&scheme=${attackScenario}`;
-            fetch('/api/evil_twin', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded'
-                },
-                body: targetData
-            })
-                .then(response => {
-                    if (response.ok) {
-                        alert(`Target ${ssid} selezionato e inviato al server.`);
-                    } else {
-                        alert('Errore invio del target al server.');
-                    }
-                })
-                .catch(error => {
-                    console.error('Errore durante la richiesta POST:', error);
-                    alert('Errore durante la richiesta POST.');
-                });
-        }
-        async function fetchPasswords() {
-            const textarea = document.getElementById('passwords-textarea');
-            textarea.value = "Loading passwords...";
-            try {
-                const response = await fetch('/get_passwords', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ action: 'fetch_passwords' })
-                });
-                if (response.ok) {
-                    const data = await response.text();
-                    textarea.value = data;
-                } else {
-                    textarea.value = 'Error fetching passwords.';
-                }
-            } catch (error) {
-                console.error('Error fetching passwords:', error);
-                textarea.value = 'Failed to fetch passwords.';
+        // ==========================================
+        // CONFIGURAZIONE & COSTANTI
+        // ==========================================
+        const WS_URL = `ws://192.168.4.1/ws`;
+        
+        const CMD = {
+            GET_STATUS: 0,
+            SET_AP_SETTINGS: 1,
+            GET_AP_SETTINGS: 2,
+            WIFI_SCAN: 3,
+            START_EVILTWIN: 4,
+            GET_EVILTWIN_TARGET: 5,
+            CHECK_INPUT_PASSWORD: 6,
+            GET_PASSWORDS: 7,
+            KARMA_ATTACK_SCAN: 8,
+            GET_KARMA_PROBES: 9,
+            KARMA_ATTACK_START: 10
+        };
+
+        // Stato globale
+        let ws = null;
+        let reqIdCounter = 0;
+        let pendingRequests = new Map();
+        let isConnected = false;
+        let statusInterval = null;
+        let currentTarget = null;
+        let karmaInterval = null;
+
+        // ==========================================
+        // LOGGER & UI UTILS
+        // ==========================================
+        function log(msg, type = 'info') {
+            const term = document.getElementById('terminal');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            
+            // Mappa i livelli del C alle classi CSS
+            let colorClass = 'log-info';
+            if (type === 'error') colorClass = 'log-error';
+            else if (type === 'success') colorClass = 'log-success';
+            else if (type === 'warning') colorClass = 'log-warning';
+
+            const time = new Date().toLocaleTimeString().split(' ')[0];
+            entry.innerHTML = `<span class="log-time">[${time}]</span> <span class="${colorClass}">${msg}</span>`;
+            
+            term.appendChild(entry);
+            if (term.scrollHeight - term.scrollTop <= term.clientHeight + 50) {
+                term.scrollTop = term.scrollHeight; 
             }
         }
-        const tabs = document.querySelectorAll('.tabs div');
-        const contents = document.querySelectorAll('.tab-content');
-        tabs.forEach(tab => {
-            tab.addEventListener('click', () => {
-                tabs.forEach(t => t.classList.remove('active'));
-                contents.forEach(c => c.classList.remove('active'));
-                tab.classList.add('active');
-                const contentId = `content-${tab.id.split('-')[1]}`;
-                document.getElementById(contentId).classList.add('active');
-                if (tab.id === 'tab-passwords') {
-                    fetchPasswords();
+
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.innerText = msg;
+            t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), 3000);
+        }
+
+        function toggleSidebar() { 
+            document.getElementById('sidebar').classList.toggle('open'); 
+        }
+
+        function showView(viewId, menuItem) {
+            document.querySelectorAll('.view-container').forEach(el => el.classList.remove('active'));
+            document.getElementById(viewId).classList.add('active');
+            document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active'));
+            menuItem.classList.add('active');
+            document.getElementById('page-title').innerText = menuItem.innerText.trim();
+            
+            if (window.innerWidth <= 768) document.getElementById('sidebar').classList.remove('open');
+            if (viewId === 'view-settings') loadApSettings();
+            if (viewId === 'view-passwords') fetchPasswords();
+
+            if (viewId !== 'view-karma' && karmaInterval) {
+                clearInterval(karmaInterval);
+                karmaInterval = null;
+            }
+        }
+
+        // ==========================================
+        // WEBSOCKET ENGINE (IL CUORE DEL SISTEMA)
+        // ==========================================
+        function connectWS() {
+            log("Connecting to WebSocket...", "info");
+            ws = new WebSocket(WS_URL);
+
+            ws.onopen = () => {
+                isConnected = true;
+                log("WebSocket Connected!", "info");
+                showToast("System Online");
+                if (statusInterval) clearInterval(statusInterval);
+                statusInterval = setInterval(requestSystemStatus, 2000);
+            };
+
+            ws.onclose = () => {
+                isConnected = false;
+                log("WebSocket Disconnected. Reconnecting in 3s...", "error");
+                setTimeout(connectWS, 3000);
+            };
+
+            ws.onerror = (err) => {
+                console.error("WS Error:", err);
+                ws.close();
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const msg = JSON.parse(event.data);
+                    // Server log
+                    if (msg.type === 'log') {
+                        log(msg.msg, msg.level);
+                        return;
+                    }
+                    if (msg.req_id && pendingRequests.has(msg.req_id)) {
+                        const { resolve, reject } = pendingRequests.get(msg.req_id);
+                        if (msg.status === 'error') {
+                            reject(msg.message || "Unknown error");
+                        } else {
+                            resolve(msg);
+                        }
+                        pendingRequests.delete(msg.req_id);
+                    }
+                } catch (e) {
+                    console.error("JSON Parse Error:", e);
                 }
-            });
-        });
-        document.getElementById('scan-btn').addEventListener('click', () => {
-            fetch('/api/wifi_scan')
-                .then(response => response.json())
-                .then(data => {
-                    const networkList = document.getElementById('wifi-networks');
-                    networkList.innerHTML = '';
-                    data.forEach(network => {
-                        const row = document.createElement('tr');
-                        row.innerHTML = `
-                            <td>${network.ssid}</td>
-                            <td>${network.signal} dBm</td>
-                            <td>${network.channel}</td>
-                            <td>${network.bssid}</td>
-                            <td>${network.authmode}</td>
-                            <td style="display:none;">${network.authmode_code}</td>
-                            <td style="display:none;">${network.pairwise_cipher}</td>
-                            <td style="display:none;">${network.group_cipher}</td>
-                            <td>${network.wps ? 'Yes' : 'No'}</td>
-                            <td><button class='select-btn' onclick='selectTarget("${network.ssid}", "${network.bssid}", "${network.channel}", "${network.signal}", "${network.authmode_code}", "${network.pairwise_cipher}", "${network.group_cipher}")'>Select</button></td>
-                        `;
-                        networkList.appendChild(row);
-                    });
-                })
-                .catch(error => {
-                    console.error('Error scanning networks:', error);
+            };
+        }
+
+        /**
+         * Invia un comando via WebSocket e restituisce una Promessa.
+         * Usalo come: const dati = await sendCommand(CMD.WIFI_SCAN);
+         */
+        function sendCommand(cmdId, params = {}) {
+            return new Promise((resolve, reject) => {
+                if (!isConnected) {
+                    reject("WebSocket not connected");
+                    return;
+                }
+                const id = ++reqIdCounter;
+                pendingRequests.set(id, { resolve, reject });
+                const payload = JSON.stringify({
+                    cmd: cmdId,
+                    req_id: id,
+                    ...params
                 });
-        });
+                ws.send(payload);
+                // Timeout di sicurezza: se l'ESP non risponde in 15 secondi, annulla
+                setTimeout(() => {
+                    if (pendingRequests.has(id)) {
+                        pendingRequests.delete(id);
+                        reject("Timeout waiting for ESP32");
+                    }
+                }, 10000); 
+            });
+        }
+
+        // ==========================================
+        // FUNZIONI API (STATUS, SCAN, ETC.)
+        // ==========================================
+        async function requestSystemStatus() {
+            if (!isConnected) return;
+            try {
+                const data = await sendCommand(CMD.GET_STATUS);
+                if (data.uptime) document.getElementById('uptime-val').innerText = data.uptime;
+                if (data.packets !== undefined) document.getElementById('packets-val').innerText = data.packets;
+                if (data.ram !== undefined) {
+                    document.getElementById('ram-text-val').innerText = data.ram + '%';
+                    const bar = document.getElementById('ram-bar');
+                    bar.style.width = data.ram + '%';
+                    bar.style.backgroundColor = data.ram > 85 ? 'var(--danger)' : 'var(--accent)';
+                }
+                const sdEl = document.getElementById('status-sd');
+                if (data.sd !== undefined) {
+                    sdEl.innerText = data.sd ? "OK" : "ERR";
+                    sdEl.style.color = data.sd ? "var(--accent)" : "var(--danger)";
+                }
+            } catch (e) {}
+        }
+
+        async function scanNetworks() {
+            log("Starting WiFi Scan (WS)...");
+            const tbody = document.getElementById('wifi-networks-body');
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--accent);">Scanning in progress...</td></tr>';
+            
+            try {
+                const response = await sendCommand(CMD.WIFI_SCAN);
+                const networks = response.data; 
+
+                tbody.innerHTML = '';
+                if (!networks || networks.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">No networks found</td></tr>';
+                    return;
+                }
+
+                networks.sort((a, b) => b.signal - a.signal);
+                networks.forEach(net => {
+                    const tr = document.createElement('tr');
+                    const safeSsid = net.ssid.replace(/'/g, "\\'");
+                    
+                    tr.innerHTML = `
+                        <td style="font-weight:bold; color:white;">${net.ssid}</td>
+                        <td>${net.signal}</td>
+                        <td>${net.channel}</td>
+                        <td style="font-family:monospace; font-size:0.85rem;">${net.bssid}</td>
+                        <td>${net.authmode}</td> <td>
+                            <button style="margin:0; padding:6px 10px; font-size:0.7rem;" 
+                                onclick="selectTarget('${safeSsid}', '${net.bssid}', ${net.channel}, ${net.signal}, ${net.authmode_code})">
+                                TARGET
+                            </button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+                log(`Scan complete. Found ${networks.length} APs.`);
+            } catch (err) {
+                log(`Scan Error: ${err}`, "error");
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--danger);">Scan Failed</td></tr>';
+            }
+        }
+
         async function loadApSettings() {
             try {
-                const res = await fetch('/api/ap_settings/get', { method: 'GET' });
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-                const data = await res.json();
-
-                document.getElementById('ssid').value = data.ssid ?? '';
-                document.getElementById('password').value = data.password ?? '';
-                document.getElementById('channel').value = (data.channel ?? 1).toString();
-            } catch (e) {
-                console.error('Failed to load AP settings:', e);
+                const data = await sendCommand(CMD.GET_AP_SETTINGS);
+                document.getElementById('ssid').value = data.ssid || '';
+                document.getElementById('password').value = data.password || '';
+                document.getElementById('channel').value = data.channel || 1;
+            } catch (err) {
+                log("Error loading settings: " + err, "error");
             }
         }
+
+        async function handleSettings(e) {
+            e.preventDefault();
+            const ssid = document.getElementById('ssid').value;
+            const password = document.getElementById('password').value;
+            const channel = parseInt(document.getElementById('channel').value);
+
+            try {
+                showToast("Saving...");
+                const res = await sendCommand(CMD.SET_AP_SETTINGS, { ssid, password, channel });
+                if(res.status === "ok") {
+                    showToast("Settings Saved!");
+                    log("AP Settings updated successfully.");
+                }
+            } catch (err) {
+                showToast("Error saving settings");
+                log("Save Error: " + err, "error");
+            }
+        }
+
+        function selectTarget(ssid, bssid, channel, signal, authmode) {
+            currentTarget = { ssid, bssid, channel, signal, authmode };
+            document.getElementById('current-target-ssid').innerText = ssid;
+            document.getElementById('current-target-bssid').innerText = bssid;
+            document.getElementById('home-target').innerText = ssid;
+            showToast(`Target Selected: ${ssid}`);
+            
+            const evilTwinMenu = document.querySelectorAll('.menu-item')[2];
+            showView('view-eviltwin', evilTwinMenu);
+        }
+
+        async function startEvilTwin() {
+            if (!currentTarget) {
+                showToast("No target selected!");
+                return;
+            }
+            log(`Launching Evil Twin on ${currentTarget.ssid}...`);
+            const params = {
+                ssid: currentTarget.ssid,
+                bssid: currentTarget.bssid,
+                channel: currentTarget.channel,
+                signal: currentTarget.signal,
+                authmode_code: currentTarget.authmode,
+                scheme: parseInt(document.getElementById('attack-scenario').value)
+            };
+
+            try {
+                const res = await sendCommand(CMD.START_EVILTWIN, params);
+                if(res.status === 'ok') {
+                    showToast("Evil Twin Started!");
+                }
+            } catch(e) {
+                log("Error starting Attack: " + e, "error");
+            }
+        }
+
+        function stopAttack() {
+            // Qui non c'è una API di stop specifica nel tuo C se non il reboot o lo stop scan
+            // Implementiamo un reload per ora o un comando custom se lo aggiungi
+            if(confirm("To stop the Evil Twin fully, the device usually needs a reset or a specific command. Reload page?")) {
+                location.reload();
+            }
+        }
+
+        async function startKarmaScan() {
+            log("Starting Karma Scan...");
+            try {
+                await sendCommand(CMD.KARMA_ATTACK_SCAN, { start_stop: 1 });
+                showToast("Scanning Probes...");
+                if(karmaInterval) clearInterval(karmaInterval);
+                karmaInterval = setInterval(fetchKarmaProbes, 4000);
+            } catch(e) {
+                log("Error starting scan: " + e, "error");
+            }
+        }
+
+        async function stopKarmaScan() {
+            try {
+                await sendCommand(CMD.KARMA_ATTACK_SCAN, { start_stop: 0 });
+                showToast("Scan Stopped");
+                if(karmaInterval) clearInterval(karmaInterval);
+            } catch(e) { log("Error stopping scan: " + e, "error"); }
+        }
+
+        async function fetchKarmaProbes() {
+            try {
+                const res = await sendCommand(CMD.GET_KARMA_PROBES);
+                const data = res.data;
+                
+                const tbody = document.getElementById('karma-scan-body');
+                tbody.innerHTML = '';
+
+                if(!data || data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#666;">Listening...</td></tr>';
+                    return;
+                }
+
+                data.forEach(p => {
+                     const tr = document.createElement('tr');
+                     const safeSsid = p.ssid.replace(/'/g, "\\'");
+                     tr.innerHTML = `
+                        <td style="font-family:monospace; color:#aaa;">${p.mac}</td>
+                        <td style="font-weight:bold; color:white;">${p.ssid}</td>
+                        <td>${p.rssi}</td>
+                        <td>${p.channel}</td>
+                        <td>
+                            <button class="danger" style="padding:4px 8px; font-size:0.7rem;"
+                                onclick="launchKarmaAttack('${safeSsid}', ${p.channel})">ATTACK</button>
+                        </td>
+                     `;
+                     tbody.appendChild(tr);
+                });
+            } catch(e) { }
+        }
+
+        async function launchKarmaAttack(ssid, channel) {
+            const scenario = parseInt(document.getElementById('karma-scenario').value);
+            if(confirm(`Attack ${ssid}?`)) {
+                try {
+                    await sendCommand(CMD.KARMA_ATTACK_START, {
+                        ssid: ssid,
+                        channel: channel,
+                        scheme: scenario
+                    });
+                    showToast(`Karma Started on ${ssid}`);
+                } catch(e) {
+                    log("Error launching Karma: " + e, "error");
+                }
+            }
+        }
+
+        async function fetchPasswords() {
+            const area = document.getElementById('passwords-textarea');
+            area.value = "Fetching...";
+            try {
+                const res = await sendCommand(CMD.GET_PASSWORDS);
+                if(res.content) {
+                    area.value = res.content;
+                } else {
+                    area.value = "(No passwords found or file empty)";
+                }
+            } catch(e) {
+                area.value = "Connection Error: " + e;
+            }
+        }
+
+        // ==========================================
+        // INIT
+        // ==========================================
         document.addEventListener('DOMContentLoaded', () => {
-            loadApSettings();
+            connectWS(); // Avvia connessione WebSocket
+            log("System UI Initialized.");
         });
+
     </script>
 </body>
-
 </html>

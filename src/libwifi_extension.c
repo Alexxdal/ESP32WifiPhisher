@@ -1,6 +1,5 @@
 #include <esp_log.h>
 #include "libwifi_extension.h"
-#include "utils.h"
 
 
 bool libwifi_extract_csa(const struct libwifi_bss *bss, csa_event_t *out)

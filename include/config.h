@@ -1,8 +1,8 @@
 #ifndef _CONFIG_H
 #define _CONFIG_H
 
+#include <esp_system.h>
 #include <esp_wifi.h>
-#include "nvs_keys.h"
 
 /* WIFI CONFIGURATION */
 #define DEFAULT_WIFI_SSID           "MagicWifi"

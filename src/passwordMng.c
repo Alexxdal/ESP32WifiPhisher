@@ -4,15 +4,14 @@
 #include "freertos/task.h"
 #include "esp_spiffs.h"
 #include "esp_log.h"
-#include "wifi_attacks.h"
 #include "passwordMng.h"
 #include "libpcap.h"
+#include "sniffer.h"
 
 
-static const char *TAG = "PASSWORD_MANAGER:";
+static const char *TAG = "PASSWORD_MANAGER";
 static QueueHandle_t password_queue = NULL;
 static uint8_t *pcap_pointer = NULL;
-#define PASSWORD_FILE "/spiffs/passwords.txt"
 #define QUEUE_LENGTH 4
 #define PASSWORD_ITEM_SIZE 128
 
@@ -166,8 +165,8 @@ void password_manager_pcap_finalize(void)
     }
 
     char filename[32] = { 0 };
-    handshake_info_t *target = wifi_attack_engine_handshake();
-    uint8_t *mac = target->mac_sta;
+    const handshake_info_t *target = wifi_sniffer_get_handshake();
+    const uint8_t *mac = (const uint8_t *)target->mac_sta;
     snprintf(filename, sizeof(filename), "/spiffs/%02X_%02X_%02X_%02X_%02X_%02X.pcap",
              mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
     FILE *file = fopen(filename, "a");

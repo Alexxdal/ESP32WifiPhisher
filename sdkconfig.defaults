@@ -31,3 +31,6 @@ CONFIG_IEEE802154_ENABLED is not set
 # Support for aircrack 
 CONFIG_MBEDTLS_CMAC_C=y
 CONFIG_MBEDTLS_AES_C=y
+
+# Enable WebSocket
+CONFIG_HTTPD_WS_SUPPORT=y

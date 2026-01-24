@@ -1,26 +1,13 @@
 #ifndef _EVIL_TWIN_H
 #define _EVIL_TWIN_H
 
-#include "esp_wifi.h"
-#include "esp_system.h"
-#include "vendors.h"
-#include "wifi_attacks.h"
-
-
-typedef enum 
-{
-    FIRMWARE_UPGRADE = 0,
-    WEB_NET_MANAGER,
-    PLUGIN_UPDATE,
-    OAUTH_LOGIN
-} attack_scheme_t;
-
+#include "target.h"
 
 /**
  * @brief Start EVIL TWIN attack, before lauching be sure to fill target struct
  * 
  */
-void evil_twin_start_attack(target_info_t *targe_info);
+void evil_twin_start_attack(const target_info_t *targe_info);
 
 
 /**
@@ -37,13 +24,5 @@ void evil_twin_stop_attack(void);
  * @return bool
  */
 bool evil_twin_check_password(char *password);
-
-
-/** 
- * @brief Get current target information
- * 
- * @return target_info_t* 
- */
-target_info_t* evil_twin_get_target_info(void);
 
 #endif

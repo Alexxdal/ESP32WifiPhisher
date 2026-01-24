@@ -1,17 +1,13 @@
 #include <string.h>
-#include <stdlib.h>
 #include <stdint.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "esp_mac.h"
-#include "esp_event.h"
-#include "esp_log.h"
-#include "nvs_flash.h"
-#include "lwip/err.h"
-#include "lwip/sys.h"
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <esp_mac.h>
+#include <esp_event.h>
+#include <esp_log.h>
 #include "config.h"
 #include "wifiMng.h"
-#include "utils.h"
+#include "nvs_keys.h"
 
 
 static const char *TAG = "WIFI_MNG";
@@ -54,9 +50,6 @@ static esp_err_t set_wifi_region() {
 
 esp_err_t wifi_init(void)
 {
-    /* Disable wifi logs */
-    esp_log_level_set("wifi", ESP_LOG_WARN);
-    
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     esp_netif_create_default_wifi_ap();
@@ -150,7 +143,7 @@ esp_err_t wifi_set_channel_safe(uint8_t new_channel)
     esp_err_t err_list = esp_wifi_ap_get_sta_list(&station_list);
     if (err_list == ESP_OK && station_list.num > 0) {
         ESP_LOGW(TAG, "Forcing deauth of %d clients to switch channel", station_list.num);
-        esp_wifi_deauth_sta(0); 
+        esp_wifi_deauth_sta(0);
         vTaskDelay(pdMS_TO_TICKS(100)); 
     }
     esp_err_t err = esp_wifi_set_channel(new_channel, WIFI_SECOND_CHAN_NONE);
