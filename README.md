@@ -84,7 +84,7 @@ To debug or monitor the ESP32's output logs:
 
 #### 1. Access Web Interface
 1. Connect to the ESP32 rogue AP (default: "MagicWifi" password: "MagicWifi1234" ).
-2. Open a browser and go to `http://192.168.4.1:8080/`.
+2. Open a browser and go to `http://192.168.4.1/admin.html`.
 
 #### 2. Configure the Attack
 1. Select the target Wi-Fi network to impersonate.
