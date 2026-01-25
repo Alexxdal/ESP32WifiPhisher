@@ -9,6 +9,7 @@
 #include "wifiMng.h"
 #include "utils.h"
 #include "target.h"
+#include "server_api.h"
 
 #define BEACON_RX_TIMEOUT_MS 5000
 #define HANDSHAKE_TIMEOUT_MS 5000
@@ -701,6 +702,8 @@ static void add_client_to_list(const uint8_t *mac)
         if (clients.count < MAX_CLIENTS) {
             memcpy(clients.client[clients.count].mac, mac, 6);
             clients.count++;
+            ws_log("info", "Client aggiunto: %02X:%02X:%02X:%02X:%02X:%02X",
+                     mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
             ESP_LOGI(TAG, "Client aggiunto: %02X:%02X:%02X:%02X:%02X:%02X",
                      mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
         }

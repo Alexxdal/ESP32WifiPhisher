@@ -583,7 +583,7 @@
 
                 <div class="btn-group">
                     <button class="danger" onclick="startEvilTwin()">LAUNCH ATTACK</button>
-                    <button class="secondary" onclick="stopAttack()">TERMINATE</button>
+                    <button class="secondary" onclick="stopEvilTwin()">TERMINATE</button>
                 </div>
             </div>
         </div>
@@ -739,14 +739,15 @@
             GET_AP_SETTINGS: 2,
             WIFI_SCAN: 3,
             START_EVILTWIN: 4,
-            GET_EVILTWIN_TARGET: 5,
-            CHECK_INPUT_PASSWORD: 6,
-            GET_PASSWORDS: 7,
-            KARMA_ATTACK_SCAN: 8,
-            GET_KARMA_PROBES: 9,
-            KARMA_ATTACK_START: 10,
-            START_DEAUTHER: 11,
-            STOP_DEAUTHER: 12
+            STOP_EVILTWIN: 5,
+            GET_EVILTWIN_TARGET: 6,
+            CHECK_INPUT_PASSWORD: 7,
+            GET_PASSWORDS: 8,
+            KARMA_ATTACK_SCAN: 9,
+            GET_KARMA_PROBES: 10,
+            KARMA_ATTACK_START: 11,
+            START_DEAUTHER: 12,
+            STOP_DEAUTHER: 13
         };
 
         // Stato globale
@@ -894,12 +895,15 @@
                 log("WebSocket Connected!", "info");
                 showToast("System Online");
                 if (statusInterval) clearInterval(statusInterval);
+                document.querySelector('.top-bar').style.borderBottom = "1px solid var(--border)";
                 statusInterval = setInterval(requestSystemStatus, 2000);
             };
 
             ws.onclose = () => {
                 isConnected = false;
-                log("WebSocket Disconnected. Reconnecting in 3s...", "error");
+                log("Connection lost (Channel Switch?). Reconnecting WiFi...", "error");
+                showToast("Connection Lost - Check WiFi");
+                document.querySelector('.top-bar').style.borderBottom = "2px solid var(--danger)";
                 setTimeout(connectWS, 3000);
             };
 
@@ -1119,11 +1123,19 @@
             }
         }
 
-        function stopAttack() {
-            // Qui non c'è una API di stop specifica nel tuo C se non il reboot o lo stop scan
-            // Implementiamo un reload per ora o un comando custom se lo aggiungi
-            if(confirm("To stop the Evil Twin fully, the device usually needs a reset or a specific command. Reload page?")) {
+        async function stopEvilTwin() {
+            /*if(confirm("To stop the Evil Twin fully, the device usually needs a reset or a specific command. Reload page?")) {
                 location.reload();
+            }*/
+            log(`Stopping Evil Twin Attack...`);
+
+            try {
+                const res = await sendCommand(CMD.STOP_EVILTWIN);
+                if(res.status === 'ok') {
+                    showToast("Evil Twin Attack Stopped!");
+                }
+            } catch(e) {
+                log("Error stopping Attack: " + e, "error");
             }
         }
 
