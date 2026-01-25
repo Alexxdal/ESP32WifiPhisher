@@ -118,7 +118,7 @@ static esp_err_t cors_prevention_handler(httpd_req_t *req)
 static esp_err_t ws_handler(httpd_req_t *req)
 {
     if (req->method == HTTP_GET) {
-        ESP_LOGI(TAG, "WS handshake done, new client fd=%d", httpd_req_to_sockfd(req));
+        ESP_LOGD(TAG, "WS handshake done, new client fd=%d", httpd_req_to_sockfd(req));
         return ESP_OK;
     }
 
@@ -129,13 +129,13 @@ static esp_err_t ws_handler(httpd_req_t *req)
     if (ret != ESP_OK) return ret;
 
 	if (frame.type == HTTPD_WS_TYPE_PING) {
-        ESP_LOGI(TAG, "PING (fd=%d)", httpd_req_to_sockfd(req));
+        ESP_LOGD(TAG, "PING (fd=%d)", httpd_req_to_sockfd(req));
         httpd_ws_frame_t pong = {.type = HTTPD_WS_TYPE_PONG, .payload = NULL, .len = 0};
         return httpd_ws_send_frame(req, &pong);
     }
-	
+
     if (frame.type == HTTPD_WS_TYPE_CLOSE) {
-        ESP_LOGI(TAG, "CLOSE (fd=%d)", httpd_req_to_sockfd(req));
+        ESP_LOGD(TAG, "CLOSE (fd=%d)", httpd_req_to_sockfd(req));
         return ESP_OK;
     }
 
