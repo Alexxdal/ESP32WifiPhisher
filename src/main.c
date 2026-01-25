@@ -61,9 +61,6 @@ void app_main()
     /* Start wifi AP */
     wifi_start_softap();
 
-    /* Start dns server */
-    dns_server_start();
-
     /* Start web server */
     http_server_start();
 

@@ -6,6 +6,7 @@
 #define DNS_PORT 53
 #define RESPONSE_IP_ADDR {192, 168, 4, 1}
 static const char *TAG= "DNS_SERVER:";
+static TaskHandle_t dns_server_task_handle = NULL;
 
 static void dns_server_task(void *pvParameters) 
 {
@@ -82,5 +83,22 @@ static void dns_server_task(void *pvParameters)
 
 void dns_server_start(void)
 {
-    xTaskCreate(dns_server_task, "dns_server_task", 4096, NULL, 5, NULL);
+    if (dns_server_task_handle != NULL)
+    {   
+        ESP_LOGE(TAG, "EvilTwin task already started.");
+        return;
+    }
+    xTaskCreate(dns_server_task, "dns_server_task", 4096, NULL, 5, &dns_server_task_handle);
+}
+
+
+void dns_server_stop(void)
+{
+    if (dns_server_task_handle == NULL)
+    {
+        ESP_LOGE(TAG, "EvilTwin task is not running.");
+        return;
+    }
+    vTaskDelete(dns_server_task_handle);
+    dns_server_task_handle = NULL;
 }
