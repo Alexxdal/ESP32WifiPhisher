@@ -364,6 +364,18 @@ static esp_err_t api_start_evil_twin(ws_frame_req_t *req)
 }
 
 
+static esp_err_t api_stop_evil_twin(ws_frame_req_t *req)
+{
+    cJSON *json = cJSON_Parse(req->payload);
+    if (!json) return ESP_FAIL;
+    
+    evil_twin_stop_attack();
+    api_send_status_frame(req, "ok", "Evil Twin Attack Stopped");
+    cJSON_Delete(json);
+    return ESP_OK;
+}
+
+
 static esp_err_t api_get_evlitwin_target(ws_frame_req_t *req)
 {
     target_info_t *target = target_get(TARGET_INFO_EVIL_TWIN);
@@ -564,18 +576,33 @@ static esp_err_t api_karma_set_target(ws_frame_req_t *req)
 }
 
 
+static esp_err_t api_deauther_start(ws_frame_req_t *req)
+{
+    return ESP_OK;
+}
+
+
+static esp_err_t api_deauther_stop(ws_frame_req_t *req)
+{
+    return ESP_OK;
+}
+
+
 static const api_cmd_t api_cmd_list[] = {
     { API_GET_STATUS, api_get_status },
     { API_SET_AP_SETTINGS, api_admin_set_ap_settings },
     { API_GET_AP_SETTINGS, api_admin_get_ap_settings },
     { API_WIFI_SCAN, api_wifi_scan },
     { API_START_EVILTWIN, api_start_evil_twin },
+    { API_STOP_EVILTWIN, api_stop_evil_twin },
     { API_GET_EVILTWIN_TARGET, api_get_evlitwin_target },
     { API_CHECK_INPUT_PASSWORD, api_check_input_password },
     { API_GET_PASSWORDS, api_get_passwords },
     { API_KARMA_ATTACK_SCAN, api_karma_scan },
     { API_GET_KARMA_PROBES, api_get_karma_probes },
     { API_KARMA_ATTACK_START, api_karma_set_target },
+    { API_DEAUTHER_START, api_deauther_start },
+    { API_DEAUTHER_STOP, api_deauther_stop }
 };
 
 

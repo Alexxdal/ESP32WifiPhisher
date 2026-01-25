@@ -17,6 +17,13 @@
 
 
 /**
+ * @brief Number of max ap to store
+ * 
+ */
+#define MAX_AP      20
+
+
+/**
  * @brief Sniffer operating modes
  * 
  */
@@ -31,12 +38,46 @@ typedef enum {
 
 
 /**
- * @brief List of associated client to the target AP
+ * @brief Struct containing AP information
+ * 
+ */
+typedef struct {
+    uint8_t bssid[6];
+    uint8_t ssid[33]; 
+    uint8_t primary_channel;
+    uint8_t secondary_channel;
+    int8_t rssi;
+    uint8_t authmode; //wifi_auth_mode_t
+} ap_info_t;
+
+
+/**
+ * @brief List of APs
+ * 
+ */
+typedef struct {
+    uint8_t count;
+    ap_info_t ap[MAX_AP];
+} aps_info_t;
+
+
+/**
+ * @brief Struct containing Client info
  * 
  */
 typedef struct {
     uint8_t mac[6];
 } client_t;
+
+
+/**
+ * @brief List of associated client to the target AP
+ * 
+ */
+typedef struct {
+    uint8_t count;
+    client_t client[MAX_CLIENTS];
+} clients_t;
 
 
 /**

