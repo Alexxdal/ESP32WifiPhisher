@@ -114,4 +114,18 @@ void wifi_attack_softap_beacon_spam(const char *ssid, uint8_t channel);
  */
 void wifi_attack_send_karma_probe_response(const uint8_t *victim_mac, const char *requested_ssid, uint8_t channel);
 
+
+/**
+ * @brief Sends RTS frames with high Duration ID to jam the network virtually.
+ * @param bssid Target AP BSSID
+ */
+void wifi_attack_nav_abuse(const uint8_t bssid[6]);
+
+
+/**
+ * @brief Floods the AP with WPA3 SAE Commit frames to exhaust CPU resources.
+ * @param bssid Target AP BSSID
+ */
+void wifi_attack_wpa3_sae_flood(const uint8_t bssid[6]);
+
 #endif

