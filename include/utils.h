@@ -37,6 +37,15 @@ bool isMacEqual(const uint8_t *mac1, const uint8_t *mac2);
 
 
 /**
+ * @brief Convert MAC String to byte array
+ * 
+ * @param mac_str MAC String char array
+ * @param mac_out Pointer to byte array
+ */
+bool macstr_to_bytes(const char *mac_str, uint8_t *mac_out);
+
+
+/**
  * @brief Print packet bytes
  * 
  * @param data 

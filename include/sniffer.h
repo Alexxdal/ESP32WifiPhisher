@@ -13,7 +13,7 @@
  * @brief Number of max client to store
  * 
  */
-#define MAX_CLIENTS 20
+#define MAX_CLIENTS 50
 
 
 /**
@@ -38,26 +38,12 @@ typedef enum {
 
 
 /**
- * @brief Struct containing AP information
- * 
- */
-typedef struct {
-    uint8_t bssid[6];
-    uint8_t ssid[33]; 
-    uint8_t primary_channel;
-    uint8_t secondary_channel;
-    int8_t rssi;
-    uint8_t authmode; //wifi_auth_mode_t
-} ap_info_t;
-
-
-/**
- * @brief List of APs
+ * @brief List of APs using native ESP-IDF struct
  * 
  */
 typedef struct {
     uint8_t count;
-    ap_info_t ap[MAX_AP];
+    wifi_ap_record_t ap[MAX_AP]; // Array nativo
 } aps_info_t;
 
 
@@ -66,7 +52,8 @@ typedef struct {
  * 
  */
 typedef struct {
-    uint8_t mac[6];
+    uint8_t mac[6];     //Client MAC
+    uint8_t bssid[6];   //Associated AP
 } client_t;
 
 
@@ -203,6 +190,22 @@ const probe_request_list_t *wifi_sniffer_get_captured_probes(void);
  * @return const handshake_info_t* 
  */
 const handshake_info_t * wifi_sniffer_get_handshake(void);
+
+
+/**
+ * @brief Get pointer to detected clients info
+ * 
+ * @return const clients_t* 
+ */
+const clients_t *wifi_sniffer_get_clients(void);
+
+
+/**
+ * @brief Get pointer to detected aps info
+ * 
+ * @return const aps_info_t* 
+ */
+const aps_info_t *wifi_sniffer_get_aps(void);
 
 
 #endif /* _SNIFFER_H */

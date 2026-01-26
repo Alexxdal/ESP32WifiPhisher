@@ -9,6 +9,30 @@ void wifi_attack_deauth_basic(const uint8_t dest[6], const uint8_t bssid[6], uin
 
 
 /**
+ * @brief Send Disassociation frame
+ */
+void wifi_attack_send_disassoc(const uint8_t bssid[6], const uint8_t dest[6], uint8_t reason);
+
+
+/**
+ * @brief Send Authentication frame (Open System)
+ */
+void wifi_attack_send_auth_frame(const uint8_t bssid[6], const uint8_t src_mac[6]);
+
+
+/**
+ * @brief Send Association Request frame
+ */
+void wifi_attack_send_assoc_req(const uint8_t bssid[6], const uint8_t src_mac[6]);
+
+
+/**
+ * @brief Send Beacon with CSA (Channel Switch Announcement) IE
+ */
+void wifi_attack_send_csa_beacon(const uint8_t bssid[6], const uint8_t src_mac[6], uint8_t new_channel);
+
+
+/**
  * @brief Deauthentication using invalid PMKID Tag Length in 4-Way Handshake 1/4.
  * @note
  * The EAPoL Key Descriptor needs to match the original 4-Way Handshake 1/4:
