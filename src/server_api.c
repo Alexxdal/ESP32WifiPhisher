@@ -12,6 +12,7 @@
 #include "vendors.h"
 #include "target.h"
 #include "nvs_keys.h"
+#include "deauther.h"
 
 static const char *TAG = "SERVER_API";
 
@@ -578,12 +579,51 @@ static esp_err_t api_karma_set_target(ws_frame_req_t *req)
 
 static esp_err_t api_deauther_start(ws_frame_req_t *req)
 {
+    cJSON *json = cJSON_Parse(req->payload);
+    if (!json) {
+        api_send_status_frame(req, "error", "Invalid JSON");
+        return ESP_FAIL;
+    }
+
+    target_info_t target_info = {0};
+    deauther_attack_type_t attack_type = DEAUTHER_ATTACK_DEAUTH_FRAME;
+    deauther_attack_mode_t attack_mode = DEAUTHER_TARGET_UNICAST;
+    cJSON *j_ssid = cJSON_GetObjectItem(json, "ssid");
+    cJSON *j_bssid = cJSON_GetObjectItem(json, "bssid");
+    cJSON *j_chan = cJSON_GetObjectItem(json, "channel");
+    cJSON *j_mode = cJSON_GetObjectItem(json, "mode");
+    cJSON *j_type = cJSON_GetObjectItem(json, "packet_type");
+
+    if (cJSON_IsString(j_bssid)) {
+        sscanf(j_bssid->valuestring, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
+               &target_info.bssid[0], &target_info.bssid[1], &target_info.bssid[2],
+               &target_info.bssid[3], &target_info.bssid[4], &target_info.bssid[5]);
+    }
+
+    if (cJSON_IsString(j_ssid)) strlcpy((char*)target_info.ssid, j_ssid->valuestring, sizeof(target_info.ssid));
+    if (cJSON_IsNumber(j_chan)) target_info.channel = (uint8_t)j_chan->valueint;
+    if (cJSON_IsNumber(j_type)) attack_type = (deauther_attack_type_t)j_type->valueint;
+
+    if (cJSON_IsString(j_mode) && strcmp(j_mode->valuestring, "broadcast") == 0) {
+        attack_mode = DEAUTHER_TARGET_ALL;
+    } else {
+        attack_mode = DEAUTHER_TARGET_UNICAST;
+    }
+    cJSON_Delete(json);
+
+    ESP_LOGI(TAG, "Starting Deauth: Type=%d, Broadcast=%d", attack_type, attack_mode);
+    deauther_start(&target_info, attack_type);
+
+    api_send_status_frame(req, "ok", "Deauth Attack Started");
     return ESP_OK;
 }
 
 
 static esp_err_t api_deauther_stop(ws_frame_req_t *req)
 {
+    deauther_stop();
+    ESP_LOGI(TAG, "Deauth Attack Stopped");
+    api_send_status_frame(req, "ok", "Deauth Attack Stopped");
     return ESP_OK;
 }
 

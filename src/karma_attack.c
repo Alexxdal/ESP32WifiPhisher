@@ -3,6 +3,7 @@
 #include "wifiMng.h"
 #include "karma_attack.h"
 #include "sniffer.h"
+#include "dns.h"
 #include "target.h"
 
 
@@ -20,6 +21,9 @@ void karma_attack_set_target(const target_info_t *target)
     /* Stop sniffer */
     wifi_sniffer_stop_channel_hopping();
     wifi_stop_sniffing();
+
+    /* Start DNS Server */
+    dns_server_start();
 
     /* Clone Access Point */
     wifi_config_t wifi_config = {
@@ -46,6 +50,8 @@ void karma_attack_set_target(const target_info_t *target)
 
 void karma_attack_stop(void)
 {
+    /* Stop DNS Server */
+    dns_server_stop();
     /* Stop sniffer and beacon tracking */
     wifi_stop_beacon_tracking();
     wifi_stop_sniffing();

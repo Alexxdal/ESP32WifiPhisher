@@ -21,6 +21,23 @@ bool isMacEqual(const uint8_t *mac1, const uint8_t *mac2)
 }
 
 
+bool macstr_to_bytes(const char *mac_str, uint8_t *mac_out) 
+{
+    if (mac_str == NULL || mac_out == NULL || strlen(mac_str) != 17) {
+        return false;
+    }
+    int bytes[6];
+    if (sscanf(mac_str, "%x:%x:%x:%x:%x:%x", 
+        &bytes[0], &bytes[1], &bytes[2], &bytes[3], &bytes[4], &bytes[5]) != 6) {
+        return false;
+    }
+    for (int i = 0; i < 6; i++) {
+        mac_out[i] = (uint8_t)bytes[i];
+    }
+    return true;
+}
+
+
 void print_packet(uint8_t *data, size_t len)
 {
     printf("\nPACKET DATA: ############\n");

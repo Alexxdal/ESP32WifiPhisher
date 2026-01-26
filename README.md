@@ -6,31 +6,11 @@ Capture client handshake and check the user input password (WPA/WPA2/WPA3).
 - **Evil Twin Attack**:  
 Creates a rogue access point (AP) mimicking the target network, thus tricking clients into connecting to it.
 
-- **Target Tracking**:
-Target trackig is done monitoring beacon frames or by detecting CSA(Channel Switch Announcement) in Beacon/Probe Response and Action Frame.
+- **Karma Attack**:  
+Automatically detects devices probing for known networks and sends spoofed responses to trick them into connecting to the rogue AP.
 
-- **Captive Portal**:  
-Victims will be automatically redirected to the Captive Portal page upon connecting to the fake access point.
-
-- **Advanced deauthentication technique**:  
-Supports new advanced techniques for Wi-Fi 6 deauthentication like negative TX power constraint, EAPOL-logoff, EAP-Failure, Malformed Handshare message 1, Invalid PMKID, EAPOL Rounds and EAPOL start spamming.
-
-- **Automatic Vendor Identification**:  
-Support for vendor identification based upon SSID name and capturing beacon frame (*TO DO*).
-
-- **Phishing Scenarios**:  
-Serves customized phishing pages to capture sensitive information, such as login credentials.
-
-- **Compact and Portable**:  
-  Runs on the ESP32, making it lightweight and suitable for hardware testing scenarios.
-
-- **Configurable via Web Interface**:  
-  Allows customization of network settings and phishing scenarios through a web interface.
-
-## To-Do List 
-- [☑] Add a channel tracking functionality (some AP may switch channels)
-- [☑] Add a handshake capture and basic aircrack implementation to check a user input password
-- [ ] Add a telegram/email notification when password is succesfully stealed
+- **Deauther & Advanced Attacks**:  
+Disconnects targets using standard deauthentication frames or advanced techniques for Wi-Fi 6 (e.g., negative TX power, EAPOL manipulation, and invalid PMKID injection).
 
 ## Flash the firmware
 Use the [Online Flasher](https://espwifiphisher.alexxdal.com/) to flash your device.

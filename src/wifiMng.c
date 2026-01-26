@@ -152,3 +152,19 @@ esp_err_t wifi_set_channel_safe(uint8_t new_channel)
     }
     return err;
 }
+
+
+esp_err_t wifi_set_temporary_channel(uint8_t new_channel, uint32_t window)
+{
+    wifi_roc_req_t roc_req = {
+        .ifx = WIFI_IF_AP,
+        .type = WIFI_ROC_REQ,
+        .channel = new_channel,
+        .sec_channel = WIFI_SECOND_CHAN_NONE,
+        .wait_time_ms = window,
+        .rx_cb = NULL,
+        .done_cb = NULL
+    };
+
+    return esp_wifi_remain_on_channel(&roc_req);
+}

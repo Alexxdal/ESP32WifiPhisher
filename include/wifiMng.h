@@ -35,4 +35,12 @@ void wifi_ap_clone(wifi_config_t *wifi_config, uint8_t *bssid);
  */
 esp_err_t wifi_set_channel_safe(uint8_t new_channel);
 
+
+/**
+ * @brief Send ROC request to set a channel temporarly
+ * @param window default 150ms, its the time window for the attack in this channel
+ */
+esp_err_t wifi_set_temporary_channel(uint8_t new_channel, uint32_t window);
+
+
 #endif

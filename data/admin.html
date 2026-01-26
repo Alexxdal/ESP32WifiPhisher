@@ -1228,6 +1228,7 @@
             const attackName = selectEl.options[selectEl.selectedIndex].text;
             let targetBssid = "";
             let targetChannel = 0;
+            let targetSsid = "";
 
             if (mode === 'broadcast') {
                 targetBssid = "FF:FF:FF:FF:FF:FF";
@@ -1240,11 +1241,13 @@
                 }
                 targetBssid = currentTarget.bssid;
                 targetChannel = currentTarget.channel;
+                targetSsid = currentTarget.ssid;
                 log(`Starting Attack on ${currentTarget.ssid} (Type: ${attackName})...`, "warning");
             }
             
             try {
                 const res = await sendCommand(CMD.START_DEAUTHER, {
+                    ssid: targetSsid,
                     bssid: targetBssid,
                     channel: targetChannel,
                     mode: mode,
@@ -1253,6 +1256,9 @@
                 
                 if(res.status === 'ok') {
                     showToast("Attack STARTED");
+                } else {
+                    showToast("Error starting attack");
+                    log("Server Error: " + res.message, "error");
                 }
             } catch(e) {
                 log("Error starting Deauth: " + e, "error");
@@ -1261,7 +1267,7 @@
         
         async function stopDeauth() {
             try {
-                await sendCommand(CMD.STOP_DEAUTH);
+                await sendCommand(CMD.STOP_DEAUTHER);
                 showToast("Attack STOPPED");
                 log("Deauth attack stopped.", "success");
             } catch(e) {

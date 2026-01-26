@@ -4,6 +4,7 @@
 #include "evil_twin.h"
 #include "aircrack.h"
 #include "sniffer.h"
+#include "dns.h"
 #include "wifi_attacks.h"
 
 
@@ -70,6 +71,9 @@ void evil_twin_start_attack(const target_info_t *targe_info)
         return;
     }
 
+    /* Start DNS Server */
+    dns_server_stop();
+    
     target_set(targe_info, TARGET_INFO_EVIL_TWIN);
     xTaskCreate(evil_twin_task, "evil_twin_task", 4096, NULL, EVIL_TWIN_TASK_PRIO, &evil_twin_task_handle);
 
@@ -85,6 +89,9 @@ void evil_twin_stop_attack(void)
         ESP_LOGE(TAG, "EvilTwin task is not running.");
         return;
     }
+
+    /* Stop DNS Server */
+    dns_server_stop();
     /* Kill task */
     vTaskDelete(evil_twin_task_handle);
     evil_twin_task_handle = NULL;

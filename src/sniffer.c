@@ -24,8 +24,9 @@ static const char *TAG = "SNIFFER";
 
 /* Queue and semaphore */
 static QueueHandle_t packet_queue = NULL;
-static SemaphoreHandle_t clients_semaphore;
-static SemaphoreHandle_t target_semaphore;
+static SemaphoreHandle_t clients_semaphore = NULL;
+static SemaphoreHandle_t target_semaphore = NULL;
+static SemaphoreHandle_t aps_semaphore = NULL;
 
 /* Tasks handlers */
 static TimerHandle_t beacon_track_timer_handle = NULL;
@@ -37,6 +38,7 @@ static TaskHandle_t channel_hopping_task_handle = NULL;
 static clients_t clients = {0};
 static handshake_info_t handshake_info = {0};
 static probe_request_list_t captured_probes = {0};
+static aps_info_t detected_aps = {0};
 
 /* Global target pointer */
 static target_info_t *target = NULL;
@@ -47,7 +49,7 @@ static sniffer_mode_t current_sniff_mode = SNIFF_MODE_IDLE;
 /* Private function */
 static void beacon_track_task(void *param);
 static void hopping_timer_callback(TimerHandle_t xTimer);
-static void add_client_to_list(const uint8_t *mac);
+static void add_client_to_list(const uint8_t *mac, const uint8_t *bssid);
 static void wifi_sniffer_channel_hopping_task(void *param);
 
 
@@ -85,9 +87,27 @@ IRAM_ATTR static void promiscuous_callback(void *buf, wifi_promiscuous_pkt_type_
  * 
  * @param frame 
  */
-static void handle_global_monitor(struct libwifi_frame *frame)
+static void handle_global_monitor(struct libwifi_frame *frame, sniffer_packet_t *sniffer_pkt)
 {
-    // TODO: Implement global monitoring logic if needed
+    // Scan for client associated with APs
+    if (frame->frame_control.type == TYPE_DATA)
+    {
+        uint8_t to_ds = frame->frame_control.flags.to_ds;
+        uint8_t from_ds = frame->frame_control.flags.from_ds;
+        const uint8_t *addr1 = (uint8_t *)&frame->header.data.addr1;
+        const uint8_t *addr2 = (uint8_t *)&frame->header.data.addr2;
+
+        // Caso 1: Client invia all'AP (ToDS=1, FromDS=0)
+        // Addr1 = BSSID (Dest), Addr2 = Client (Src)
+        if (to_ds == 1 && from_ds == 0) {
+            add_client_to_list(addr2, addr1); // Client, AP
+        }
+        // Caso 2: AP invia al Client (ToDS=0, FromDS=1)
+        // Addr1 = Client (Dest), Addr2 = BSSID (Src)
+        else if (to_ds == 0 && from_ds == 1) {
+            add_client_to_list(addr1, addr2); // Client, AP
+        }
+    }
 }
 
 
@@ -111,7 +131,7 @@ static void handle_target_monitor(struct libwifi_frame *frame)
         // 1. Aggiungi client alla lista (se è un client che parla col target)
         if (!isMacEqual(src, target->bssid) && frame->frame_control.type == TYPE_DATA)
         {
-            add_client_to_list(src);
+            add_client_to_list(src, target->bssid);
         }
 
         // 2. Cerca Handshake / PMKID (solo se non li abbiamo già)
@@ -199,7 +219,7 @@ static void handle_evil_twin(struct libwifi_frame *frame, sniffer_packet_t *snif
             /* Add client to the list if MAC matches the target */
             if (!isMacEqual(src_mac, target->bssid))
             {
-                add_client_to_list(src_mac);
+                add_client_to_list(src_mac, target->bssid);
             }
             /* Check if handshake or pmkid already captured */
             if (handshake_info.handshake_captured || handshake_info.pmkid_captured)
@@ -397,7 +417,7 @@ static void packet_parsing_task(void *param)
                 break;
 
             case SNIFF_MODE_GLOBAL_MONITOR:
-                handle_global_monitor(&frame);
+                handle_global_monitor(&frame, &sniffer_pkt);
                 break;
 
             case SNIFF_MODE_IDLE:
@@ -416,13 +436,14 @@ static void packet_parsing_task(void *param)
 esp_err_t wifi_start_sniffing(target_info_t * _target, sniffer_mode_t mode)
 {
     /* Init semaphore */
-    if (clients_semaphore == NULL)
-    {
+    if (clients_semaphore == NULL) {
         clients_semaphore = xSemaphoreCreateMutex();
     }
-    if (target_semaphore == NULL)
-    {
+    if (target_semaphore == NULL) {
         target_semaphore = xSemaphoreCreateMutex();
+    }
+    if (aps_semaphore == NULL) {
+        aps_semaphore = xSemaphoreCreateMutex();
     }
 
     if (_target != NULL)
@@ -620,6 +641,18 @@ const handshake_info_t *wifi_sniffer_get_handshake(void)
 }
 
 
+const clients_t *wifi_sniffer_get_clients(void)
+{
+    return &clients;
+}
+
+
+const aps_info_t *wifi_sniffer_get_aps(void)
+{
+    return &detected_aps;
+}
+
+
 static void beacon_track_task(void *param)
 {
     uint8_t new_channel = 0;
@@ -674,19 +707,65 @@ static void wifi_sniffer_channel_hopping_task(void *param)
             .show_hidden = false,
             .scan_type = WIFI_SCAN_TYPE_ACTIVE,
             .scan_time.active.min = 100,
-            .scan_time.active.max = 300,
+            .scan_time.active.max = 500,
             .home_chan_dwell_time = 100,
         };
-        esp_wifi_scan_start(&scan_config, true);
-        vTaskDelay(pdMS_TO_TICKS(2000)); 
+        esp_err_t err = esp_wifi_scan_start(&scan_config, true);
+        
+        if (err == ESP_OK) 
+        {
+            uint16_t ap_count = 0;
+            esp_wifi_scan_get_ap_num(&ap_count);
+
+            if (ap_count > 0) 
+            {
+                wifi_ap_record_t *ap_records = (wifi_ap_record_t *)calloc(ap_count, sizeof(wifi_ap_record_t));
+                if (ap_records) 
+                {
+                    err = esp_wifi_scan_get_ap_records(&ap_count, ap_records);
+                    if (err == ESP_OK) 
+                    {
+                        if (xSemaphoreTake(aps_semaphore, pdMS_TO_TICKS(100)) == pdTRUE) 
+                        {
+                            for (int i = 0; i < ap_count; i++) 
+                            {
+                                if (ap_records[i].rssi < -92) continue; 
+                                bool found = false;
+                                for (int k = 0; k < detected_aps.count; k++) 
+                                {
+                                    if (memcmp(detected_aps.ap[k].bssid, ap_records[i].bssid, 6) == 0) 
+                                    {
+                                        memcpy(&detected_aps.ap[k], &ap_records[i], sizeof(wifi_ap_record_t));
+                                        found = true;
+                                        break;
+                                    }
+                                }
+                                if (!found && detected_aps.count < MAX_AP) 
+                                {
+                                    memcpy(&detected_aps.ap[detected_aps.count], &ap_records[i], sizeof(wifi_ap_record_t));
+                                    detected_aps.count++;
+                                }
+                            }
+                            xSemaphoreGive(aps_semaphore);
+                        }
+                    }
+                    free(ap_records);
+                }
+            }
+        }
+        vTaskDelay(pdMS_TO_TICKS(2000));
     }
 }
 
 
-static void add_client_to_list(const uint8_t *mac)
+static void add_client_to_list(const uint8_t *mac, const uint8_t *bssid)
 {
     // Filter null MAC or Broadcast/Multicast
     if (mac == NULL || (mac[0] & 0x01) == 1) {
+        return;
+    }
+
+    if (bssid == NULL || isMacBroadcast(bssid)) {
         return;
     }
 
@@ -695,17 +774,17 @@ static void add_client_to_list(const uint8_t *mac)
         /* Dont add duplicates */
         for (uint8_t i = 0; i < clients.count; i++) {
             if (memcmp(clients.client[i].mac, mac, 6) == 0) {
+                memcpy(clients.client[i].bssid, bssid, 6);
                 xSemaphoreGive(clients_semaphore);
                 return;
             }
         }
         if (clients.count < MAX_CLIENTS) {
             memcpy(clients.client[clients.count].mac, mac, 6);
+            memcpy(clients.client[clients.count].bssid, bssid, 6);
             clients.count++;
-            ws_log("info", "Client aggiunto: %02X:%02X:%02X:%02X:%02X:%02X",
-                     mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-            ESP_LOGI(TAG, "Client aggiunto: %02X:%02X:%02X:%02X:%02X:%02X",
-                     mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+            ws_log(TAG, "New Client: %02X:%02X:%02X:%02X:%02X:%02X Linked to AP: %02X:%02X:%02X:%02X:%02X:%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5]);
+            ESP_LOGI(TAG, "New Client: %02X:%02X:%02X:%02X:%02X:%02X Linked to AP: %02X:%02X:%02X:%02X:%02X:%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5]);
         }
         xSemaphoreGive(clients_semaphore);
     }
