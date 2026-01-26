@@ -80,7 +80,7 @@ void wifi_start_softap(void)
             .ssid_len = strlen(DEFAULT_WIFI_SSID),
             .channel = DEFAULT_WIFI_CHAN,
             .authmode = DEFAULT_WIFI_AUTH,
-            .beacon_interval = 100,
+            .beacon_interval = 50,
             .max_connection = DEFAULT_WIFI_MAX_CONN,
             .pmf_cfg = {
                     /* Cannot set pmf to required when in wpa-wpa2 mixed mode! Setting pmf to optional mode. */

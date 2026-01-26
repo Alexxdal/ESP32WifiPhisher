@@ -12,8 +12,8 @@
 #define DEAUTHER_TASK_PRIO 5
 // Syncronization times
 #define CHANNEL_SWITCH_DELAY 5   // Channel switch assestment time
-#define ATTACK_WINDOW        150  // RCO duration
-#define SOFTAP_REST_TIME     100   // Home channel time
+#define ATTACK_WINDOW        250  // RCO duration
+#define SOFTAP_REST_TIME     150   // Home channel time
 
 static const char *TAG = "DEAUTHER";
 static TaskHandle_t deauther_task_handle = NULL;
