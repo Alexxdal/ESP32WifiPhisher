@@ -197,7 +197,7 @@ const handshake_info_t * wifi_sniffer_get_handshake(void);
  * 
  * @return const clients_t* 
  */
-const clients_t *wifi_sniffer_get_clients(void);
+esp_err_t wifi_sniffer_get_clients(clients_t *out);
 
 
 /**
@@ -205,7 +205,7 @@ const clients_t *wifi_sniffer_get_clients(void);
  * 
  * @return const aps_info_t* 
  */
-const aps_info_t *wifi_sniffer_get_aps(void);
+esp_err_t wifi_sniffer_get_aps(aps_info_t *out);
 
 
 #endif /* _SNIFFER_H */

@@ -19,7 +19,7 @@ static const char *TAG = "SNIFFER";
 /* Tasks Priority and queue len */
 #define BEACON_TRACK_TASK_PRIO        10
 #define PACKET_PARSING_TASK_PRIO      5
-#define PACKET_QUEUE_LEN              30
+#define PACKET_QUEUE_LEN              50
 #define CHANNEL_HOPPING_TASK_PRIO     3
 
 /* Queue and semaphore */
@@ -641,15 +641,31 @@ const handshake_info_t *wifi_sniffer_get_handshake(void)
 }
 
 
-const clients_t *wifi_sniffer_get_clients(void)
+esp_err_t wifi_sniffer_get_clients(clients_t *out)
 {
-    return &clients;
+    if(out == NULL) return ESP_ERR_INVALID_ARG;
+
+    if (xSemaphoreTake(clients_semaphore, pdMS_TO_TICKS(100)) == pdTRUE) 
+    {
+        memcpy(out, &clients, sizeof(clients_t));
+        xSemaphoreGive(clients_semaphore);
+        return ESP_OK;
+    }
+    return ESP_FAIL;
 }
 
 
-const aps_info_t *wifi_sniffer_get_aps(void)
+esp_err_t wifi_sniffer_get_aps(aps_info_t *out)
 {
-    return &detected_aps;
+    if(out == NULL) return ESP_ERR_INVALID_ARG;
+
+    if (xSemaphoreTake(aps_semaphore, pdMS_TO_TICKS(100)) == pdTRUE) 
+    {
+        memcpy(out, &detected_aps, sizeof(aps_info_t));
+        xSemaphoreGive(aps_semaphore);
+        return ESP_OK;
+    }
+    return ESP_FAIL;
 }
 
 
@@ -706,9 +722,9 @@ static void wifi_sniffer_channel_hopping_task(void *param)
             .channel = 0,
             .show_hidden = false,
             .scan_type = WIFI_SCAN_TYPE_ACTIVE,
-            .scan_time.active.min = 100,
-            .scan_time.active.max = 500,
-            .home_chan_dwell_time = 100,
+            .scan_time.active.min = 60,
+            .scan_time.active.max = 200,
+            .home_chan_dwell_time = 150,
         };
         esp_err_t err = esp_wifi_scan_start(&scan_config, true);
         
@@ -753,7 +769,7 @@ static void wifi_sniffer_channel_hopping_task(void *param)
                 }
             }
         }
-        vTaskDelay(pdMS_TO_TICKS(2000));
+        vTaskDelay(pdMS_TO_TICKS(5000));
     }
 }
 
