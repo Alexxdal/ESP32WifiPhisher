@@ -246,7 +246,7 @@ static void deauther_send_frames(const target_info_t *target)
                     // Burst di pacchetti
                     for(int k=0; k<5; k++) {
                         execute_attack_on_target(aps->ap[i].bssid, (const char*)aps->ap[i].ssid, current_ch);
-                        ets_delay_us(5000); 
+                        vTaskDelay(5); 
                     }
                 }
                 if ((esp_timer_get_time() - start_time) / 1000 > (ATTACK_WINDOW - 20)) break;
@@ -268,7 +268,7 @@ static void deauther_send_frames(const target_info_t *target)
         int64_t start_time = esp_timer_get_time();
         while(true) {
             execute_attack_on_target(target->bssid, (const char*)target->ssid, target->channel);
-            vTaskDelay(1); //10 ms
+            vTaskDelay(1);
             if ((esp_timer_get_time() - start_time) / 1000 > (ATTACK_WINDOW - 20)) break;
         }
         int64_t elapsed = (esp_timer_get_time() - start_time) / 1000;

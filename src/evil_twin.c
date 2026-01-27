@@ -72,7 +72,7 @@ void evil_twin_start_attack(const target_info_t *targe_info)
     }
 
     /* Start DNS Server */
-    dns_server_stop();
+    dns_server_start();
     
     target_set(targe_info, TARGET_INFO_EVIL_TWIN);
     xTaskCreate(evil_twin_task, "evil_twin_task", 4096, NULL, EVIL_TWIN_TASK_PRIO, &evil_twin_task_handle);
