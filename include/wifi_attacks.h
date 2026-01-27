@@ -116,10 +116,72 @@ void wifi_attack_send_karma_probe_response(const uint8_t *victim_mac, const char
 
 
 /**
- * @brief Sends RTS frames with high Duration ID to jam the network virtually.
- * @param bssid Target AP BSSID
+ * @brief Attempts to perform a NAV (Network Allocation Vector) Abuse attack using RTS frames.
+ * * This function constructs an RTS (Request-to-Send) Control frame with the Duration ID 
+ * set to the maximum value (0x7FFF, approx 32ms) to reserve the RF medium.
+ * * @param bssid The target Access Point BSSID (used as Receiver Address).
+ * * @warning **NOT EFFECTIVE ON ESP32**. 
+ * The ESP32 Wi-Fi hardware MAC layer identifies frames with Type: Control (0x1) 
+ * and Subtype: RTS (0xB). It automatically recalculates and overwrites the 
+ * Duration field based on the current PHY rate and packet length, ignoring 
+ * the user-supplied value (0x7FFF).
  */
-void wifi_attack_nav_abuse(const uint8_t bssid[6]);
+void wifi_attack_nav_abuse_rts(const uint8_t bssid[6]);
+
+
+/**
+ * @brief Attempts to perform a NAV Abuse attack using CTS frames (CTS-to-Self).
+ * * This function constructs a CTS (Clear-to-Send) Control frame with the Duration ID 
+ * set to the maximum value (0x7FFF) to silence all nearby nodes.
+ * * @param bssid The MAC address to simulate (usually the BSSID for CTS-to-Self).
+ * * @warning **NOT EFFECTIVE ON ESP32**. 
+ * Similar to the RTS attack, the ESP32 hardware controller intercepts CTS Control 
+ * frames and overrides the Duration field with the standard calculated value 
+ * (required time for SIFS + ACK), neutralizing the DoS attempt.
+ */
+void wifi_attack_nav_abuse_cts(const uint8_t bssid[6]);
+
+
+/**
+ * @brief Executes a functional NAV Abuse attack using QoS Null Data frames.
+ * * This function bypasses the ESP32 hardware protections by using a DATA frame 
+ * (Type: 0x2, Subtype: 0xC - QoS Null) instead of a Control frame. 
+ * The hardware allows user-defined Duration values for Data frames.
+ * * @param target The MAC address of the victim client (or FF:FF:FF:FF:FF:FF for broadcast).
+ * @param bssid The BSSID of the Access Point.
+ * * * @warning **NOT EFFECTIVE ON ESP32**. 
+ * The ESP32 Wi-Fi hardware MAC layer automatically recalculates and overwrites the 
+ * Duration field based on the current PHY rate and packet length, ignoring 
+ * the user-supplied value (0x7FFF).
+ */
+void wifi_attack_nav_abuse_qos_null(const uint8_t target[6], const uint8_t bssid[6]);
+
+
+/**
+ * @brief Performs a NAV (Network Allocation Vector) Abuse attack using QoS Data frames.
+ * * This function constructs a QoS Data frame (Type: 0x2, Subtype: 0x8) injected with a 
+ * maximized Duration ID (0x7FFF, approx 32ms). This forces receiving devices to 
+ * update their NAV timers and suspend transmission, virtually jamming the network.
+ * * @param target The MAC address of the victim (Source/Transmitter).
+ * @param bssid The BSSID of the Access Point (Receiver/Destination).
+ * * @note The efficacy of this attack on ESP32 depends on whether the hardware MAC layer 
+ * respects the user-defined Duration field for Unicast Data frames. If the hardware 
+ * overwrites it, using a Broadcast Receiver address is the recommended bypass.
+ * * @warning **NOT EFFECTIVE ON ESP32**. 
+ */
+void wifi_attack_nav_abuse_qos_data(const uint8_t target[6], const uint8_t bssid[6]);
+
+
+/**
+ * @brief Performs a NAV Abuse attack using QoS Data frames directed to Broadcast.
+ * @details This approach bypasses the ESP32 hardware duration overwrite by targeting the 
+ * Broadcast address (FF:FF:FF:FF:FF:FF). Since Broadcast frames do not require 
+ * an ACK, the hardware MAC layer does not recalculate the Duration field, allowing 
+ * the injection of the maximum value (0x7FFF / ~32ms).
+ * * @param ap_bssid The BSSID of the Access Point to spoof (Source address).
+ * * @warning **NOT EFFECTIVE ON ESP32**. 
+ */
+void wifi_attack_nav_abuse_qos_data_broadcast(const uint8_t ap_bssid[6]);
 
 
 /**

