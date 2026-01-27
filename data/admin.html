@@ -433,6 +433,51 @@
                 display: none;
             }
 
+            /* --- EFFECTIVENESS BADGES --- */
+            .impact-badge {
+                display: inline-block;
+                padding: 4px 12px;
+                border-radius: 4px;
+                font-size: 0.75rem;
+                font-weight: 800;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+                margin-bottom: 8px;
+                border: 1px solid rgba(255,255,255,0.2);
+            }
+
+            .impact-low {
+                background-color: rgba(108, 117, 125, 0.2);
+                color: #adb5bd;
+                border-color: #adb5bd;
+            }
+
+            .impact-medium {
+                background-color: rgba(255, 171, 64, 0.2);
+                color: #ffab40;
+                border-color: #ffab40;
+            }
+
+            .impact-high {
+                background-color: rgba(255, 82, 82, 0.2);
+                color: #ff5252;
+                border-color: #ff5252;
+            }
+
+            .impact-critical {
+                background-color: rgba(255, 0, 0, 0.3);
+                color: #ff0000;
+                border-color: #ff0000;
+                box-shadow: 0 0 10px rgba(255, 0, 0, 0.4);
+                animation: pulse-red 2s infinite;
+            }
+
+            @keyframes pulse-red {
+                0% { box-shadow: 0 0 5px rgba(255, 0, 0, 0.2); }
+                50% { box-shadow: 0 0 15px rgba(255, 0, 0, 0.6); }
+                100% { box-shadow: 0 0 5px rgba(255, 0, 0, 0.2); }
+            }
+
             /* Hide status on mobile top bar */
         }
     </style>
@@ -670,6 +715,8 @@
                         <option value="13">NAV/RTS/CTS abuse</option>
                         <option value="14">Beacon manipulation</option>
                     </select>
+
+                    <div id="attack-meta" style="margin-top: 15px;"></div>
                     
                     <div id="attack-desc" style="margin-top: 10px; padding: 10px; background: #121212; border-left: 3px solid var(--accent); color: #aaa; font-size: 0.85rem; font-style: italic; min-height: 40px;">
                     </div>
@@ -813,76 +860,104 @@
         function updateAttackTypeDesc() {
             const type = document.getElementById('deauth-frame-type').value;
             const descEl = document.getElementById('attack-desc');
-            let text = "";
-            switch (type) {
-                case "0": // Deauthentication frame
-                text = "Sends <b>802.11 Deauthentication</b> frames. The client is told it’s no longer authenticated, forcing a disconnect/reconnect cycle (mainly effective when management frames aren’t protected).";
-                break;
+            const metaEl = document.getElementById('attack-meta');
 
-                case "1": // Disassociation frame
-                text = "Sends <b>802.11 Disassociation</b> frames. The association state is torn down, pushing the client to re-associate (often perceived as a sudden drop).";
-                break;
+            // Configurazione dati attacchi
+            const attackData = {
+                "0": { // Deauth
+                    level: "LOW / MEDIUM",
+                    cls: "impact-medium",
+                    desc: "Sends <b>802.11 Deauthentication</b> frames. Effective on legacy networks. Completely blocked by WPA3/PMF."
+                },
+                "1": { // Disassoc
+                    level: "LOW / MEDIUM",
+                    cls: "impact-medium",
+                    desc: "Sends <b>802.11 Disassociation</b> frames. Forces re-association. Blocked by PMF."
+                },
+                "2": { // Broadcast
+                    level: "HIGH",
+                    cls: "impact-high",
+                    desc: "Uses <b>broadcast</b> deauth frames. Can disrupt entire non-PMF networks instantly. Extremely noisy."
+                },
+                "3": { // Auth Flood
+                    level: "MEDIUM",
+                    cls: "impact-medium",
+                    desc: "<b>Authentication flood</b>: Overwhelms AP state tables. Can freeze cheap routers, but modern APs limit this."
+                },
+                "4": { // Assoc Flood
+                    level: "HIGH",
+                    cls: "impact-high",
+                    desc: "<b>Association flood</b>: Consumes AP memory/clients slots. effective DoS against consumer routers."
+                },
+                "5": { // CSA Spoofing
+                    level: "CRITICAL",
+                    cls: "impact-critical",
+                    desc: "<b>CSA Spoofing</b>: Forces clients to switch channel immediately. Causes instant drops even on some PMF networks."
+                },
+                "6": { // EAPOL Logoff
+                    level: "LOW",
+                    cls: "impact-low",
+                    desc: "<b>EAPOL-Logoff</b>: Specific to WPA-Enterprise. Only works on implementations that don't validate frame state."
+                },
+                "7": { // EAPOL Start
+                    level: "MEDIUM",
+                    cls: "impact-medium",
+                    desc: "<b>EAPOL-Start Spam</b>: Stresses the AP CPU by initiating many fake handshake sessions."
+                },
+                "8": { // EAP Failure
+                    level: "MEDIUM",
+                    cls: "impact-medium",
+                    desc: "<b>EAP Failure</b>: Can abort authentication process mid-way. Effective during connection phase."
+                },
+                "9": { // EAP ID
+                    level: "LOW",
+                    cls: "impact-low",
+                    desc: "<b>EAP Identity Spam</b>: Minor annoyance, keeps client/AP busy answering identity requests."
+                },
+                "10": { // Handshake
+                    level: "LOW",
+                    cls: "impact-low",
+                    desc: "<b>Handshake Disruption</b>: Surgical denial of service. Prevents clients from completing the 4-Way Handshake."
+                },
+                "11": { // WPA3 SAE
+                    level: "LOW",
+                    cls: "impact-low",
+                    desc: "<b>WPA3 SAE Flood</b>: Cryptographic DoS. Exhausts AP CPU by forcing heavy math calculations. Deadly for WPA3 APs."
+                },
+                "12": { // PMF Downgrade
+                    level: "LOW",
+                    cls: "impact-low",
+                    desc: "<b>PMF Downgrade</b>: Attempts to force legacy mode. Low success rate on modern configured networks."
+                },
+                "13": { // NAV Abuse
+                    level: "HIGH",
+                    cls: "impact-high",
+                    desc: "<b>NAV Abuse (Broadcast)</b>: Jams the network logically by reserving airtime (32ms). Virtual jamming."
+                },
+                "14": { // Beacon Manip
+                    level: "CRITICAL / DEADLY",
+                    cls: "impact-critical",
+                    desc: "<b>Beacon Regulatory Abuse</b>: Exploits 802.11h/Compliance. Forces clients to drop power or switch channel. <br><b>Bypasses PMF. Highly Effective.</b>"
+                }
+            };
 
-                case "2": // Broadcast deauth/disassoc
-                text = "Uses <b>broadcast/multicast</b> deauth/disassoc to impact multiple stations at once, increasing overall disruption and airtime usage.";
-                break;
+            const data = attackData[type] || { level: "UNKNOWN", cls: "impact-low", desc: "Select an attack." };
 
-                case "3": // Authentication flood
-                text = "<b>Authentication flood</b>: overwhelms the AP with many auth attempts, consuming CPU/state tables and preventing legitimate clients from joining reliably.";
-                break;
-
-                case "4": // Association/Reassociation flood
-                text = "<b>Association/Reassociation flood</b>: repeated (re)assoc requests consume AP resources and can destabilize client connectivity or onboarding.";
-                break;
-
-                case "5": // CSA spoofing
-                text = "<b>CSA spoofing</b>: forged Channel Switch information attempts to push clients to a different channel, causing drops or temporary loss of the AP.";
-                break;
-
-                case "6": // EAPOL-Logoff spoofing
-                text = "<b>EAPOL-Logoff spoofing</b>: spoofed EAPOL logoff frames may terminate an authentication session on some implementations, forcing re-authentication.";
-                break;
-
-                case "7": // EAPOL-Start spam
-                text = "<b>EAPOL-Start spam</b>: bursts of EAPOL-Start frames repeatedly trigger the 802.1X/WPA state machine, creating delays and instability.";
-                break;
-
-                case "8": // EAP Failure injection
-                text = "<b>EAP Failure injection</b>: injected EAP-Failure messages can make a supplicant abort authentication, resulting in repeated connection failures.";
-                break;
-
-                case "9": // EAP Identity request spam / rounds abuse
-                text = "<b>EAP Identity request spam</b>: floods identity requests to keep the client busy and stall or reset authentication progress.";
-                break;
-
-                case "10": // 4-Way Handshake disruption
-                text = "<b>4-Way Handshake disruption</b>: interferes with EAPOL-Key exchange (timeouts/replays/malformed fields) so keys aren’t installed and the client can’t complete the join.";
-                break;
-
-                case "11": // WPA3 SAE flood
-                text = "<b>WPA3 SAE flood</b>: overloads the AP with many SAE exchanges (cryptographically expensive), causing denial-of-service for legitimate clients.";
-                break;
-
-                case "12": // PMF/802.11w downgrade pressure
-                text = "<b>PMF/802.11w downgrade pressure</b>: attempts to force legacy behavior where management frames aren’t protected, making disconnect spoofing easier on vulnerable setups.";
-                break;
-
-                case "13": // NAV/RTS/CTS abuse
-                text = "<b>NAV/RTS/CTS abuse</b>: manipulates virtual carrier-sense timing to starve airtime, increasing latency, packet loss, and disconnect-like timeouts.";
-                break;
-
-                case "14": // Beacon manipulation
-                text = "<b>Beacon manipulation</b>: crafted/spam beacons (fake SSIDs/IE fields) can confuse scanning/roaming decisions and waste airtime, degrading user experience.";
-                break;
-
-                default:
-                text = "Select an attack type to see a short description.";
-                break;
-            }
-
-            descEl.innerHTML = text;
+            // Update Badge
+            metaEl.innerHTML = `<span class="impact-badge ${data.cls}">EFFECTIVENESS: ${data.level}</span>`;
+            
+            // Update Description
+            descEl.innerHTML = data.desc;
+            
+            // Cambia il colore del bordo del box descrizione in base alla pericolosità
+            const borderColors = {
+                "impact-low": "#adb5bd",
+                "impact-medium": "#ffab40",
+                "impact-high": "#ff5252",
+                "impact-critical": "#ff0000"
+            };
+            descEl.style.borderLeftColor = borderColors[data.cls];
         }
-
         // ==========================================
         // WEBSOCKET ENGINE (IL CUORE DEL SISTEMA)
         // ==========================================

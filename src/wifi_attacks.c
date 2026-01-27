@@ -845,7 +845,6 @@ void wifi_attack_nav_abuse_qos_data(const uint8_t target[6], const uint8_t bssid
 void wifi_attack_nav_abuse_qos_data_broadcast(const uint8_t ap_bssid[6])
 {
     static uint16_t seq_num = 0;
-    const uint8_t broadcast_mac[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
     uint8_t packet[27] = {
         // Frame Control: QoS Data (0x88) + FromDS (0x02) = 0x8A
         0x88, 0x02, 
