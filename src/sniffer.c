@@ -38,6 +38,11 @@ static TaskHandle_t packet_parsing_task_handle = NULL;
 static TaskHandle_t channel_hopping_task_handle = NULL;
 static TaskHandle_t single_channel_hopping_task_handle = NULL;
 
+/* Group Bits */
+#define SCAN_DONE_BIT (1<<0)
+static EventGroupHandle_t scan_evt = NULL;
+static esp_event_handler_instance_t scan_done_event_instance = NULL;
+
 /* Client and target info */
 static clients_t clients = {0};
 static handshake_info_t handshake_info = {0};
@@ -53,6 +58,7 @@ static sniffer_mode_t current_sniff_mode = SNIFF_MODE_IDLE;
 /* Filters for promiscous mode */
 static int filter_type_main = 0;      // 0=All, 1=Mgmt, 2=Ctrl, 3=Data
 static uint32_t filter_subtype_mask = 0; // Maschera specifica
+static uint8_t filter_channel = 0; // Channel mask
 
 /* Private function */
 static void beacon_track_task(void *param);
@@ -60,6 +66,16 @@ static void hopping_timer_callback(TimerHandle_t xTimer);
 static void add_client_to_list(const uint8_t *mac, const uint8_t *bssid);
 static void wifi_sniffer_channel_hopping_task(void *param);
 static void wifi_sniffer_single_channel_hopping_task(void *param);
+
+
+static void wifi_event_scan_done_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data)
+{
+    if(event_base != WIFI_EVENT) return;
+    if (event_id == WIFI_EVENT_SCAN_DONE) 
+    {
+        xEventGroupSetBits(scan_evt, SCAN_DONE_BIT);
+    }
+}
 
 
 IRAM_ATTR static void promiscuous_callback(void *buf, wifi_promiscuous_pkt_type_t type)
@@ -83,7 +99,9 @@ IRAM_ATTR static void promiscuous_callback(void *buf, wifi_promiscuous_pkt_type_
     memcpy(sniffer_pkt.payload, packet->payload, sniffer_pkt.length);
 
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-    xQueueSendFromISR(packet_queue, &sniffer_pkt, &xHigherPriorityTaskWoken);
+    if( xQueueSendFromISR(packet_queue, &sniffer_pkt, &xHigherPriorityTaskWoken) != pdTRUE ) {
+
+    }
     if (xHigherPriorityTaskWoken)
     {
         portYIELD_FROM_ISR();
@@ -394,6 +412,8 @@ cleanup:
  */
 static void handle_raw_view(struct libwifi_frame *frame, sniffer_packet_t *sniffer_pkt)
 {
+    if(sniffer_pkt->channel != filter_channel && filter_channel != 0) return;
+
     struct libwifi_wpa_auth_data wpa_data = {0};
 
     // Rate Limiting
@@ -719,6 +739,11 @@ esp_err_t wifi_stop_sniffing(void)
         vSemaphoreDelete(target_semaphore);
         target_semaphore = NULL;
     }
+    if (aps_semaphore != NULL)
+    {
+        vSemaphoreDelete(aps_semaphore);
+        aps_semaphore = NULL;
+    }
 
     target = NULL;
     current_sniff_mode = SNIFF_MODE_IDLE;
@@ -727,9 +752,10 @@ esp_err_t wifi_stop_sniffing(void)
 }
 
 
-void wifi_sniffer_set_fine_filter(int type, uint32_t subtype) {
+void wifi_sniffer_set_fine_filter(int type, uint32_t subtype, uint8_t channel) {
     filter_type_main = type;
     filter_subtype_mask = subtype;
+    filter_channel = channel;
 
     wifi_promiscuous_filter_t filter = {0};
     filter.filter_mask = 0;
@@ -848,8 +874,17 @@ esp_err_t wifi_sniffer_stop_channel_hopping(void)
 
 esp_err_t wifi_sniffer_start_single_channel_hopping(uint8_t channel)
 {
-    if (single_channel_hopping_task_handle == NULL)
-    {
+    if(scan_evt == NULL) {
+        scan_evt = xEventGroupCreate();
+    }
+    if(scan_evt == NULL) {
+        ESP_LOGE(TAG, "Failed to create event group.");
+        return ESP_FAIL;
+    }
+    if(scan_done_event_instance == NULL) {
+        ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, WIFI_EVENT_SCAN_DONE, &wifi_event_scan_done_handler, NULL, &scan_done_event_instance));
+    }
+    if (single_channel_hopping_task_handle == NULL) {
         xTaskCreate(wifi_sniffer_single_channel_hopping_task, "single_channel_hopping_task", 2048, (void*)(uintptr_t)channel, SINGLE_CHANNEL_HOPPING_TASK_PRIO, &single_channel_hopping_task_handle);
     }
     return ESP_OK;
@@ -858,10 +893,17 @@ esp_err_t wifi_sniffer_start_single_channel_hopping(uint8_t channel)
 
 esp_err_t wifi_sniffer_stop_single_channel_hopping(void)
 {
-    if (single_channel_hopping_task_handle != NULL)
-    {
+    if(scan_evt != NULL) {
+        vEventGroupDelete(scan_evt);
+        scan_evt = NULL;
+    }
+    if (single_channel_hopping_task_handle != NULL) {
         vTaskDelete(single_channel_hopping_task_handle);
         single_channel_hopping_task_handle = NULL;
+    }
+    if(scan_done_event_instance != NULL) {
+        ESP_ERROR_CHECK(esp_event_handler_instance_unregister(WIFI_EVENT, WIFI_EVENT_SCAN_DONE, scan_done_event_instance));
+        scan_done_event_instance = NULL;
     }
     return ESP_OK;
 }
@@ -952,12 +994,28 @@ static void hopping_timer_callback(TimerHandle_t xTimer)
 static void wifi_sniffer_single_channel_hopping_task(void *param)
 {
     uint8_t channel = (uint8_t)(uintptr_t)param;
-    while(true)
-    {
-        wifi_set_temporary_channel(channel, 150);
-        vTaskDelay(pdMS_TO_TICKS(270));
-    }
+    wifi_scan_config_t cfg = {
+        .ssid = NULL,
+        .bssid = NULL,
+        .scan_type = WIFI_SCAN_TYPE_PASSIVE,
+        .show_hidden = false,
+        .channel = channel,
+        //.scan_time.active.min = 0,
+        //.scan_time.active.max = 120,
+        .scan_time.passive = 90,      // dwell per channel (ms)
+        .home_chan_dwell_time = 220,
+    };
 
+    while(true) 
+    {
+        xEventGroupClearBits(scan_evt, SCAN_DONE_BIT);
+        if (esp_wifi_scan_start(&cfg, false) != ESP_OK) { 
+            vTaskDelay(pdMS_TO_TICKS(150)); 
+            continue; 
+        }
+        xEventGroupWaitBits(scan_evt, SCAN_DONE_BIT, pdTRUE, pdFALSE, pdMS_TO_TICKS(600));
+        vTaskDelay(pdMS_TO_TICKS(5));
+    }
 }
 
 

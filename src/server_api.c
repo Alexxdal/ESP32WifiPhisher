@@ -653,13 +653,12 @@ static esp_err_t api_start_raw_sniffer(ws_frame_req_t *req)
         cJSON_Delete(json);
     }
 
-    // 1. Configura i filtri complessi (HW + SW)
-    wifi_sniffer_set_fine_filter(type, subtype);
-
     // 2. Gestione Canale / Hopping
     if (hopping) {
+        wifi_sniffer_set_fine_filter(type, subtype, 0);
         wifi_sniffer_start_channel_hopping(); 
     } else {
+        wifi_sniffer_set_fine_filter(type, subtype, channel);
         wifi_sniffer_start_single_channel_hopping(channel);
     }
     

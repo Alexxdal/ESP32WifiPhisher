@@ -142,8 +142,9 @@ esp_err_t wifi_stop_sniffing(void);
  * 
  * @param type Main type (MGMT, DATA, CONTROL)
  * @param subtype Filter subtype
+ * @param channel Set to 0 to disable filter
  */
-void wifi_sniffer_set_fine_filter(int type, uint32_t subtype);
+void wifi_sniffer_set_fine_filter(int type, uint32_t subtype, uint8_t channel);
 
 
 /**

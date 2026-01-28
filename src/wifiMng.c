@@ -12,6 +12,7 @@
 
 
 static const char *TAG = "WIFI_MNG";
+
 /* Enable send management frames */
 extern int ieee80211_raw_frame_sanity_check(int32_t arg, int32_t arg2, int32_t arg3){
     return 0;
@@ -20,6 +21,8 @@ extern int ieee80211_raw_frame_sanity_check(int32_t arg, int32_t arg2, int32_t a
 
 static void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data)
 {
+    if(event_base != WIFI_EVENT) return;
+
     if (event_id == WIFI_EVENT_AP_STACONNECTED) 
     {
         wifi_event_ap_staconnected_t* event = (wifi_event_ap_staconnected_t*) event_data;
@@ -86,7 +89,7 @@ void wifi_start_softap(void)
             .ssid_len = strlen(DEFAULT_WIFI_SSID),
             .channel = DEFAULT_WIFI_CHAN,
             .authmode = DEFAULT_WIFI_AUTH,
-            .beacon_interval = 100,
+            .beacon_interval = 80,
             .max_connection = DEFAULT_WIFI_MAX_CONN,
             .pmf_cfg = {
                     /* Cannot set pmf to required when in wpa-wpa2 mixed mode! Setting pmf to optional mode. */
