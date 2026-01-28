@@ -13,7 +13,7 @@ typedef enum
 
 
 #define WS_FRAME_BUFFER_SIZE 1024
-#define WS_FRAME_QUEUE_LENGTH 18
+#define WS_FRAME_QUEUE_LENGTH 128
 
 /**
  * @brief Websocket frame type

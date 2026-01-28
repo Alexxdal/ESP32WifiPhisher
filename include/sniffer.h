@@ -32,7 +32,8 @@ typedef enum {
     SNIFF_MODE_GLOBAL_MONITOR,  // Ascolta tutto (Scan, statistiche generali)
     SNIFF_MODE_TARGET_ONLY,     // Ascolta SOLO il target (Handshake/PMKID capture, no attacchi)
     SNIFF_MODE_ATTACK_KARMA,    // Risponde alle Probe Requests (Karma)
-    SNIFF_MODE_ATTACK_EVIL_TWIN, // Logica Evil Twin (Deauth + Monitoraggio specifico)
+    SNIFF_MODE_ATTACK_EVIL_TWIN,// Logica Evil Twin (Deauth + Monitoraggio specifico)
+    SNIFF_MODE_RAW_VIEW,        // Logica per packet analyzer
     SNIFF_MODE_MAX
 } sniffer_mode_t;
 
@@ -137,6 +138,15 @@ esp_err_t wifi_stop_sniffing(void);
 
 
 /**
+ * @brief Set filter for promiscous mode
+ * 
+ * @param type Main type (MGMT, DATA, CONTROL)
+ * @param subtype Filter subtype
+ */
+void wifi_sniffer_set_fine_filter(int type, uint32_t subtype);
+
+
+/**
  * @brief Set sniffer operating mode
  * 
  * @param mode 
@@ -174,6 +184,23 @@ esp_err_t wifi_sniffer_start_channel_hopping(void);
  * @return esp_err_t 
  */
 esp_err_t wifi_sniffer_stop_channel_hopping(void);
+
+
+/**
+ * @brief Start single channel hopping task
+ * 
+ * @param channel Target channel to temporary switch
+ * @return esp_err_t 
+ */
+esp_err_t wifi_sniffer_start_single_channel_hopping(uint8_t channel);
+
+
+/**
+ * @brief Stop single channel hopping task
+ * 
+ * @return esp_err_t 
+ */
+esp_err_t wifi_sniffer_stop_single_channel_hopping(void);
 
 
 /**

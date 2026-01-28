@@ -19,7 +19,6 @@ void karma_attack_set_target(const target_info_t *target)
     memcpy(karma_target, target, sizeof(target_info_t));
 
     /* Stop sniffer */
-    wifi_sniffer_stop_channel_hopping();
     wifi_stop_sniffing();
 
     /* Start DNS Server */
@@ -53,7 +52,6 @@ void karma_attack_stop(void)
     /* Stop DNS Server */
     dns_server_stop();
     /* Stop sniffer and beacon tracking */
-    wifi_stop_beacon_tracking();
     wifi_stop_sniffing();
     /* Wait engine stop */
     vTaskDelay(pdMS_TO_TICKS(1000));
@@ -73,7 +71,6 @@ void karma_attack_probes_scan_start(void)
 
 void karma_attack_probes_scan_stop(void)
 {
-    wifi_sniffer_stop_channel_hopping();
     wifi_stop_sniffing();
     ESP_LOGI(TAG, "Karma attack probe scan stopped.");
 }

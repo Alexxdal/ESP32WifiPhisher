@@ -327,7 +327,6 @@ void deauther_stop(void)
         ESP_LOGE(TAG, "Deauther task is not running.");
         return;
     }
-    wifi_sniffer_stop_channel_hopping();
     wifi_stop_sniffing();
     vTaskDelete(deauther_task_handle);
     deauther_task_handle = NULL;

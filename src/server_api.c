@@ -628,6 +628,58 @@ static esp_err_t api_deauther_stop(ws_frame_req_t *req)
 }
 
 
+static esp_err_t api_start_raw_sniffer(ws_frame_req_t *req)
+{
+    cJSON *json = cJSON_Parse(req->payload);
+    int channel = 1;
+    bool hopping = false;
+    int type = 0;
+    uint32_t subtype = 0;
+
+    if(json) {
+        // Estrai parametri dal JSON
+        cJSON *j_chan = cJSON_GetObjectItem(json, "channel");
+        cJSON *j_hop = cJSON_GetObjectItem(json, "hopping");
+        cJSON *j_type = cJSON_GetObjectItem(json, "type");
+        cJSON *j_sub = cJSON_GetObjectItem(json, "subtype");
+
+        if(j_chan) channel = j_chan->valueint;
+        if(j_hop) hopping = cJSON_IsTrue(j_hop);
+        if(j_type) type = j_type->valueint;
+        
+        // Usa valuedouble per sicurezza con numeri grandi (0xFFFFFFFF) in JSON
+        if(j_sub) subtype = (uint32_t)j_sub->valuedouble; 
+        
+        cJSON_Delete(json);
+    }
+
+    // 1. Configura i filtri complessi (HW + SW)
+    wifi_sniffer_set_fine_filter(type, subtype);
+
+    // 2. Gestione Canale / Hopping
+    if (hopping) {
+        wifi_sniffer_start_channel_hopping(); 
+    } else {
+        wifi_sniffer_start_single_channel_hopping(channel);
+    }
+    
+    // 3. Avvia Sniffer in modalità RAW
+    // Passiamo NULL come target perché in RAW mode vogliamo vedere tutto
+    wifi_start_sniffing(NULL, SNIFF_MODE_RAW_VIEW);
+    
+    api_send_status_frame(req, "ok", "Sniffer Started");
+    return ESP_OK;
+}
+
+
+static esp_err_t api_stop_raw_sniffer(ws_frame_req_t *req)
+{
+    wifi_stop_sniffing();
+    api_send_status_frame(req, "ok", "Sniffer Stopped");
+    return ESP_OK;
+}
+
+
 static const api_cmd_t api_cmd_list[] = {
     { API_GET_STATUS, api_get_status },
     { API_SET_AP_SETTINGS, api_admin_set_ap_settings },
@@ -642,7 +694,9 @@ static const api_cmd_t api_cmd_list[] = {
     { API_GET_KARMA_PROBES, api_get_karma_probes },
     { API_KARMA_ATTACK_START, api_karma_set_target },
     { API_DEAUTHER_START, api_deauther_start },
-    { API_DEAUTHER_STOP, api_deauther_stop }
+    { API_DEAUTHER_STOP, api_deauther_stop },
+    { API_START_RAW_SNIFFER, api_start_raw_sniffer },
+    { API_STOP_RAW_SNIFFER, api_stop_raw_sniffer }
 };
 
 
