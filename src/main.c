@@ -54,7 +54,7 @@ void app_main()
     esp_log_level_set("wifi", ESP_LOG_DEBUG);
     esp_log_level_set("esp_netif_lwip", ESP_LOG_DEBUG);
     #else
-    esp_log_level_set("wifi", ESP_LOG_WARN);
+    esp_log_level_set("wifi", ESP_LOG_ERROR);
     esp_log_level_set("esp_netif_lwip", ESP_LOG_WARN);
     #endif
 
