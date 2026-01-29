@@ -64,7 +64,7 @@ void karma_attack_stop(void)
 void karma_attack_probes_scan_start(void)
 {
     wifi_start_sniffing(NULL, SNIFF_MODE_ATTACK_KARMA);
-    wifi_sniffer_start_channel_hopping();
+    wifi_sniffer_start_channel_hopping(0);
     ESP_LOGI(TAG, "Karma attack probe scan started.");
 }
 

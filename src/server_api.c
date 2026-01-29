@@ -182,7 +182,7 @@ static esp_err_t api_admin_set_ap_settings(ws_frame_req_t *req)
 {
     cJSON *json = cJSON_Parse(req->payload);
     if (!json) {
-        ESP_LOGE(TAG, "Invalid JSON received");
+        ESP_LOGE(TAG, "Invalid JSON received: %s", req->payload);
         return ESP_FAIL;
     }
     const cJSON *j_ssid = cJSON_GetObjectItemCaseSensitive(json, "ssid");
@@ -656,10 +656,10 @@ static esp_err_t api_start_raw_sniffer(ws_frame_req_t *req)
     // 2. Gestione Canale / Hopping
     if (hopping) {
         wifi_sniffer_set_fine_filter(type, subtype, 0);
-        wifi_sniffer_start_channel_hopping(); 
+        wifi_sniffer_start_channel_hopping(0); 
     } else {
         wifi_sniffer_set_fine_filter(type, subtype, channel);
-        wifi_sniffer_start_single_channel_hopping(channel);
+        wifi_sniffer_start_channel_hopping(channel);
     }
     
     // 3. Avvia Sniffer in modalità RAW
@@ -703,7 +703,7 @@ void http_api_parse(ws_frame_req_t *req)
 {
     cJSON *root = cJSON_Parse(req->payload);
     if (root == NULL) {
-        ESP_LOGE(TAG, "Invalid JSON received");
+        ESP_LOGE(TAG, "Invalid JSON received: %s", req->payload);
         return;
     }
 

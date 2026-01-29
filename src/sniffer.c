@@ -23,7 +23,6 @@ static const char *TAG = "SNIFFER";
 #define PACKET_PARSING_TASK_PRIO            5
 #define PACKET_QUEUE_LEN                    50
 #define CHANNEL_HOPPING_TASK_PRIO           3
-#define SINGLE_CHANNEL_HOPPING_TASK_PRIO    3
 
 /* Queue and semaphore */
 static QueueHandle_t packet_queue = NULL;
@@ -36,7 +35,6 @@ static TimerHandle_t beacon_track_timer_handle = NULL;
 static TaskHandle_t beacon_track_task_handle = NULL;
 static TaskHandle_t packet_parsing_task_handle = NULL;
 static TaskHandle_t channel_hopping_task_handle = NULL;
-static TaskHandle_t single_channel_hopping_task_handle = NULL;
 
 /* Group Bits */
 #define SCAN_DONE_BIT (1<<0)
@@ -65,7 +63,6 @@ static void beacon_track_task(void *param);
 static void hopping_timer_callback(TimerHandle_t xTimer);
 static void add_client_to_list(const uint8_t *mac, const uint8_t *bssid);
 static void wifi_sniffer_channel_hopping_task(void *param);
-static void wifi_sniffer_single_channel_hopping_task(void *param);
 
 
 static void wifi_event_scan_done_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data)
@@ -91,6 +88,10 @@ IRAM_ATTR static void promiscuous_callback(void *buf, wifi_promiscuous_pkt_type_
     }
 
     if(packet->rx_ctrl.channel != filter_channel && filter_channel != 0) {
+        return;
+    }
+
+    if (xQueueIsQueueFullFromISR(packet_queue)) {
         return;
     }
 
@@ -705,7 +706,6 @@ esp_err_t wifi_stop_sniffing(void)
     bool en = false;
     ESP_ERROR_CHECK(esp_wifi_get_promiscuous(&en));
 
-    wifi_sniffer_stop_single_channel_hopping();
     wifi_sniffer_stop_channel_hopping();
 
     /* Disable promiscuous mode */
@@ -852,28 +852,7 @@ esp_err_t wifi_stop_beacon_tracking(void)
 }
 
 
-esp_err_t wifi_sniffer_start_channel_hopping(void)
-{
-    if (channel_hopping_task_handle == NULL)
-    {
-        xTaskCreate(wifi_sniffer_channel_hopping_task, "channel_hopping_task", 4096, NULL, CHANNEL_HOPPING_TASK_PRIO, &channel_hopping_task_handle);
-    }
-    return ESP_OK;
-}
-
-
-esp_err_t wifi_sniffer_stop_channel_hopping(void)
-{
-    if (channel_hopping_task_handle != NULL)
-    {
-        vTaskDelete(channel_hopping_task_handle);
-        channel_hopping_task_handle = NULL;
-    }
-    return ESP_OK;
-}
-
-
-esp_err_t wifi_sniffer_start_single_channel_hopping(uint8_t channel)
+esp_err_t wifi_sniffer_start_channel_hopping(uint8_t channel)
 {
     if(scan_evt == NULL) {
         scan_evt = xEventGroupCreate();
@@ -885,25 +864,29 @@ esp_err_t wifi_sniffer_start_single_channel_hopping(uint8_t channel)
     if(scan_done_event_instance == NULL) {
         ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, WIFI_EVENT_SCAN_DONE, &wifi_event_scan_done_handler, NULL, &scan_done_event_instance));
     }
-    if (single_channel_hopping_task_handle == NULL) {
-        xTaskCreate(wifi_sniffer_single_channel_hopping_task, "single_channel_hopping_task", 2048, (void*)(uintptr_t)channel, SINGLE_CHANNEL_HOPPING_TASK_PRIO, &single_channel_hopping_task_handle);
+    if (channel_hopping_task_handle == NULL)
+    {
+        xTaskCreate(wifi_sniffer_channel_hopping_task, "channel_hopping_task", 4096, (void*)(uintptr_t)channel, CHANNEL_HOPPING_TASK_PRIO, &channel_hopping_task_handle);
     }
     return ESP_OK;
 }
 
 
-esp_err_t wifi_sniffer_stop_single_channel_hopping(void)
+esp_err_t wifi_sniffer_stop_channel_hopping(void)
 {
+    esp_wifi_scan_stop();
+    vTaskDelay(pdMS_TO_TICKS(10));
     if(scan_done_event_instance != NULL) {
         ESP_ERROR_CHECK(esp_event_handler_instance_unregister(WIFI_EVENT, WIFI_EVENT_SCAN_DONE, scan_done_event_instance));
         scan_done_event_instance = NULL;
     }
-    vTaskDelay(pdMS_TO_TICKS(100));
-    if (single_channel_hopping_task_handle != NULL) {
-        vTaskDelete(single_channel_hopping_task_handle);
-        single_channel_hopping_task_handle = NULL;
+    vTaskDelay(pdMS_TO_TICKS(10));
+    if (channel_hopping_task_handle != NULL)
+    {
+        vTaskDelete(channel_hopping_task_handle);
+        channel_hopping_task_handle = NULL;
     }
-    vTaskDelay(pdMS_TO_TICKS(100));
+    vTaskDelay(pdMS_TO_TICKS(10));
     if(scan_evt != NULL) {
         vEventGroupDelete(scan_evt);
         scan_evt = NULL;
@@ -952,6 +935,61 @@ esp_err_t wifi_sniffer_get_aps(aps_info_t *out)
 }
 
 
+esp_err_t wifi_sniffer_scan_fill_aps(void) 
+{
+    wifi_scan_config_t scan_config = {
+        .ssid = NULL,
+        .bssid = NULL,
+        .channel = 0,
+        .show_hidden = false,
+        .scan_type = WIFI_SCAN_TYPE_ACTIVE,
+        .scan_time.active.min = 0,
+        .scan_time.active.max = 150,
+        .home_chan_dwell_time = 150,
+    };
+    
+    if(esp_wifi_scan_start(&scan_config, true) != ESP_OK ) return ESP_FAIL;
+    uint16_t ap_count = 0;
+    esp_wifi_scan_get_ap_num(&ap_count);
+
+    if (ap_count > 0) 
+    {
+        wifi_ap_record_t *ap_records = (wifi_ap_record_t *)calloc(ap_count, sizeof(wifi_ap_record_t));
+        if (ap_records) 
+        {
+            if (esp_wifi_scan_get_ap_records(&ap_count, ap_records) == ESP_OK) 
+            {
+                if (xSemaphoreTake(aps_semaphore, pdMS_TO_TICKS(100)) == pdTRUE) 
+                {
+                    for (int i = 0; i < ap_count; i++) 
+                    {
+                        if (ap_records[i].rssi < -92) continue; 
+                        bool found = false;
+                        for (int k = 0; k < detected_aps.count; k++) 
+                        {
+                            if (memcmp(detected_aps.ap[k].bssid, ap_records[i].bssid, 6) == 0) 
+                            {
+                                memcpy(&detected_aps.ap[k], &ap_records[i], sizeof(wifi_ap_record_t));
+                                found = true;
+                                break;
+                            }
+                        }
+                        if (!found && detected_aps.count < MAX_AP) 
+                        {
+                            memcpy(&detected_aps.ap[detected_aps.count], &ap_records[i], sizeof(wifi_ap_record_t));
+                            detected_aps.count++;
+                        }
+                    }
+                    xSemaphoreGive(aps_semaphore);
+                }
+            }
+            free(ap_records);
+        }
+    }
+    return ESP_OK;
+}
+
+
 static void beacon_track_task(void *param)
 {
     uint8_t new_channel = 0;
@@ -994,93 +1032,52 @@ static void hopping_timer_callback(TimerHandle_t xTimer)
 }
 
 
-static void wifi_sniffer_single_channel_hopping_task(void *param)
+static void wifi_sniffer_channel_hopping_task(void *param)
 {
     uint8_t channel = (uint8_t)(uintptr_t)param;
+
     wifi_scan_config_t cfg = {
         .ssid = NULL,
         .bssid = NULL,
-        .scan_type = WIFI_SCAN_TYPE_PASSIVE,
+        .channel = 0,
         .show_hidden = false,
-        .channel = channel,
-        //.scan_time.active.min = 0,
-        //.scan_time.active.max = 120,
-        .scan_time.passive = 90,      // dwell per channel (ms)
-        .home_chan_dwell_time = 240,
+        .scan_type = WIFI_SCAN_TYPE_PASSIVE,
+        .scan_time.passive = 180,
+        .home_chan_dwell_time = 30,
     };
 
-    while(true) 
-    {
-        xEventGroupClearBits(scan_evt, SCAN_DONE_BIT);
-        if (esp_wifi_scan_start(&cfg, false) != ESP_OK) { 
-            vTaskDelay(pdMS_TO_TICKS(240)); 
-            continue; 
-        }
-        xEventGroupWaitBits(scan_evt, SCAN_DONE_BIT, pdTRUE, pdFALSE, pdMS_TO_TICKS(600));
-        vTaskDelay(pdMS_TO_TICKS(5));
-    }
-}
-
-
-static void wifi_sniffer_channel_hopping_task(void *param)
-{
     while(true)
-    {
-        /* Do a scan instead of changing channel to keep AP connection */
-        wifi_scan_config_t scan_config = {
-            .ssid = NULL,
-            .bssid = NULL,
-            .channel = 0,
-            .show_hidden = false,
-            .scan_type = WIFI_SCAN_TYPE_ACTIVE,
-            .scan_time.active.min = 60,
-            .scan_time.active.max = 200,
-            .home_chan_dwell_time = 150,
-        };
-        esp_err_t err = esp_wifi_scan_start(&scan_config, true);
-        
-        if (err == ESP_OK) 
-        {
-            uint16_t ap_count = 0;
-            esp_wifi_scan_get_ap_num(&ap_count);
+    {   
+        if(scan_evt != NULL)
+            xEventGroupClearBits(scan_evt, SCAN_DONE_BIT);
 
-            if (ap_count > 0) 
-            {
-                wifi_ap_record_t *ap_records = (wifi_ap_record_t *)calloc(ap_count, sizeof(wifi_ap_record_t));
-                if (ap_records) 
-                {
-                    err = esp_wifi_scan_get_ap_records(&ap_count, ap_records);
-                    if (err == ESP_OK) 
-                    {
-                        if (xSemaphoreTake(aps_semaphore, pdMS_TO_TICKS(100)) == pdTRUE) 
-                        {
-                            for (int i = 0; i < ap_count; i++) 
-                            {
-                                if (ap_records[i].rssi < -92) continue; 
-                                bool found = false;
-                                for (int k = 0; k < detected_aps.count; k++) 
-                                {
-                                    if (memcmp(detected_aps.ap[k].bssid, ap_records[i].bssid, 6) == 0) 
-                                    {
-                                        memcpy(&detected_aps.ap[k], &ap_records[i], sizeof(wifi_ap_record_t));
-                                        found = true;
-                                        break;
-                                    }
-                                }
-                                if (!found && detected_aps.count < MAX_AP) 
-                                {
-                                    memcpy(&detected_aps.ap[detected_aps.count], &ap_records[i], sizeof(wifi_ap_record_t));
-                                    detected_aps.count++;
-                                }
-                            }
-                            xSemaphoreGive(aps_semaphore);
-                        }
-                    }
-                    free(ap_records);
+        /* Scan all Channel */
+        if(channel == 0) {
+            for(uint8_t i = 1; i < 14; i++) {
+                cfg.channel = i;
+                if(esp_wifi_scan_start(&cfg, false) == ESP_OK) {
+                    if(scan_evt != NULL)
+                        xEventGroupWaitBits(scan_evt, SCAN_DONE_BIT, pdTRUE, pdFALSE, pdMS_TO_TICKS(600));
+                    /* Delay for SoftAP */
+                    vTaskDelay(pdMS_TO_TICKS(200));
+                }
+                else {
+                    continue;
                 }
             }
         }
-        vTaskDelay(pdMS_TO_TICKS(5000));
+        else {
+            cfg.channel = channel;
+            if(esp_wifi_scan_start(&cfg, false) == ESP_OK) {
+                if(scan_evt != NULL)
+                    xEventGroupWaitBits(scan_evt, SCAN_DONE_BIT, pdTRUE, pdFALSE, pdMS_TO_TICKS(600));
+                /* Delay for SoftAP */
+                vTaskDelay(pdMS_TO_TICKS(200));
+            }
+            else {
+                continue;
+            }
+        }
     }
 }
 

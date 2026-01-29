@@ -174,9 +174,10 @@ esp_err_t wifi_stop_beacon_tracking(void);
 /**
  * @brief Start channel hopping task
  * 
+ * @param channel Target channel to temporary switch
  * @return esp_err_t 
  */
-esp_err_t wifi_sniffer_start_channel_hopping(void);
+esp_err_t wifi_sniffer_start_channel_hopping(uint8_t channel);
 
 
 /**
@@ -185,23 +186,6 @@ esp_err_t wifi_sniffer_start_channel_hopping(void);
  * @return esp_err_t 
  */
 esp_err_t wifi_sniffer_stop_channel_hopping(void);
-
-
-/**
- * @brief Start single channel hopping task
- * 
- * @param channel Target channel to temporary switch
- * @return esp_err_t 
- */
-esp_err_t wifi_sniffer_start_single_channel_hopping(uint8_t channel);
-
-
-/**
- * @brief Stop single channel hopping task
- * 
- * @return esp_err_t 
- */
-esp_err_t wifi_sniffer_stop_single_channel_hopping(void);
 
 
 /**
@@ -235,5 +219,10 @@ esp_err_t wifi_sniffer_get_clients(clients_t *out);
  */
 esp_err_t wifi_sniffer_get_aps(aps_info_t *out);
 
+
+/**
+ * @brief Scan for aps and fill static memory
+ */
+esp_err_t wifi_sniffer_scan_fill_aps(void);
 
 #endif /* _SNIFFER_H */
