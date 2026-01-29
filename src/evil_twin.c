@@ -46,7 +46,7 @@ static void evil_twin_task(void *pvParameters)
     vTaskDelay(pdMS_TO_TICKS(2000));
     /* Start sniffer and beacon tracking */
     wifi_start_sniffing(target, SNIFF_MODE_ATTACK_EVIL_TWIN);
-    wifi_start_beacon_tracking();
+    //wifi_start_beacon_tracking();
     
     while(true)
     {
