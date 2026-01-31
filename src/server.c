@@ -77,8 +77,14 @@ static void ws_frame_process_task(void *pvParameter)
 				ws_frame_req_t *heap_req = malloc(sizeof(ws_frame_req_t));
 				if (heap_req) {
                     memcpy(heap_req, &ws_frame, sizeof(ws_frame_req_t));
-                    httpd_queue_work(ws_frame.hd, ws_send_work, heap_req);
+					if (httpd_queue_work(ws_frame.hd, ws_send_work, heap_req) != ESP_OK) {
+                        ESP_LOGE(TAG, "Failed to queue WS work, freeing memory");
+                        if(heap_req->payload && heap_req->need_free) {
+                            free(heap_req->payload);
+                        }
+                    }
                 } else {
+					ESP_LOGE(TAG, "Failed to alloc async req");
                     if(ws_frame.payload && ws_frame.need_free) free(ws_frame.payload);
                 }
 				break;

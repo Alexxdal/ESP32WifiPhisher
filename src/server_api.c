@@ -287,6 +287,7 @@ static esp_err_t api_wifi_scan(ws_frame_req_t *req)
         if (!obj) {
             cJSON_Delete(root);
             free(ap_records);
+            cJSON_Delete(response_obj);
             api_send_status_frame(req, "error", "cJSON_CreateObject failed");
             return ESP_ERR_NO_MEM;
         }
