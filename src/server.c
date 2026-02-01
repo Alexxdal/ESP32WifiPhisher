@@ -292,9 +292,13 @@ esp_err_t ws_send_broadcast_to_queue(ws_frame_req_t *_req)
 		ESP_LOGE(TAG, "Websocket frame queue is not initialized!");
 		return ESP_FAIL;
 	}
+
+	if (uxQueueSpacesAvailable(ws_frame_queue) == 0) {
+        return ESP_FAIL;
+    }
+
     _req->frame_type = WS_TX_FRAME;
     
-
     if (xQueueSend(ws_frame_queue, _req, 0) != pdTRUE) {
         return ESP_FAIL; 
     }

@@ -20,7 +20,7 @@ static const char *TAG = "SNIFFER";
 
 /* Tasks Priority and queue len */
 #define BEACON_TRACK_TASK_PRIO              10
-#define PACKET_PARSING_TASK_PRIO            5
+#define PACKET_PARSING_TASK_PRIO            10
 #define PACKET_QUEUE_LEN                    50
 #define CHANNEL_HOPPING_TASK_PRIO           3
 
@@ -38,8 +38,11 @@ static TaskHandle_t channel_hopping_task_handle = NULL;
 
 /* Group Bits */
 #define SCAN_DONE_BIT (1<<0)
+#define ROC_DONE_BIT (1<<0)
 static EventGroupHandle_t scan_evt = NULL;
+static EventGroupHandle_t roc_evt = NULL;
 static esp_event_handler_instance_t scan_done_event_instance = NULL;
+static esp_event_handler_instance_t roc_done_event_instance = NULL;
 
 /* Client and target info */
 static clients_t clients = {0};
@@ -58,6 +61,11 @@ static int filter_type_main = 0;      // 0=All, 1=Mgmt, 2=Ctrl, 3=Data
 static uint32_t filter_subtype_mask = 0; // Maschera specifica
 static uint8_t filter_channel = 0; // Channel mask
 
+/* Callback */
+sniffer_packet_t callback_sniffer_pkt = {0};
+/* Parsing */
+sniffer_packet_t parsing_sniffer_pkt = {0};
+
 /* Private function */
 static void beacon_track_task(void *param);
 static void hopping_timer_callback(TimerHandle_t xTimer);
@@ -71,6 +79,16 @@ static void wifi_event_scan_done_handler(void* arg, esp_event_base_t event_base,
     if (event_id == WIFI_EVENT_SCAN_DONE) 
     {
         xEventGroupSetBits(scan_evt, SCAN_DONE_BIT);
+    }
+}
+
+
+static void wifi_event_roc_done_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data)
+{
+    if(event_base != WIFI_EVENT) return;
+    if (event_id == WIFI_EVENT_ROC_DONE) 
+    {
+        xEventGroupSetBits(roc_evt, ROC_DONE_BIT);
     }
 }
 
@@ -91,23 +109,17 @@ IRAM_ATTR static void promiscuous_callback(void *buf, wifi_promiscuous_pkt_type_
         return;
     }
 
-    if (xQueueIsQueueFullFromISR(packet_queue)) {
+    if (uxQueueSpacesAvailable(packet_queue) == 0) {
         return;
     }
 
-    sniffer_packet_t sniffer_pkt;
-    sniffer_pkt.length = packet->rx_ctrl.sig_len;
-    sniffer_pkt.rssi = packet->rx_ctrl.rssi;
-    sniffer_pkt.channel = packet->rx_ctrl.channel;
-    memcpy(sniffer_pkt.payload, packet->payload, sniffer_pkt.length);
+    callback_sniffer_pkt.length = packet->rx_ctrl.sig_len;
+    callback_sniffer_pkt.rssi = packet->rx_ctrl.rssi;
+    callback_sniffer_pkt.channel = packet->rx_ctrl.channel;
+    memcpy(callback_sniffer_pkt.payload, packet->payload, callback_sniffer_pkt.length);
 
-    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-    if( xQueueSendFromISR(packet_queue, &sniffer_pkt, &xHigherPriorityTaskWoken) != pdTRUE ) {
+    if( xQueueSend(packet_queue, &callback_sniffer_pkt, 0) != pdTRUE ) {
 
-    }
-    if (xHigherPriorityTaskWoken)
-    {
-        portYIELD_FROM_ISR();
     }
 }
 
@@ -415,11 +427,9 @@ cleanup:
  */
 static void handle_raw_view(struct libwifi_frame *frame, sniffer_packet_t *sniffer_pkt)
 {
-    struct libwifi_wpa_auth_data wpa_data = {0};
-
     // Rate Limiting
     static int64_t last_pkt_time = 0;
-    if (esp_timer_get_time() - last_pkt_time < 40000) return; 
+    if (esp_timer_get_time() - last_pkt_time < 5000) return; 
 
     uint16_t type = frame->frame_control.type;       
     uint16_t subtype = frame->frame_control.subtype; 
@@ -441,48 +451,99 @@ static void handle_raw_view(struct libwifi_frame *frame, sniffer_packet_t *sniff
         }
     }
     // Nota: Control (type 2) è filtrato in Hardware via maschera
-
     last_pkt_time = esp_timer_get_time();
-
-    // --- GENERAZIONE STRINGHE (Basata sulle tue Enum) ---
     char type_str[10] = "UNK";
-    char subtype_str[32] = "Unk"; // Aumentato buffer
-    char info[64] = "";
+    char subtype_str[32] = "Unk";
+    char info[128] = "";
+    char sec[32] = "UNK";
 
     if (type == TYPE_MANAGEMENT) {
         strcpy(type_str, "MGMT");
         switch(subtype) {
-            case 0: strcpy(subtype_str, "ASSOC_REQ"); break;
-            case 1: strcpy(subtype_str, "ASSOC_RESP"); break;
-            case 2: strcpy(subtype_str, "REASSOC_REQ"); break;
-            case 3: strcpy(subtype_str, "REASSOC_RESP"); break;
-            case 4: 
+            case SUBTYPE_ASSOC_REQ: strcpy(subtype_str, "ASSOC_REQ"); break;
+            case SUBTYPE_ASSOC_RESP: strcpy(subtype_str, "ASSOC_RESP"); break;
+            case SUBTYPE_REASSOC_REQ: strcpy(subtype_str, "REASSOC_REQ"); break;
+            case SUBTYPE_REASSOC_RESP: strcpy(subtype_str, "REASSOC_RESP"); break;
+            case SUBTYPE_PROBE_REQ: {
                 strcpy(subtype_str, "PROBE_REQ");
                 struct libwifi_sta sta = {0};
-                if(libwifi_parse_probe_req(&sta, frame) == 0) {
-                    snprintf(info, sizeof(info), "Req: %s", sta.ssid);
+                if (libwifi_parse_probe_req(&sta, frame) == 0) {
+                    snprintf(info, sizeof(info),
+                            "SSID:%s%s | Ch:%u",
+                            sta.ssid,
+                            sta.broadcast_ssid ? " (hidden)" : "",
+                            sta.channel);
                     libwifi_free_sta(&sta);
                 }
-                break;
-            case 5: strcpy(subtype_str, "PROBE_RESP"); break;
-            case 6: strcpy(subtype_str, "TIME_ADV"); break;
-            case 8: 
-                strcpy(subtype_str, "BEACON");
+            } break;
+
+            case SUBTYPE_PROBE_RESP: {
+                strcpy(subtype_str, "PROBE_RESP");
                 struct libwifi_bss bss = {0};
-                if(libwifi_parse_beacon(&bss, frame) == 0) {
-                    snprintf(info, sizeof(info), "SSID: %s", bss.ssid);
+                if (libwifi_parse_probe_resp(&bss, frame) == 0) {
+                    libwifi_get_security_type_s(&bss, sec, sizeof(sec));
+                    snprintf(info, sizeof(info),
+                            "SSID:%s%s | Ch:%u | Sec:%s | WPS:%s",
+                            bss.ssid,
+                            bss.hidden ? " (hidden)" : "",
+                            bss.channel,
+                            sec,
+                            bss.wps ? "yes" : "no");
                     libwifi_free_bss(&bss);
                 }
-                break;
-            case 9: strcpy(subtype_str, "ATIM"); break;
-            case 10: strcpy(subtype_str, "DISASSOC"); break;
-            case 11: strcpy(subtype_str, "AUTH"); break;
-            case 12: strcpy(subtype_str, "DEAUTH"); break;
-            case 13: strcpy(subtype_str, "ACTION"); break;
-            case 14: strcpy(subtype_str, "ACTION_NOACK"); break;
+            } break;
+
+            case SUBTYPE_TIME_ADV: strcpy(subtype_str, "TIME_ADV"); break;
+            case SUBTYPE_BEACON: {
+                strcpy(subtype_str, "BEACON");
+                struct libwifi_bss bss = {0};
+                if (libwifi_parse_beacon(&bss, frame) == 0) {
+                    libwifi_get_security_type_s(&bss, sec, sizeof(sec));
+                    snprintf(info, sizeof(info),
+                            "SSID:%s%s | Ch:%u | Sec:%s | WPS:%s",
+                            bss.ssid,
+                            bss.hidden ? " (hidden)" : "",
+                            bss.channel,
+                            sec,
+                            bss.wps ? "yes" : "no");
+                    libwifi_free_bss(&bss);
+                }
+            } break;
+
+            case SUBTYPE_ATIM: strcpy(subtype_str, "ATIM"); break;
+            case SUBTYPE_DISASSOC: {
+                strcpy(subtype_str, "DISASSOC");
+                struct libwifi_parsed_disassoc dis = {0};
+                if (libwifi_parse_disassoc(&dis, frame) == 0) {
+                    snprintf(info, sizeof(info), "Reason:%u (0x%04X)", dis.fixed_parameters.reason_code, dis.fixed_parameters.reason_code);
+                }
+            } break;
+
+            case SUBTYPE_AUTH: strcpy(subtype_str, "AUTH"); break;
+            case SUBTYPE_DEAUTH: {
+                strcpy(subtype_str, "DEAUTH");
+                struct libwifi_parsed_deauth de = {0};
+                if (libwifi_parse_deauth(&de, frame) == 0) {
+                    snprintf(info, sizeof(info), "Reason:%u", de.fixed_parameters.reason_code);
+                    libwifi_free_parsed_deauth(&de);
+                }
+            } break;
+
+            case SUBTYPE_ACTION: {
+                strcpy(subtype_str, "ACTION");
+                size_t body_len = frame->len - frame->header_len;
+                if (body_len >= 2) {
+                    uint8_t category = frame->body[0];
+                    uint8_t action_code = frame->body[1];
+                    snprintf(info, sizeof(info), "Category:%u | Act:%u", category, action_code);
+                } else {
+                    snprintf(info, sizeof(info), "Malformed ACTION");
+                }
+            } break;
+
+            case SUBTYPE_ACTION_NOACK: strcpy(subtype_str, "ACTION_NOACK"); break;
             default: snprintf(subtype_str, sizeof(subtype_str), "MGMT_%d", subtype); break;
         }
-
     } else if (type == TYPE_CONTROL) {
         strcpy(type_str, "CTRL");
         switch(subtype) {
@@ -504,6 +565,7 @@ static void handle_raw_view(struct libwifi_frame *frame, sniffer_packet_t *sniff
 
     } else if (type == TYPE_DATA) {
         strcpy(type_str, "DATA");
+        struct libwifi_wpa_auth_data wpa_data = {0};
         // Check Handshake EAPOL (che è un Data subtype 0 o 8 solitamente)
         if (libwifi_get_wpa_data(frame, &wpa_data) == 0) {
             const char *handshake_message = libwifi_get_wpa_message_string(frame);
@@ -573,14 +635,12 @@ static void handle_raw_view(struct libwifi_frame *frame, sniffer_packet_t *sniff
  */
 static void packet_parsing_task(void *param)
 {
-    sniffer_packet_t sniffer_pkt = {0};
-
     while (1)
     {
-        if (xQueueReceive(packet_queue, &sniffer_pkt, portMAX_DELAY) == pdTRUE)
+        if (xQueueReceive(packet_queue, &parsing_sniffer_pkt, portMAX_DELAY) == pdTRUE)
         {
             struct libwifi_frame frame = {0};
-            int ret = libwifi_get_wifi_frame(&frame, (uint8_t *)sniffer_pkt.payload, sniffer_pkt.length, false);
+            int ret = libwifi_get_wifi_frame(&frame, (uint8_t *)parsing_sniffer_pkt.payload, parsing_sniffer_pkt.length, false);
 
             /* Failed to parse the Wi-Fi frame */
             if (ret != 0)
@@ -594,7 +654,7 @@ static void packet_parsing_task(void *param)
             switch (current_sniff_mode)
             {
             case SNIFF_MODE_RAW_VIEW:
-                handle_raw_view(&frame, &sniffer_pkt);
+                handle_raw_view(&frame, &parsing_sniffer_pkt);
                 break;
 
             case SNIFF_MODE_TARGET_ONLY:
@@ -602,15 +662,15 @@ static void packet_parsing_task(void *param)
                 break;
 
             case SNIFF_MODE_ATTACK_EVIL_TWIN:
-                handle_evil_twin(&frame, &sniffer_pkt);
+                handle_evil_twin(&frame, &parsing_sniffer_pkt);
                 break;
 
             case SNIFF_MODE_ATTACK_KARMA:
-                handle_karma_attack(&frame, &sniffer_pkt);
+                handle_karma_attack(&frame, &parsing_sniffer_pkt);
                 break;
 
             case SNIFF_MODE_GLOBAL_MONITOR:
-                handle_global_monitor(&frame, &sniffer_pkt);
+                handle_global_monitor(&frame, &parsing_sniffer_pkt);
                 break;
 
             case SNIFF_MODE_IDLE:
@@ -628,6 +688,15 @@ static void packet_parsing_task(void *param)
 
 esp_err_t wifi_start_sniffing(target_info_t * _target, sniffer_mode_t mode)
 {
+    bool en = false;
+    ESP_ERROR_CHECK(esp_wifi_get_promiscuous(&en));
+    /* Start wifi promiscuos mode */
+    if (en == true)
+    {
+        ESP_LOGW(TAG, "Promiscuous mode already enabled");
+        return ESP_ERR_INVALID_STATE;
+    }
+
     /* Init semaphore */
     if (clients_semaphore == NULL) {
         clients_semaphore = xSemaphoreCreateMutex();
@@ -668,15 +737,6 @@ esp_err_t wifi_start_sniffing(target_info_t * _target, sniffer_mode_t mode)
         }
     }
 
-    bool en = false;
-    ESP_ERROR_CHECK(esp_wifi_get_promiscuous(&en));
-    /* Start wifi promiscuos mode */
-    if (en == true)
-    {
-        ESP_LOGW(TAG, "Promiscuous mode already enabled");
-        return ESP_ERR_INVALID_STATE;
-    }
-
     /* Reset client count */
     memset(&clients, 0, sizeof(clients_t));
     memset(&handshake_info, 0, sizeof(handshake_info_t));
@@ -706,6 +766,7 @@ esp_err_t wifi_stop_sniffing(void)
     bool en = false;
     ESP_ERROR_CHECK(esp_wifi_get_promiscuous(&en));
 
+    wifi_stop_beacon_tracking();
     wifi_sniffer_stop_channel_hopping();
 
     /* Disable promiscuous mode */
@@ -821,10 +882,10 @@ esp_err_t wifi_start_beacon_tracking(void)
         return ESP_FAIL;
     }
 
-    xTimerStart(beacon_track_timer_handle, 0);
     if (beacon_track_task_handle == NULL)
     {
         xTaskCreate(beacon_track_task, "beacon_track_task_handle", 4096, NULL, BEACON_TRACK_TASK_PRIO, &beacon_track_task_handle);
+        xTimerStart(beacon_track_timer_handle, 0);
     }
 
     return ESP_OK;
@@ -854,16 +915,29 @@ esp_err_t wifi_stop_beacon_tracking(void)
 
 esp_err_t wifi_sniffer_start_channel_hopping(uint8_t channel)
 {
+    if(roc_evt == NULL) {
+        roc_evt = xEventGroupCreate();
+    }
     if(scan_evt == NULL) {
         scan_evt = xEventGroupCreate();
     }
-    if(scan_evt == NULL) {
-        ESP_LOGE(TAG, "Failed to create event group.");
+
+    if(roc_evt == NULL) {
+        ESP_LOGE(TAG, "Failed to create roc event group.");
         return ESP_FAIL;
+    }
+    if(scan_evt == NULL) {
+        ESP_LOGE(TAG, "Failed to create scan done event group.");
+        return ESP_FAIL;
+    }
+
+    if(roc_done_event_instance == NULL) {
+        ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, WIFI_EVENT_ROC_DONE, &wifi_event_roc_done_handler, NULL, &roc_done_event_instance));
     }
     if(scan_done_event_instance == NULL) {
         ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, WIFI_EVENT_SCAN_DONE, &wifi_event_scan_done_handler, NULL, &scan_done_event_instance));
     }
+
     if (channel_hopping_task_handle == NULL)
     {
         xTaskCreate(wifi_sniffer_channel_hopping_task, "channel_hopping_task", 4096, (void*)(uintptr_t)channel, CHANNEL_HOPPING_TASK_PRIO, &channel_hopping_task_handle);
@@ -876,17 +950,28 @@ esp_err_t wifi_sniffer_stop_channel_hopping(void)
 {
     esp_wifi_scan_stop();
     vTaskDelay(pdMS_TO_TICKS(10));
+
+    if(roc_done_event_instance != NULL) {
+        ESP_ERROR_CHECK(esp_event_handler_instance_unregister(WIFI_EVENT, WIFI_EVENT_ROC_DONE, roc_done_event_instance));
+        roc_done_event_instance = NULL;
+    }
     if(scan_done_event_instance != NULL) {
         ESP_ERROR_CHECK(esp_event_handler_instance_unregister(WIFI_EVENT, WIFI_EVENT_SCAN_DONE, scan_done_event_instance));
         scan_done_event_instance = NULL;
     }
     vTaskDelay(pdMS_TO_TICKS(10));
+
     if (channel_hopping_task_handle != NULL)
     {
         vTaskDelete(channel_hopping_task_handle);
         channel_hopping_task_handle = NULL;
     }
     vTaskDelay(pdMS_TO_TICKS(10));
+
+    if(roc_evt != NULL) {
+        vEventGroupDelete(roc_evt);
+        roc_evt = NULL;
+    }
     if(scan_evt != NULL) {
         vEventGroupDelete(scan_evt);
         scan_evt = NULL;
@@ -925,6 +1010,10 @@ esp_err_t wifi_sniffer_get_aps(aps_info_t *out)
 {
     if(out == NULL) return ESP_ERR_INVALID_ARG;
 
+    if (aps_semaphore == NULL) {
+        aps_semaphore = xSemaphoreCreateMutex();
+    }
+
     if (xSemaphoreTake(aps_semaphore, pdMS_TO_TICKS(100)) == pdTRUE) 
     {
         memcpy(out, &detected_aps, sizeof(aps_info_t));
@@ -937,6 +1026,10 @@ esp_err_t wifi_sniffer_get_aps(aps_info_t *out)
 
 esp_err_t wifi_sniffer_scan_fill_aps(void) 
 {
+    if (aps_semaphore == NULL) {
+        aps_semaphore = xSemaphoreCreateMutex();
+    }
+
     wifi_scan_config_t scan_config = {
         .ssid = NULL,
         .bssid = NULL,
@@ -963,7 +1056,7 @@ esp_err_t wifi_sniffer_scan_fill_aps(void)
                 {
                     for (int i = 0; i < ap_count; i++) 
                     {
-                        if (ap_records[i].rssi < -92) continue; 
+                        if (ap_records[i].rssi < -95) continue; 
                         bool found = false;
                         for (int k = 0; k < detected_aps.count; k++) 
                         {
@@ -1023,60 +1116,54 @@ static void beacon_track_task(void *param)
 
 static void hopping_timer_callback(TimerHandle_t xTimer)
 {
-    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-    vTaskNotifyGiveFromISR(beacon_track_task_handle, &xHigherPriorityTaskWoken);
-    if (xHigherPriorityTaskWoken)
-    {
-        portYIELD_FROM_ISR();
+    if (beacon_track_task_handle) {
+        xTaskNotifyGive(beacon_track_task_handle);
     }
 }
 
 
 static void wifi_sniffer_channel_hopping_task(void *param)
 {
-    uint8_t channel = (uint8_t)(uintptr_t)param;
+    uint8_t target_channel = (uint8_t)(uintptr_t)param;
+    uint8_t current_channel = 1;
+    const uint32_t ROC_DURATION_MS = 10;
+    const uint32_t AP_REST_TIME_MS = 50;
 
-    wifi_scan_config_t cfg = {
-        .ssid = NULL,
-        .bssid = NULL,
-        .channel = 0,
-        .show_hidden = false,
-        .scan_type = WIFI_SCAN_TYPE_PASSIVE,
-        .scan_time.passive = 180,
-        .home_chan_dwell_time = 30,
-    };
-
-    while(true)
-    {   
-        if(scan_evt != NULL)
-            xEventGroupClearBits(scan_evt, SCAN_DONE_BIT);
-
-        /* Scan all Channel */
-        if(channel == 0) {
-            for(uint8_t i = 1; i < 14; i++) {
-                cfg.channel = i;
-                if(esp_wifi_scan_start(&cfg, false) == ESP_OK) {
-                    if(scan_evt != NULL)
-                        xEventGroupWaitBits(scan_evt, SCAN_DONE_BIT, pdTRUE, pdFALSE, pdMS_TO_TICKS(600));
-                    /* Delay for SoftAP */
-                    vTaskDelay(pdMS_TO_TICKS(200));
-                }
-                else {
-                    continue;
-                }
-            }
+    while (1)
+    {
+        if (roc_evt != NULL) {
+            xEventGroupClearBits(roc_evt, ROC_DONE_BIT);
         }
-        else {
-            cfg.channel = channel;
-            if(esp_wifi_scan_start(&cfg, false) == ESP_OK) {
-                if(scan_evt != NULL)
-                    xEventGroupWaitBits(scan_evt, SCAN_DONE_BIT, pdTRUE, pdFALSE, pdMS_TO_TICKS(600));
-                /* Delay for SoftAP */
-                vTaskDelay(pdMS_TO_TICKS(200));
+
+        uint8_t channel_to_scan = 0;
+        if (target_channel != 0) {
+            channel_to_scan = target_channel;
+        } else {
+            channel_to_scan = current_channel;
+        }
+
+        wifi_roc_req_t req = {
+            .ifx = WIFI_IF_AP,
+            .type = WIFI_ROC_REQ,
+            .channel = channel_to_scan,
+            .sec_channel = WIFI_SECOND_CHAN_NONE,
+            .wait_time_ms = ROC_DURATION_MS, 
+            .rx_cb = NULL,
+            .done_cb = NULL
+        };
+        esp_err_t err = esp_wifi_remain_on_channel(&req);
+        if (err == ESP_OK) {
+            if (roc_evt != NULL) {
+                xEventGroupWaitBits(roc_evt, ROC_DONE_BIT, pdTRUE, pdFALSE, pdMS_TO_TICKS(ROC_DURATION_MS + 50));
             }
-            else {
-                continue;
-            }
+        } else {
+             ESP_LOGW(TAG, "ROC request failed: %s", esp_err_to_name(err));
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(AP_REST_TIME_MS));
+        if (target_channel == 0) {
+            current_channel++;
+            if (current_channel > 13) current_channel = 1;
         }
     }
 }

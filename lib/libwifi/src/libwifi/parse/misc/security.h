@@ -83,6 +83,9 @@ void libwifi_enumerate_wpa_suites(struct libwifi_wpa_info *wpa_info, struct libw
  */
 void libwifi_get_security_type(struct libwifi_bss *bss, char *buf);
 
+
+void libwifi_get_security_type_s(struct libwifi_bss *bss, char *buf, size_t len);
+
 /**
  * Enumerate the group ciphers (CCMP, GCMP128, etc) in a given libwifi_bss,
  * formatted into the given buffer.
@@ -119,6 +122,7 @@ void libwifi_get_auth_key_suites(struct libwifi_bss *bss, char *buf);
  * @param append A pointer to the append state variable
  * @param item A pointer to the string to append to the given buf
  */
-void _libwifi_add_sec_item(char *buf, int *offset, int *append, char *item);
+void _libwifi_add_sec_item(char *buf, int *offset, int *append, const char *item);
+
 
 #endif /* LIBWIFI_PARSE_SECURITY_H */

@@ -859,7 +859,6 @@
         <div class="terminal-panel" id="terminal">
             <div class="log-entry"><span class="log-time">[SYSTEM]</span> <span class="log-info">Ready.</span></div>
         </div>
-
     </div>
 
     <script>
@@ -1657,6 +1656,7 @@
         
         async function stopDeauth() {
             try {
+                log("Stopping deauth attack... please wait...", "warning");
                 await sendCommand(CMD.STOP_DEAUTHER);
                 showToast("Attack STOPPED");
                 log("Deauth attack stopped.", "success");

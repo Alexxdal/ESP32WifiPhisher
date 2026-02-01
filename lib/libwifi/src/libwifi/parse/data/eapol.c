@@ -36,24 +36,31 @@
  * - There is enough data in the frame body to fill a libwifi_wpa_auth_data struct.
  */
 int libwifi_check_wpa_handshake(struct libwifi_frame *frame) {
-    // 1. Basic Validation (Keep existing checks)
+    // WPA Handshakes are transmitted in EAPOL frames
     if (frame->frame_control.type != TYPE_DATA) {
         return -EINVAL;
     }
 
+    // Data frame must be at least the length of the header plus the encapsulating LLC
     if (frame->len < (frame->header_len + sizeof(struct libwifi_logical_link_ctrl))) {
         return -EINVAL;
     }
 
+    // Represent the LLC layer so that we can check the OUI and ensure it is correct
     struct libwifi_logical_link_ctrl *llc = (struct libwifi_logical_link_ctrl *) (frame->body);
     if (memcmp(llc->oui, XEROX_OUI, sizeof(llc->oui)) != 0) {
         return -EINVAL;
     }
 
+    // Match the network byte-order of LLC and ensure we have a frame containing 802.1X information
     if (ntohs(llc->type) != LLC_TYPE_AUTH) {
         return -EINVAL;
     }
 
+    // Ensure we have enough information in the frame to fill a libwifi_wpa_auth_data struct
+    // This value is calculated by ensuring the frame is at least the length of the LLC layer, plus the length
+    // of the libwifi_wpa_auth_data struct, however, the length of an unsigned char pointer is subtracted due
+    // to the possibility of the frame having no WPA key data.
     size_t required_data_length =
         frame->header_len + (sizeof(struct libwifi_logical_link_ctrl) +
                              (sizeof(struct libwifi_wpa_auth_data) - sizeof(unsigned char *)));
@@ -61,49 +68,7 @@ int libwifi_check_wpa_handshake(struct libwifi_frame *frame) {
         return -EINVAL;
     }
 
-    // 2. NEW LOGIC: Identify M1-M4 using Bitwise checks
-    // We access the WPA data after the LLC header
-    struct libwifi_wpa_auth_data *auth_data =
-        (struct libwifi_wpa_auth_data *) (frame->body + sizeof(struct libwifi_logical_link_ctrl));
-
-    // Convert Key Information to host byte order
-    uint16_t key_info = ntohs(auth_data->key_info.information);
-
-    // Extract Flags (Masks are standard 802.11)
-    // Bit 3: Key Type (1 = Pairwise, 0 = Group)
-    // Bit 7: Key Ack
-    // Bit 8: Key MIC
-    // Bit 9: Key Secure
-    int key_type_pairwise = (key_info & 0x0008); 
-    int key_ack           = (key_info & 0x0080);
-    int key_mic           = (key_info & 0x0100);
-    int key_secure        = (key_info & 0x0200);
-
-    // If it's not a Pairwise key, it's likely a Group Handshake (return 5 or valid)
-    if (!key_type_pairwise) {
-        return 5; 
-    }
-
-    // Logic to distinguish M1, M2, M3, M4
-    if (key_ack && !key_mic) {
-        return 1; // M1: AP -> STA (Ack set, No MIC yet)
-    }
-    
-    if (key_ack && key_mic) {
-        return 3; // M3: AP -> STA (Ack set, MIC set, Install usually set)
-    }
-    
-    if (!key_ack && key_mic) {
-        // Distinguish M2 from M4 using the Secure bit
-        if (key_secure) {
-            return 4; // M4: STA -> AP (Secure bit set means keys are installed)
-        } else {
-            return 2; // M2: STA -> AP (Secure bit NOT set)
-        }
-    }
-
-    // Fallback if flags are unusual but frame structure is valid
-    return 1; 
+    return 1;
 }
 
 /*
