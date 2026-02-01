@@ -41,7 +41,7 @@ static esp_err_t set_wifi_region() {
         .cc = "CN",      // Codice paese (EU per Europa)
         .schan = 1,      // Canale iniziale
         .nchan = 14,     // Numero di canali (1-13 per EU)
-        .policy = WIFI_COUNTRY_POLICY_MANUAL, // Configurazione manual
+        .policy = WIFI_COUNTRY_POLICY_AUTO,
         #if CONFIG_SOC_WIFI_SUPPORT_5G
         .wifi_5g_channel_mask = 0
         #endif

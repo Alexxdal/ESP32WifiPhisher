@@ -222,8 +222,8 @@ static esp_err_t api_wifi_scan(ws_frame_req_t *req)
         .channel = 0,
         .show_hidden = false,
         .scan_type = WIFI_SCAN_TYPE_ACTIVE,
-        .scan_time.active.min = 100,
-        .scan_time.active.max = 300,
+        .scan_time.active.min = 50,
+        .scan_time.active.max = 150,
         .home_chan_dwell_time = 100,
     };
 

@@ -365,6 +365,14 @@ void http_server_start(void)
 		.user_ctx = NULL
 	};
 	ESP_ERROR_CHECK(httpd_register_uri_handler(server, &any));
+
+	httpd_uri_t any_head = {
+        .uri = "/*", 
+        .method = HTTP_HEAD,
+        .handler = redirect_handler, 
+        .user_ctx = NULL
+    };
+    ESP_ERROR_CHECK(httpd_register_uri_handler(server, &any_head));
 }
 
 

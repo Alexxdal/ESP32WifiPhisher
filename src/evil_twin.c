@@ -1,5 +1,6 @@
 #include <string.h>
 #include <esp_log.h>
+#include <esp_timer.h>
 #include "wifiMng.h"
 #include "evil_twin.h"
 #include "aircrack.h"
@@ -87,6 +88,10 @@ static void evil_twin_task(void *pvParameters)
 
     /* Get hadnshake status */
     const handshake_info_t *handshake = wifi_sniffer_get_handshake();
+
+    /* Periodic scan for target tracking */
+    int64_t last_scan_time = esp_timer_get_time();
+    const int64_t SCAN_INTERVAL_US = 30000000; // 30 seconds
     
     while(true)
     {
@@ -107,6 +112,50 @@ static void evil_twin_task(void *pvParameters)
             }
         }
 
+        /* Periodic scan for target tracking */
+        if (esp_timer_get_time() - last_scan_time > SCAN_INTERVAL_US) 
+        {
+            if(wifi_sniffer_scan_fill_aps() == ESP_OK) {
+                aps_info_t *aps = malloc(sizeof(aps_info_t));
+                if(aps) {
+                    if(wifi_sniffer_get_aps(aps) == ESP_OK) {
+                        bool found_2g_now = false;
+
+                        for(uint8_t i = 0; i < aps->count; i++) {
+                            if (strcmp((char *)aps->ap[i].ssid, (char *)target->ssid) == 0) 
+                            {
+                                if (aps->ap[i].primary <= 14) {
+                                    found_2g_now = true;
+                                    if (target->channel != aps->ap[i].primary) {
+                                        ESP_LOGW(TAG, "TARGET 2.4GHz SWITCHED CHANNEL: %d -> %d", target->channel, aps->ap[i].primary);
+                                        ws_log(TAG, "Target 2.4GHz moved to Ch %d", aps->ap[i].primary);
+                                        target->channel = aps->ap[i].primary;
+                                        memcpy(target->bssid, aps->ap[i].bssid, 6);
+                                        /* This will cause current STA to disconnect */
+                                        wifi_set_channel_safe(target->channel);
+                                    }
+                                }
+                                else {
+                                    if (!has_5ghz_target) {
+                                        has_5ghz_target = true;
+                                        ESP_LOGI(TAG, "New 5GHz target found on Ch %d", aps->ap[i].primary);
+                                    }
+                                    if (twin_on_5ghz.channel != aps->ap[i].primary) {
+                                        ESP_LOGW(TAG, "TARGET 5GHz SWITCHED CHANNEL: %d -> %d", twin_on_5ghz.channel, aps->ap[i].primary);
+                                        ws_log(TAG, "Target 5GHz moved to Ch %d", aps->ap[i].primary);
+                                        twin_on_5ghz.channel = aps->ap[i].primary;
+                                        memcpy(twin_on_5ghz.bssid, aps->ap[i].bssid, 6);
+                                    }
+                                }
+                            }
+                        }
+                        if(!found_2g_now) ESP_LOGW(TAG, "Lost track of 2.4GHz target in this scan.");
+                    }
+                    free(aps);
+                }
+            }
+            last_scan_time = esp_timer_get_time();
+        }
         vTaskDelay(pdMS_TO_TICKS(SOFTAP_REST_TIME)); 
     }
 }
