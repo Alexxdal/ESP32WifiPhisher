@@ -287,6 +287,7 @@ static esp_err_t api_wifi_scan(ws_frame_req_t *req)
         if (!obj) {
             cJSON_Delete(root);
             free(ap_records);
+            cJSON_Delete(response_obj);
             api_send_status_frame(req, "error", "cJSON_CreateObject failed");
             return ESP_ERR_NO_MEM;
         }
@@ -622,7 +623,7 @@ static esp_err_t api_deauther_start(ws_frame_req_t *req)
 static esp_err_t api_deauther_stop(ws_frame_req_t *req)
 {
     deauther_stop();
-    ESP_LOGI(TAG, "Deauth Attack Stopped");
+    ESP_LOGI(TAG, "Stopping Deauth Attack...");
     api_send_status_frame(req, "ok", "Deauth Attack Stopped");
     return ESP_OK;
 }
@@ -653,7 +654,11 @@ static esp_err_t api_start_raw_sniffer(ws_frame_req_t *req)
         cJSON_Delete(json);
     }
 
-    // 2. Gestione Canale / Hopping
+    // 2. Avvia Sniffer in modalità RAW
+    // Passiamo NULL come target perché in RAW mode vogliamo vedere tutto
+    wifi_start_sniffing(NULL, SNIFF_MODE_RAW_VIEW);
+
+    // 3. Gestione Canale / Hopping
     if (hopping) {
         wifi_sniffer_set_fine_filter(type, subtype, 0);
         wifi_sniffer_start_channel_hopping(0); 
@@ -661,10 +666,6 @@ static esp_err_t api_start_raw_sniffer(ws_frame_req_t *req)
         wifi_sniffer_set_fine_filter(type, subtype, channel);
         wifi_sniffer_start_channel_hopping(channel);
     }
-    
-    // 3. Avvia Sniffer in modalità RAW
-    // Passiamo NULL come target perché in RAW mode vogliamo vedere tutto
-    wifi_start_sniffing(NULL, SNIFF_MODE_RAW_VIEW);
     
     api_send_status_frame(req, "ok", "Sniffer Started");
     return ESP_OK;

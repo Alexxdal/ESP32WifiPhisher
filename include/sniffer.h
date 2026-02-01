@@ -20,7 +20,7 @@
  * @brief Number of max ap to store
  * 
  */
-#define MAX_AP      20
+#define MAX_AP      35
 
 
 /**

