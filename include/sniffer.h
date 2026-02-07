@@ -156,6 +156,12 @@ void wifi_sniffer_set_mode(sniffer_mode_t mode);
 
 
 /**
+ * @brief Get sniffer operation mode
+ */
+sniffer_mode_t wifi_sniffer_get_mode(void);
+
+
+/**
  * @brief Start beacon tracking for channel hopping
  * 
  * @return esp_err_t 

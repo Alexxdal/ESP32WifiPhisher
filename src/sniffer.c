@@ -868,6 +868,12 @@ void wifi_sniffer_set_mode(sniffer_mode_t mode)
 }
 
 
+sniffer_mode_t wifi_sniffer_get_mode(void)
+{
+    return current_sniff_mode;
+}
+
+
 esp_err_t wifi_start_beacon_tracking(void)
 {
     /* Start beacon timer for channel tracking */
@@ -995,6 +1001,10 @@ const handshake_info_t *wifi_sniffer_get_handshake(void)
 esp_err_t wifi_sniffer_get_clients(clients_t *out)
 {
     if(out == NULL) return ESP_ERR_INVALID_ARG;
+
+    if (clients_semaphore == NULL) {
+        clients_semaphore = xSemaphoreCreateMutex();
+    }
 
     if (xSemaphoreTake(clients_semaphore, pdMS_TO_TICKS(100)) == pdTRUE) 
     {
