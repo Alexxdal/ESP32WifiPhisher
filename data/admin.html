@@ -554,6 +554,8 @@
             <div class="page-title" id="page-title">Status Overview</div>
 
             <div class="status-indicators">
+                <div class="status-badge">UPTIME <span class="status-value" id="uptime-val">--:--:--</span></div>
+
                 <div class="ram-container">
                     <div class="ram-text"><span>RAM</span> <span id="ram-text-val">0%</span></div>
                     <div class="progress-bg">
@@ -567,19 +569,123 @@
         <div id="toast" class="toast">Notification Message</div>
 
         <div id="view-home" class="view-container active">
-            <h2>System Dashboard</h2>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px;">
-                <div class="card">
-                    <div class="stat-label">System Uptime</div>
-                    <div class="stat-number" id="uptime-val">--:--:--</div>
+            <div style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 1px solid #333; padding-bottom: 10px; margin-bottom: 20px;">
+                <h2 style="border:none; padding:0; margin:0;">Dashboard</h2>
+                <div id="global-status-badge" style="background:#333; color:#aaa; padding:5px 12px; border-radius:4px; font-size:0.8rem; font-weight:bold; border:1px solid #444;">
+                    SYSTEM IDLE
                 </div>
-                <div class="card">
-                    <div class="stat-label">Packets Captured</div>
-                    <div class="stat-number" id="packets-val" style="color:var(--accent)">0</div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 25px;">
+                <div id="mod-et" style="background:#121212; border:1px solid #333; padding:15px; border-radius:6px; text-align:center; transition:all 0.3s;">
+                    <div style="font-size:0.75rem; color:#666; font-weight:bold;">EVIL TWIN</div>
+                    <div class="mod-status" style="font-size:1rem; font-weight:bold; color:#444; margin-top:5px;">INACTIVE</div>
                 </div>
-                <div class="card">
-                    <div class="stat-label">Active Target</div>
-                    <div style="font-size:1.4rem; font-weight:bold; color:white;" id="home-target">None</div>
+                <div id="mod-deauth" style="background:#121212; border:1px solid #333; padding:15px; border-radius:6px; text-align:center; transition:all 0.3s;">
+                    <div style="font-size:0.75rem; color:#666; font-weight:bold;">DEAUTHER</div>
+                    <div class="mod-status" style="font-size:1rem; font-weight:bold; color:#444; margin-top:5px;">INACTIVE</div>
+                </div>
+                <div id="mod-karma" style="background:#121212; border:1px solid #333; padding:15px; border-radius:6px; text-align:center; transition:all 0.3s;">
+                    <div style="font-size:0.75rem; color:#666; font-weight:bold;">KARMA</div>
+                    <div class="mod-status" style="font-size:1rem; font-weight:bold; color:#444; margin-top:5px;">INACTIVE</div>
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+                
+                <div class="card" style="border-top: 3px solid var(--accent); position: relative;">
+                    <div class="stat-label">PRIMARY TARGET INFO</div>
+                    
+                    <div style="margin-top: 15px;">
+                        <div style="display:flex; justify-content:space-between; align-items:flex-end;">
+                            <div id="home-ssid" style="font-size: 1.5rem; font-weight: bold; color: white; line-height:1.2; word-break: break-all;">No Target</div>
+                            <div id="home-rssi" style="font-size: 0.9rem; color: #666; font-weight:bold; white-space: nowrap;">-- dBm</div>
+                        </div>
+                        
+                        <div style="margin-top:15px; display:grid; grid-template-columns: 1fr 1fr; gap:10px; font-size:0.85rem;">
+                            <div style="background:#121212; padding:10px; border-radius:4px; border:1px solid #333;">
+                                <span style="color:#666; display:block; font-size:0.65rem; margin-bottom:2px;">MAC ADDRESS</span>
+                                <span id="home-bssid" style="font-family:monospace; color:#ccc; letter-spacing:1px;">--:--:--:--:--:--</span>
+                            </div>
+                            <div style="background:#121212; padding:10px; border-radius:4px; border:1px solid #333;">
+                                <span style="color:#666; display:block; font-size:0.65rem; margin-bottom:2px;">VENDOR</span>
+                                <span id="home-vendor" style="color:#ccc;">--</span>
+                            </div>
+                            <div style="background:#121212; padding:10px; border-radius:4px; border:1px solid #333;">
+                                <span style="color:#666; display:block; font-size:0.65rem; margin-bottom:2px;">CHANNEL</span>
+                                <span id="home-ch" style="color:var(--accent); font-weight:bold; font-size:1.1rem;">--</span>
+                            </div>
+                            <div style="background:#121212; padding:10px; border-radius:4px; border:1px solid #333;">
+                                <span style="color:#666; display:block; font-size:0.65rem; margin-bottom:2px;">SECURITY</span>
+                                <span id="home-auth" style="color:#ccc;">--</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card" style="border-top: 3px solid #ff5252;">
+                    <div class="stat-label">INTELLIGENCE & CAPTURE</div>
+                    
+                    <div style="margin-top:20px; display:flex; flex-direction:column; gap:15px;">
+                        <div style="display:flex; align-items:center; justify-content:space-between; padding-bottom:10px; border-bottom:1px solid #333;">
+                            <div>
+                                <div style="font-size:0.85rem; font-weight:bold; color:#fff;">WPA Handshake</div>
+                                <div style="font-size:0.75rem; color:#888;">Hash collection</div>
+                            </div>
+                            <div id="home-hs-badge" style="background:#222; color:#555; padding:4px 10px; border-radius:4px; font-size:0.7rem; font-weight:bold; letter-spacing:1px;">
+                                WAITING
+                            </div>
+                        </div>
+
+                        <div style="display:flex; align-items:center; justify-content:space-between; padding-bottom:10px; border-bottom:1px solid #333;">
+                            <div>
+                                <div style="font-size:0.85rem; font-weight:bold; color:#fff;">5GHz Twin</div>
+                                <div style="font-size:0.75rem; color:#888;">Dual-band AP detection</div>
+                            </div>
+                            <div id="home-5g-badge" style="background:#222; color:#555; padding:4px 10px; border-radius:4px; font-size:0.7rem; font-weight:bold; letter-spacing:1px;">
+                                SCANNING
+                            </div>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 5px;">
+                            <div style="text-align:center; background:#1a1a1a; padding:10px; border-radius:4px;">
+                                <div id="home-clients" style="font-size: 1.5rem; font-weight:bold; color: #fff;">0</div>
+                                <div style="font-size: 0.7rem; color: #00bcd4; font-weight:bold;">CLIENTS</div>
+                            </div>
+                            <div style="text-align:center; background:#1a1a1a; padding:10px; border-radius:4px;">
+                                <div id="home-aps" style="font-size: 1.5rem; font-weight:bold; color: #fff;">0</div>
+                                <div style="font-size: 0.7rem; color: #aaa; font-weight:bold;">NETWORKS</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card" style="border-top: 3px solid #00e676;">
+                    <div class="stat-label">PACKET INJECTION HEALTH</div>
+                    
+                    <div style="margin-top: 20px;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+                            <div style="text-align: center; background: #151515; padding: 10px; border-radius: 4px;">
+                                <div id="stat-tx-sent" style="font-size: 1.8rem; font-weight: bold; color: white;">0</div>
+                                <div style="font-size: 0.7rem; color: #aaa; letter-spacing: 1px;">SENT</div>
+                            </div>
+                            <div style="text-align: center; background: #151515; padding: 10px; border-radius: 4px;">
+                                <div id="stat-tx-drop" style="font-size: 1.8rem; font-weight: bold; color: #ff5252;">0</div>
+                                <div style="font-size: 0.7rem; color: #aaa; letter-spacing: 1px;">DROPPED</div>
+                            </div>
+                        </div>
+
+                        <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: #aaa; margin-bottom: 5px;">
+                            <span>INJECTION QUALITY</span>
+                            <span id="stat-quality-perc">100%</span>
+                        </div>
+                        <div class="progress-bg" style="background: #333; height: 6px;">
+                            <div id="stat-quality-bar" class="progress-fill" style="width: 100%; background: #00e676;"></div>
+                        </div>
+                        <div id="stat-message" style="font-size: 0.7rem; color: #666; margin-top: 8px; font-style: italic;">
+                            System idle.
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1097,6 +1203,12 @@
             descEl.style.borderLeftColor = borderColors[data.cls];
         }
         
+        function formatBigNumber(num) {
+            if (num >= 1000000) return (num / 1000000).toFixed(2) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'k';
+            return num.toString();
+        }
+        
         //Sniffer Functions
         function handlePacket(pkt) {
             // Risparmia CPU se la vista non è attiva
@@ -1359,20 +1471,186 @@
             if (!isConnected) return;
             try {
                 const data = await sendCommand(CMD.GET_STATUS);
+                
+                // 1. Top Bar (RAM & Uptime)
                 if (data.uptime) document.getElementById('uptime-val').innerText = data.uptime;
-                if (data.packets !== undefined) document.getElementById('packets-val').innerText = data.packets;
                 if (data.ram !== undefined) {
                     document.getElementById('ram-text-val').innerText = data.ram + '%';
                     const bar = document.getElementById('ram-bar');
                     bar.style.width = data.ram + '%';
                     bar.style.backgroundColor = data.ram > 85 ? 'var(--danger)' : 'var(--accent)';
                 }
+
+                // 2. Module Status Indicators & Global Badge
+                const modEt = document.getElementById('mod-et');
+                const modDeauth = document.getElementById('mod-deauth');
+                const modKarma = document.getElementById('mod-karma');
+                const globalBadge = document.getElementById('global-status-badge');
+
+                // Reset styles
+                const setInactive = (el, label) => {
+                    el.style.borderColor = "#333";
+                    el.querySelector('.mod-status').innerText = "INACTIVE";
+                    el.querySelector('.mod-status').style.color = "#444";
+                };
+                const setActive = (el, label, color) => {
+                    el.style.borderColor = color;
+                    el.querySelector('.mod-status').innerText = "RUNNING";
+                    el.querySelector('.mod-status').style.color = color;
+                    el.querySelector('.mod-status').style.textShadow = `0 0 10px ${color}`;
+                };
+
+                setInactive(modEt);
+                setInactive(modDeauth);
+                setInactive(modKarma);
+
+                let activeModules = [];
+
+                if(data.et_running) {
+                    setActive(modEt, "EVIL TWIN", "var(--accent)");
+                    activeModules.push("EVIL TWIN");
+                }
+                if(data.deauth_running) {
+                    setActive(modDeauth, "DEAUTHER", "var(--danger)");
+                    activeModules.push("DEAUTH");
+                }
+                if(data.karma_running) {
+                    setActive(modKarma, "KARMA", "#e040fb"); // Purple for Karma
+                    activeModules.push("KARMA");
+                }
+
+                // Update Global Badge
+                if(activeModules.length > 0) {
+                    globalBadge.innerText = activeModules.join(" + ");
+                    globalBadge.style.borderColor = "var(--accent)";
+                    globalBadge.style.color = "#fff";
+                    globalBadge.style.background = "rgba(0, 230, 118, 0.1)";
+                    globalBadge.style.boxShadow = "0 0 10px rgba(0,0,0,0.5)";
+                } else {
+                    globalBadge.innerText = "SYSTEM READY";
+                    globalBadge.style.borderColor = "#444";
+                    globalBadge.style.color = "#aaa";
+                    globalBadge.style.background = "#333";
+                    globalBadge.style.boxShadow = "none";
+                }
+
+                // 3. Target Profile Data
+                // Fill data if ET is running OR if we have a selected target in memory
+                if (data.et_running) {
+                    document.getElementById('home-ssid').innerText = data.ssid || "Unknown";
+                    document.getElementById('home-bssid').innerText = data.bssid || "--";
+                    document.getElementById('home-ch').innerText = data.ch || "--";
+                    document.getElementById('home-vendor').innerText = data.vendor || "Unknown";
+                    document.getElementById('home-auth').innerText = data.auth || "Open";
+                    
+                    const rssi = data.rssi || -100;
+                    const rssiEl = document.getElementById('home-rssi');
+                    rssiEl.innerText = rssi + " dBm";
+                    rssiEl.style.color = rssi > -60 ? "#0f0" : (rssi > -80 ? "#ffab40" : "#ff5252");
+
+                    // 5GHz Badge
+                    const badge5g = document.getElementById('home-5g-badge');
+                    if (data.has_5g) {
+                        badge5g.innerHTML = `DETECTED CH ${data.ch_5g}`;
+                        badge5g.style.background = "rgba(0, 188, 212, 0.2)";
+                        badge5g.style.color = "#00bcd4";
+                        badge5g.style.border = "1px solid #00bcd4";
+                    } else {
+                        badge5g.innerText = "NOT FOUND";
+                        badge5g.style.background = "#222";
+                        badge5g.style.color = "#555";
+                        badge5g.style.border = "1px solid transparent";
+                    }
+
+                } else if (!data.et_running && currentTarget) {
+                     // Show selected target from JS memory even if attack not running
+                    document.getElementById('home-ssid').innerText = currentTarget.ssid;
+                    document.getElementById('home-bssid').innerText = currentTarget.bssid;
+                    document.getElementById('home-ch').innerText = currentTarget.channel;
+                    document.getElementById('home-auth').innerText = "SELECTED";
+                    document.getElementById('home-rssi').innerText = currentTarget.signal + " dBm";
+                } else {
+                    // Reset if idle and no selection
+                    document.getElementById('home-ssid').innerText = "No Target";
+                    document.getElementById('home-bssid').innerText = "--:--:--:--:--:--";
+                    document.getElementById('home-ch').innerText = "--";
+                    document.getElementById('home-vendor').innerText = "--";
+                    document.getElementById('home-auth').innerText = "--";
+                    document.getElementById('home-rssi').innerText = "-- dBm";
+                }
+
+                // 4. Handshake Badge
+                const hsBadge = document.getElementById('home-hs-badge');
+                if (data.hs_state === 2) { 
+                    hsBadge.innerText = "CAPTURED (4-WAY)";
+                    hsBadge.style.background = "rgba(0, 230, 118, 0.2)";
+                    hsBadge.style.color = "var(--accent)";
+                    hsBadge.style.border = "1px solid var(--accent)";
+                } else if (data.hs_state === 1) { 
+                    hsBadge.innerText = "CAPTURED (PMKID)";
+                    hsBadge.style.background = "rgba(255, 171, 64, 0.2)";
+                    hsBadge.style.color = "#ffab40";
+                    hsBadge.style.border = "1px solid #ffab40";
+                } else {
+                    hsBadge.innerText = "WAITING";
+                    hsBadge.style.background = "#222";
+                    hsBadge.style.color = "#555";
+                    hsBadge.style.border = "1px solid transparent";
+                }
+
+                // 5. Environment Stats
+                document.getElementById('home-clients').innerText = data.n_clients || 0;
+                document.getElementById('home-aps').innerText = data.n_aps || 0;
+
+                // 6. FRAME STATISTICS (Nuova Card)
+                // Assicurati che nel server_api.c tu abbia usato i nomi "tx_sent" e "tx_drop"
+                const txSent = data.tx_sent || 0;
+                const txDrop = data.tx_drop || 0;
+                const totalTx = txSent + txDrop;
+
+                // Aggiorna numeri
+                document.getElementById('stat-tx-sent').innerText = formatBigNumber(txSent);
+                document.getElementById('stat-tx-drop').innerText = formatBigNumber(txDrop);
+
+                // Calcola Salute (Qualità dell'invio)
+                let quality = 100;
+                let msg = "Optimal performance.";
+                let color = "#00e676"; // Verde
+
+                if (totalTx > 0) {
+                    quality = Math.round((txSent / totalTx) * 100);
+                }
+
+                // Logica colori e messaggi
+                if (quality < 50) {
+                    color = "#ff1744"; // Rosso Critico
+                    msg = "CRITICAL: Radio congested or driver stuck.";
+                } else if (quality < 80) {
+                    color = "#ff9100"; // Arancione
+                    msg = "WARNING: High packet loss detected.";
+                } else if (totalTx > 1000) {
+                    msg = "Injecting packets...";
+                } else {
+                    msg = "System idle / Low traffic.";
+                }
+
+                // Aggiorna barra e testo
+                document.getElementById('stat-quality-perc').innerText = quality + "%";
+                document.getElementById('stat-quality-bar').style.width = quality + "%";
+                document.getElementById('stat-quality-bar').style.backgroundColor = color;
+                document.getElementById('stat-message').innerText = msg;
+                document.getElementById('stat-message').style.color = (quality < 80) ? color : "#666";
+
+                // SD Check
                 const sdEl = document.getElementById('status-sd');
                 if (data.sd !== undefined) {
-                    sdEl.innerText = data.sd ? "OK" : "ERR";
+                    sdEl.innerText = data.sd ? "REC" : "ERR";
                     sdEl.style.color = data.sd ? "var(--accent)" : "var(--danger)";
                 }
-            } catch (e) {}
+
+            } catch (e) {
+                console.error(e);
+            }
         }
 
         async function scanNetworks() {

@@ -1153,7 +1153,7 @@ static void wifi_sniffer_channel_hopping_task(void *param)
         }
 
         wifi_roc_req_t req = {
-            .ifx = WIFI_IF_AP,
+            .ifx = WIFI_IF_STA,
             .type = WIFI_ROC_REQ,
             .channel = channel_to_scan,
             .sec_channel = WIFI_SECOND_CHAN_NONE,

