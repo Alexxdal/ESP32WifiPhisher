@@ -93,22 +93,10 @@ static esp_err_t api_get_status(ws_frame_req_t *req)
     // 1. Target Info
     target_info_t *et_target = target_get(TARGET_INFO_EVIL_TWIN);
     target_info_t *et_5g_target = target_get(TARGET_INFO_EVIL_TWIN_5G);
-    const handshake_info_t *hs = wifi_sniffer_get_handshake();
     
-    int client_count = 0;
-    int ap_count = 0;
-    
-    clients_t *cls = malloc(sizeof(clients_t));
-    aps_info_t *aps = malloc(sizeof(aps_info_t));
-    
-    if(cls) {
-        if(wifi_sniffer_get_clients(cls) == ESP_OK) client_count = cls->count;
-        free(cls);
-    }
-    if(aps) {
-        if(wifi_sniffer_get_aps(aps) == ESP_OK) ap_count = aps->count;
-        free(aps);
-    }
+    int client_count = wifi_sniffer_get_clients_count();
+    int ap_count = wifi_sniffer_get_aps_count();
+    int has_handshake = wifi_sniffer_get_handshake_status_for_target(et_target->bssid);
 
     cJSON *root = cJSON_CreateObject();
     if (root == NULL) return ESP_FAIL;
@@ -155,13 +143,7 @@ static esp_err_t api_get_status(ws_frame_req_t *req)
     // Sniffer / Environment Stats
     cJSON_AddNumberToObject(root, "n_clients", client_count);
     cJSON_AddNumberToObject(root, "n_aps", ap_count);
-    
-    // Handshake Status (0=None, 1=PMKID, 2=Full)
-    int hs_status = 0;
-    if(hs->handshake_captured) hs_status = 2;
-    else if(hs->pmkid_captured) hs_status = 1;
-    cJSON_AddNumberToObject(root, "hs_state", hs_status);
-
+    cJSON_AddNumberToObject(root, "hs_state", has_handshake);
     cJSON_AddNumberToObject(root, "tx_sent", wifi_get_sent_frames());
     cJSON_AddNumberToObject(root, "tx_drop", wifi_get_dropped_frames());
 
@@ -169,8 +151,6 @@ static esp_err_t api_get_status(ws_frame_req_t *req)
     cJSON_Delete(root);
 
     if (json_response == NULL) {
-        if(cls) free(cls);
-        if(aps) free(aps);
         return ESP_FAIL;
     }
 
@@ -577,27 +557,26 @@ static esp_err_t api_karma_scan(ws_frame_req_t *req)
 
 static esp_err_t api_get_karma_probes(ws_frame_req_t *req)
 {
-    const probe_request_list_t *list = wifi_sniffer_get_captured_probes();
+    probe_request_list_t list = {0};
+    if(wifi_sniffer_get_probes(&list) != ESP_OK) return ESP_FAIL;
     
     cJSON *root = cJSON_CreateObject();
     cJSON_AddNumberToObject(root, "req_id", req->req_id);
     cJSON_AddStringToObject(root, "type", "karma_probes");
     
     cJSON *arr = cJSON_CreateArray();
-    if (list) {
-        for (int i = 0; i < list->num_probes; i++) {
-            cJSON *item = cJSON_CreateObject();
-            char mac_str[18];
-            snprintf(mac_str, sizeof(mac_str), "%02x:%02x:%02x:%02x:%02x:%02x",
-                     list->probes[i].mac[0], list->probes[i].mac[1], list->probes[i].mac[2],
-                     list->probes[i].mac[3], list->probes[i].mac[4], list->probes[i].mac[5]);
+    for (int i = 0; i < list.num_probes; i++) {
+        cJSON *item = cJSON_CreateObject();
+        char mac_str[18];
+        snprintf(mac_str, sizeof(mac_str), "%02x:%02x:%02x:%02x:%02x:%02x",
+                    list.probes[i].mac[0], list.probes[i].mac[1], list.probes[i].mac[2],
+                    list.probes[i].mac[3], list.probes[i].mac[4], list.probes[i].mac[5]);
 
-            cJSON_AddStringToObject(item, "mac", mac_str);
-            cJSON_AddStringToObject(item, "ssid", list->probes[i].ssid);
-            cJSON_AddNumberToObject(item, "rssi", list->probes[i].rssi);
-            cJSON_AddNumberToObject(item, "channel", list->probes[i].channel);
-            cJSON_AddItemToArray(arr, item);
-        }
+        cJSON_AddStringToObject(item, "mac", mac_str);
+        cJSON_AddStringToObject(item, "ssid", list.probes[i].ssid);
+        cJSON_AddNumberToObject(item, "rssi", list.probes[i].rssi);
+        cJSON_AddNumberToObject(item, "channel", list.probes[i].channel);
+        cJSON_AddItemToArray(arr, item);
     }
     cJSON_AddItemToObject(root, "data", arr);
 
@@ -716,9 +695,8 @@ static esp_err_t api_start_raw_sniffer(ws_frame_req_t *req)
         cJSON_Delete(json);
     }
 
-    // 2. Avvia Sniffer in modalità RAW
-    // Passiamo NULL come target perché in RAW mode vogliamo vedere tutto
-    wifi_start_sniffing(NULL, SNIFF_MODE_RAW_VIEW);
+    wifi_sniffer_start_packet_analyzer(true);
+    wifi_start_sniffing();
 
     // 3. Gestione Canale / Hopping
     if (hopping) {

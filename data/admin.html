@@ -1819,6 +1819,7 @@
         }
 
         async function stopKarmaScan() {
+            log("Stopping Karma Scan...");
             try {
                 await sendCommand(CMD.KARMA_ATTACK_SCAN, { start_stop: 0 });
                 showToast("Scan Stopped");

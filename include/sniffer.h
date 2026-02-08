@@ -3,76 +3,66 @@
 
 #include "target.h"
 
-#define PACKET_MAX_PAYLOAD_LEN 352
-
 #define CLIENT_SEM_WAIT 10
 #define TARGET_SEM_WAIT 10
-#define MAX_PROBE_REQ   30
 
-/**
- * @brief Number of max client to store
- * 
- */
-#define MAX_CLIENTS 50
-
-
-/**
- * @brief Number of max ap to store
- * 
- */
-#define MAX_AP      35
-
-
-/**
- * @brief Sniffer operating modes
- * 
- */
-typedef enum {
-    SNIFF_MODE_IDLE = 0,        // Sniffer fermo o promiscuo disabilitato
-    SNIFF_MODE_GLOBAL_MONITOR,  // Ascolta tutto (Scan, statistiche generali)
-    SNIFF_MODE_TARGET_ONLY,     // Ascolta SOLO il target (Handshake/PMKID capture, no attacchi)
-    SNIFF_MODE_ATTACK_KARMA,    // Risponde alle Probe Requests (Karma)
-    SNIFF_MODE_ATTACK_EVIL_TWIN,// Logica Evil Twin (Deauth + Monitoraggio specifico)
-    SNIFF_MODE_RAW_VIEW,        // Logica per packet analyzer
-    SNIFF_MODE_MAX
-} sniffer_mode_t;
 
 
 /**
  * @brief List of APs using native ESP-IDF struct
  * 
  */
+#define MAX_AP      35
 typedef struct {
     uint8_t count;
-    wifi_ap_record_t ap[MAX_AP]; // Array nativo
+    wifi_ap_record_t ap[MAX_AP];
 } aps_info_t;
+
 
 
 /**
  * @brief Struct containing Client info
  * 
  */
+#define MAX_CLIENTS 50
 typedef struct {
     uint8_t mac[6];     //Client MAC
     uint8_t bssid[6];   //Associated AP
 } client_t;
 
-
-/**
- * @brief List of associated client to the target AP
- * 
- */
 typedef struct {
     uint8_t count;
     client_t client[MAX_CLIENTS];
-} clients_t;
+} client_list_t;
+
+
+
+/**
+ * @brief Struct containing captured probe request info
+ * 
+ */
+#define MAX_PROBE_REQ   30
+typedef struct {
+    uint8_t mac[6];
+    char ssid[33];
+    int8_t rssi;
+    uint8_t channel;
+} probe_request_t;
+
+typedef struct {
+    uint8_t num_probes;
+    probe_request_t probes[MAX_PROBE_REQ];
+} probe_request_list_t;
+
 
 
 /**
  * @brief Struct containing captured HANDSHAKE and PMKID for aircrack
  * 
  */
+#define MAX_HANDSHAKE_NUM 10
 typedef struct {
+    uint8_t bssid[6];
     uint8_t mac_sta[6];
     uint8_t anonce[32];
     uint8_t snonce[32];
@@ -81,14 +71,24 @@ typedef struct {
     uint8_t eapol[256];
     uint16_t eapol_len;
     uint8_t key_decriptor_version;
+    /* Capture information */
+    int64_t last_m1_timestamp;
+    uint64_t replay_counter;
     bool handshake_captured;
     bool pmkid_captured;
 } handshake_info_t;
+
+typedef struct {
+    uint8_t count;
+    handshake_info_t handshake[MAX_HANDSHAKE_NUM];
+} handshake_info_list_t;
+
 
 
 /**
  * @brief Struct containing a sniffed packet
  */
+#define PACKET_MAX_PAYLOAD_LEN 400
 typedef struct {
     uint8_t payload[PACKET_MAX_PAYLOAD_LEN];
     uint16_t length;
@@ -97,36 +97,13 @@ typedef struct {
 } sniffer_packet_t;
 
 
-/**
- * @brief Struct containing captured probe request info
- * 
- */
-typedef struct {
-    uint8_t mac[6];
-    char ssid[33];
-    int8_t rssi;
-    uint8_t channel;
-} probe_request_t;
-
-
-/**
- * @brief Struct containing list of captured probe requests
- * 
- */
-typedef struct {
-    uint8_t num_probes;
-    probe_request_t probes[MAX_PROBE_REQ];
-} probe_request_list_t;
-
 
 /**
  * @brief Start packet sniffing in promiscuous mode
  * 
- * @param _target 
- * @param mode 
  * @return esp_err_t 
  */
-esp_err_t wifi_start_sniffing(target_info_t * _target, sniffer_mode_t mode);
+esp_err_t wifi_start_sniffing(void);
 
 
 /**
@@ -148,33 +125,9 @@ void wifi_sniffer_set_fine_filter(int type, uint32_t subtype, uint8_t channel);
 
 
 /**
- * @brief Set sniffer operating mode
- * 
- * @param mode 
+ * @brief Set sniffer BSSID filter
  */
-void wifi_sniffer_set_mode(sniffer_mode_t mode);
-
-
-/**
- * @brief Get sniffer operation mode
- */
-sniffer_mode_t wifi_sniffer_get_mode(void);
-
-
-/**
- * @brief Start beacon tracking for channel hopping
- * 
- * @return esp_err_t 
- */
-esp_err_t wifi_start_beacon_tracking(void);
-
-
-/**
- * @brief Stop beacon tracking for channel hopping
- * 
- * @return esp_err_t 
- */
-esp_err_t wifi_stop_beacon_tracking(void);
+void wifi_sniffer_set_bssid_filter(uint8_t *bssid);
 
 
 /**
@@ -195,11 +148,18 @@ esp_err_t wifi_sniffer_stop_channel_hopping(void);
 
 
 /**
- * @brief Get pointer to captured probe requests
+ * @brief Set live packet analyzer to send raw frame information over websocket
  * 
- * @return const probe_request_list_t*
  */
-const probe_request_list_t *wifi_sniffer_get_captured_probes(void);
+void wifi_sniffer_start_packet_analyzer(bool start);
+
+
+/**
+ * @brief Get copy of captured probe requests list
+ * * @param out Pointer to destination structure
+ * @return esp_err_t 
+ */
+esp_err_t wifi_sniffer_get_probes(probe_request_list_t *out);
 
 
 /**
@@ -207,7 +167,14 @@ const probe_request_list_t *wifi_sniffer_get_captured_probes(void);
  * 
  * @return const handshake_info_t* 
  */
-const handshake_info_t * wifi_sniffer_get_handshake(void);
+esp_err_t wifi_sniffer_get_handshake_for_target(const uint8_t *bssid, const uint8_t *client_mac, handshake_info_t *out);
+
+
+/**
+ * @brief Check if there is and handshake or PMKID for target
+ * 0 = None, 1 = handshake, 2 = PMKID, 3 = Both
+ */
+int wifi_sniffer_get_handshake_status_for_target(const uint8_t *bssid);
 
 
 /**
@@ -215,7 +182,14 @@ const handshake_info_t * wifi_sniffer_get_handshake(void);
  * 
  * @return const clients_t* 
  */
-esp_err_t wifi_sniffer_get_clients(clients_t *out);
+esp_err_t wifi_sniffer_get_clients(client_list_t *out);
+
+
+/**
+ * @brief Return the number of captured clients/STA
+ * 
+ */
+uint8_t wifi_sniffer_get_clients_count(void);
 
 
 /**
@@ -224,6 +198,13 @@ esp_err_t wifi_sniffer_get_clients(clients_t *out);
  * @return const aps_info_t* 
  */
 esp_err_t wifi_sniffer_get_aps(aps_info_t *out);
+
+
+/**
+ * @brief Return the number of detected APs
+ * 
+ */
+uint8_t wifi_sniffer_get_aps_count(void);
 
 
 /**

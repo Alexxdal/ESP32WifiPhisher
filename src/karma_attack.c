@@ -76,7 +76,9 @@ void karma_attack_stop(void)
 
 void karma_attack_probes_scan_start(void)
 {
-    wifi_start_sniffing(NULL, SNIFF_MODE_ATTACK_KARMA);
+    wifi_start_sniffing();
+    /* Filter probes requests */
+    wifi_sniffer_set_fine_filter(1, 0x40, 0);
     wifi_sniffer_start_channel_hopping(0);
 
     current_status = KARMA_ATTACK_STATUS_PROBE_SCANNING;
