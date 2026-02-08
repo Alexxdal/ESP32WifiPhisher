@@ -13,6 +13,19 @@
 
 static const char *TAG = "WIFI_MNG";
 
+static volatile uint32_t g_tx_packets_success = 0;
+static volatile uint32_t g_tx_packets_dropped = 0;
+
+
+static void IRAM_ATTR wifi_80211_tx_done_cb(const esp_80211_tx_info_t *tx_info) {
+    if (tx_info->tx_status == WIFI_SEND_SUCCESS) {
+        g_tx_packets_success++;
+    } else {
+        g_tx_packets_dropped++;
+    }
+}
+
+
 /* Enable send management frames */
 extern int ieee80211_raw_frame_sanity_check(int32_t arg, int32_t arg2, int32_t arg3){
     return 0;
@@ -41,7 +54,7 @@ static esp_err_t set_wifi_region() {
         .cc = "CN",      // Codice paese (EU per Europa)
         .schan = 1,      // Canale iniziale
         .nchan = 14,     // Numero di canali (1-13 per EU)
-        .policy = WIFI_COUNTRY_POLICY_MANUAL, // Configurazione manual
+        .policy = WIFI_COUNTRY_POLICY_AUTO,
         #if CONFIG_SOC_WIFI_SUPPORT_5G
         .wifi_5g_channel_mask = 0
         #endif
@@ -70,11 +83,18 @@ esp_err_t wifi_init(void)
 
     //ESP_ERROR_CHECK(esp_wifi_internal_set_fix_rate(WIFI_IF_STA, true, WIFI_PHY_RATE_11M_S));
     //ESP_ERROR_CHECK(esp_wifi_config_80211_tx_rate(WIFI_IF_STA, WIFI_PHY_RATE_6M));
-    ESP_ERROR_CHECK(esp_wifi_config_80211_tx_rate(WIFI_IF_STA, WIFI_PHY_RATE_2M_L));
+    ESP_ERROR_CHECK(esp_wifi_config_80211_tx_rate(WIFI_IF_STA, WIFI_PHY_RATE_5M_L));
 #if CONFIG_SOC_WIFI_SUPPORT_5G
     ESP_ERROR_CHECK(esp_wifi_set_band_mode(WIFI_BAND_MODE_AUTO));
 #endif
     ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL));
+
+    /* Callback for frame statistics */
+    esp_err_t err = esp_wifi_register_80211_tx_cb(wifi_80211_tx_done_cb);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to register TX callback: %s", esp_err_to_name(err));
+    }
+
     return ESP_OK;
 }
 
@@ -164,8 +184,12 @@ esp_err_t wifi_set_channel_safe(uint8_t new_channel)
 
 esp_err_t wifi_set_temporary_channel(uint8_t new_channel, uint32_t window)
 {
+    uint8_t cur_channel = 0;
+    esp_wifi_get_channel(&cur_channel, NULL);
+    if(cur_channel == new_channel) return ESP_OK;
+
     wifi_roc_req_t roc_req = {
-        .ifx = WIFI_IF_AP,
+        .ifx = WIFI_IF_STA,
         .type = WIFI_ROC_REQ,
         .channel = new_channel,
         .sec_channel = WIFI_SECOND_CHAN_NONE,
@@ -175,4 +199,16 @@ esp_err_t wifi_set_temporary_channel(uint8_t new_channel, uint32_t window)
     };
 
     return esp_wifi_remain_on_channel(&roc_req);
+}
+
+
+uint32_t wifi_get_sent_frames(void) 
+{
+    return g_tx_packets_success;
+}
+
+
+uint32_t wifi_get_dropped_frames(void) 
+{
+    return g_tx_packets_dropped;
 }

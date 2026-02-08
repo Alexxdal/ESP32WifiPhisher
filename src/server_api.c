@@ -5,6 +5,7 @@
 #include <stdarg.h>
 #include "utils.h"
 #include "config.h"
+#include "wifiMng.h"
 #include "evil_twin.h"
 #include "karma_attack.h"
 #include "server_api.h"
@@ -76,6 +77,7 @@ static void api_send_status_frame(ws_frame_req_t *req, const char* status, const
 
 static esp_err_t api_get_status(ws_frame_req_t *req)
 {
+    /* --- SYSTEM STATS --- */
     int64_t time_us = esp_timer_get_time();
     int64_t time_s = time_us / 1000000;
     int hours = time_s / 3600;
@@ -84,26 +86,66 @@ static esp_err_t api_get_status(ws_frame_req_t *req)
     char uptime_str[16];
     snprintf(uptime_str, sizeof(uptime_str), "%02d:%02d:%02d", hours, minutes, seconds);
 
-    /* Get RAM Usage percentage */
     size_t total_ram = heap_caps_get_total_size(MALLOC_CAP_DEFAULT);
     size_t free_ram = heap_caps_get_free_size(MALLOC_CAP_DEFAULT);
-    int ram_usage = 0;
-    if (total_ram > 0) {
-        ram_usage = 100 - ((free_ram * 100) / total_ram);
-    }
+    int ram_usage = (total_ram > 0) ? 100 - ((free_ram * 100) / total_ram) : 0;
+
+    // 1. Target Info
+    target_info_t *et_target = target_get(TARGET_INFO_EVIL_TWIN);
+    target_info_t *et_5g_target = target_get(TARGET_INFO_EVIL_TWIN_5G);
+    
+    int client_count = wifi_sniffer_get_clients_count();
+    int ap_count = wifi_sniffer_get_aps_count();
+    int has_handshake = wifi_sniffer_get_handshake_status_for_target(et_target->bssid);
 
     cJSON *root = cJSON_CreateObject();
-    if (root == NULL) {
-        return ESP_FAIL;
-    }
+    if (root == NULL) return ESP_FAIL;
+
     cJSON_AddNumberToObject(root, "req_id", req->req_id);
     cJSON_AddStringToObject(root, "type", "get_status");
+    
+    // System
     cJSON_AddStringToObject(root, "uptime", uptime_str);
     cJSON_AddNumberToObject(root, "ram", ram_usage);
-    cJSON_AddNumberToObject(root, "packets", 0);
-    cJSON_AddBoolToObject(root, "sd", false);
-    bool attack_running = false;
-    cJSON_AddBoolToObject(root, "evil_twin_running", attack_running);
+    
+    bool is_et_running = (evil_twin_attack_get_status() != EVIL_TWIN_ATTACK_STATUS_IDLE);
+    bool is_deauth_running = deauther_is_running();
+    bool is_karma_running = (karma_attack_get_status() != KARMA_ATTACK_STATUS_IDLE);
+
+    cJSON_AddBoolToObject(root, "et_running", is_et_running);
+    cJSON_AddBoolToObject(root, "deauth_running", is_deauth_running);
+    cJSON_AddBoolToObject(root, "karma_running", is_karma_running);
+    
+    if(is_et_running) {
+        // Basic Target Info
+        cJSON_AddStringToObject(root, "ssid", (char*)et_target->ssid);
+        cJSON_AddNumberToObject(root, "ch", et_target->channel);
+        cJSON_AddNumberToObject(root, "rssi", et_target->rssi);
+        
+        // Advanced Target Info (BSSID, Vendor, Security)
+        char bssid_str[18];
+        snprintf(bssid_str, sizeof(bssid_str), "%02X:%02X:%02X:%02X:%02X:%02X",
+                 et_target->bssid[0], et_target->bssid[1], et_target->bssid[2],
+                 et_target->bssid[3], et_target->bssid[4], et_target->bssid[5]);
+        cJSON_AddStringToObject(root, "bssid", bssid_str);
+        cJSON_AddStringToObject(root, "vendor", vendorToString(et_target->vendor));
+        cJSON_AddStringToObject(root, "auth", authmode_to_str(et_target->authmode));
+
+        // 5GHz Intelligence
+        bool has_5g = (et_5g_target->channel > 0);
+        cJSON_AddBoolToObject(root, "has_5g", has_5g);
+        if(has_5g) {
+            cJSON_AddNumberToObject(root, "ch_5g", et_5g_target->channel);
+            cJSON_AddNumberToObject(root, "rssi_5g", et_5g_target->rssi);
+        }
+    }
+
+    // Sniffer / Environment Stats
+    cJSON_AddNumberToObject(root, "n_clients", client_count);
+    cJSON_AddNumberToObject(root, "n_aps", ap_count);
+    cJSON_AddNumberToObject(root, "hs_state", has_handshake);
+    cJSON_AddNumberToObject(root, "tx_sent", wifi_get_sent_frames());
+    cJSON_AddNumberToObject(root, "tx_drop", wifi_get_dropped_frames());
 
     char *json_response = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
@@ -222,8 +264,8 @@ static esp_err_t api_wifi_scan(ws_frame_req_t *req)
         .channel = 0,
         .show_hidden = false,
         .scan_type = WIFI_SCAN_TYPE_ACTIVE,
-        .scan_time.active.min = 100,
-        .scan_time.active.max = 300,
+        .scan_time.active.min = 50,
+        .scan_time.active.max = 150,
         .home_chan_dwell_time = 100,
     };
 
@@ -515,27 +557,26 @@ static esp_err_t api_karma_scan(ws_frame_req_t *req)
 
 static esp_err_t api_get_karma_probes(ws_frame_req_t *req)
 {
-    const probe_request_list_t *list = wifi_sniffer_get_captured_probes();
+    probe_request_list_t list = {0};
+    if(wifi_sniffer_get_probes(&list) != ESP_OK) return ESP_FAIL;
     
     cJSON *root = cJSON_CreateObject();
     cJSON_AddNumberToObject(root, "req_id", req->req_id);
     cJSON_AddStringToObject(root, "type", "karma_probes");
     
     cJSON *arr = cJSON_CreateArray();
-    if (list) {
-        for (int i = 0; i < list->num_probes; i++) {
-            cJSON *item = cJSON_CreateObject();
-            char mac_str[18];
-            snprintf(mac_str, sizeof(mac_str), "%02x:%02x:%02x:%02x:%02x:%02x",
-                     list->probes[i].mac[0], list->probes[i].mac[1], list->probes[i].mac[2],
-                     list->probes[i].mac[3], list->probes[i].mac[4], list->probes[i].mac[5]);
+    for (int i = 0; i < list.num_probes; i++) {
+        cJSON *item = cJSON_CreateObject();
+        char mac_str[18];
+        snprintf(mac_str, sizeof(mac_str), "%02x:%02x:%02x:%02x:%02x:%02x",
+                    list.probes[i].mac[0], list.probes[i].mac[1], list.probes[i].mac[2],
+                    list.probes[i].mac[3], list.probes[i].mac[4], list.probes[i].mac[5]);
 
-            cJSON_AddStringToObject(item, "mac", mac_str);
-            cJSON_AddStringToObject(item, "ssid", list->probes[i].ssid);
-            cJSON_AddNumberToObject(item, "rssi", list->probes[i].rssi);
-            cJSON_AddNumberToObject(item, "channel", list->probes[i].channel);
-            cJSON_AddItemToArray(arr, item);
-        }
+        cJSON_AddStringToObject(item, "mac", mac_str);
+        cJSON_AddStringToObject(item, "ssid", list.probes[i].ssid);
+        cJSON_AddNumberToObject(item, "rssi", list.probes[i].rssi);
+        cJSON_AddNumberToObject(item, "channel", list.probes[i].channel);
+        cJSON_AddItemToArray(arr, item);
     }
     cJSON_AddItemToObject(root, "data", arr);
 
@@ -654,9 +695,8 @@ static esp_err_t api_start_raw_sniffer(ws_frame_req_t *req)
         cJSON_Delete(json);
     }
 
-    // 2. Avvia Sniffer in modalità RAW
-    // Passiamo NULL come target perché in RAW mode vogliamo vedere tutto
-    wifi_start_sniffing(NULL, SNIFF_MODE_RAW_VIEW);
+    wifi_sniffer_start_packet_analyzer(true);
+    wifi_start_sniffing();
 
     // 3. Gestione Canale / Hopping
     if (hopping) {

@@ -68,4 +68,6 @@ void deauther_start(const target_info_t *deauth_target, deauther_attack_type_t a
 void deauther_stop(void);
 
 
+bool deauther_is_running(void);
+
 #endif // DEAUTHER_H

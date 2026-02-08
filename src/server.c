@@ -35,15 +35,21 @@ static void ws_send_work(void *arg)
         int client_fds[10];
         if (httpd_get_client_list(r->hd, &fds, client_fds) == ESP_OK) {
             for (int i = 0; i < fds; i++) {
-                if (httpd_ws_get_fd_info(r->hd, client_fds[i]) == HTTPD_WS_CLIENT_WEBSOCKET) {
-                    httpd_ws_send_frame_async(r->hd, client_fds[i], &out);
+				if (httpd_ws_get_fd_info(r->hd, client_fds[i]) == HTTPD_WS_CLIENT_WEBSOCKET) {
+                    esp_err_t ret = httpd_ws_send_frame_async(r->hd, client_fds[i], &out);
+                    if (ret != ESP_OK) {
+                        httpd_sess_trigger_close(r->hd, client_fds[i]);
+                    }
                 }
             }
         }
     } 
 	/* UNICAST */
     else {
-        httpd_ws_send_frame_async(r->hd, r->fd, &out);
+		esp_err_t ret = httpd_ws_send_frame_async(r->hd, r->fd, &out);
+        if (ret != ESP_OK) {
+             httpd_sess_trigger_close(r->hd, r->fd);
+        }
     }
 
     if (r->need_free && r->payload) {
@@ -246,6 +252,28 @@ static esp_err_t redirect_handler(httpd_req_t *req)
     FILE *f = fopen(filepath, "r");
     if (!f) 
     { 
+		const char *method_str = "OTHER";
+        switch(req->method) {
+            case HTTP_GET:  method_str = "GET"; break;
+            case HTTP_POST: method_str = "POST"; break;
+            case HTTP_HEAD: method_str = "HEAD"; break;
+			case HTTP_OPTIONS: method_str = "OPTION"; break;
+			case HTTP_PUT: method_str = "PUT"; break;
+            default: break;
+        }
+		ESP_LOGW(TAG, "%s %s - 404", method_str, req->uri);
+		if (req->method == HTTP_POST && req->content_len > 0) {
+            char buf[101]; 
+            size_t recv_size = (req->content_len < 100) ? req->content_len : 100;
+            int ret = httpd_req_recv(req, buf, recv_size);
+            if (ret > 0) {
+                buf[ret] = '\0';
+                ESP_LOGW(TAG, "POST DATA (Preview): %s", buf);
+            } else if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
+                ESP_LOGW(TAG, "POST DATA: Timeout reading body");
+            }
+        }
+
         httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "Not found");
         return ESP_OK; 
     }
@@ -365,6 +393,14 @@ void http_server_start(void)
 		.user_ctx = NULL
 	};
 	ESP_ERROR_CHECK(httpd_register_uri_handler(server, &any));
+
+	httpd_uri_t any_head = {
+        .uri = "/*", 
+        .method = HTTP_HEAD,
+        .handler = redirect_handler, 
+        .user_ctx = NULL
+    };
+    ESP_ERROR_CHECK(httpd_register_uri_handler(server, &any_head));
 }
 
 

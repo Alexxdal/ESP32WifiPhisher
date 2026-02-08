@@ -5,31 +5,31 @@
  * @brief Basic Deauthentication Attack.
  * 
  */
-void wifi_attack_deauth_basic(const uint8_t dest[6], const uint8_t bssid[6], uint8_t reason_code);
+esp_err_t wifi_attack_deauth_basic(const uint8_t dest[6], const uint8_t bssid[6], uint8_t reason_code);
 
 
 /**
  * @brief Send Disassociation frame
  */
-void wifi_attack_send_disassoc(const uint8_t bssid[6], const uint8_t dest[6], uint8_t reason);
+esp_err_t wifi_attack_send_disassoc(const uint8_t bssid[6], const uint8_t dest[6], uint8_t reason);
 
 
 /**
  * @brief Send Authentication frame (Open System)
  */
-void wifi_attack_send_auth_frame(const uint8_t bssid[6], const uint8_t src_mac[6]);
+esp_err_t wifi_attack_send_auth_frame(const uint8_t bssid[6], const uint8_t src_mac[6]);
 
 
 /**
  * @brief Send Association Request frame
  */
-void wifi_attack_send_assoc_req(const uint8_t bssid[6], const uint8_t src_mac[6]);
+esp_err_t wifi_attack_send_assoc_req(const uint8_t bssid[6], const uint8_t src_mac[6]);
 
 
 /**
  * @brief Send Beacon with CSA (Channel Switch Announcement) IE
  */
-void wifi_attack_send_csa_beacon(const uint8_t bssid[6], const uint8_t src_mac[6], uint8_t new_channel);
+esp_err_t wifi_attack_send_csa_beacon(const uint8_t bssid[6], const uint8_t src_mac[6], uint8_t new_channel);
 
 
 /**
@@ -41,14 +41,14 @@ void wifi_attack_send_csa_beacon(const uint8_t bssid[6], const uint8_t src_mac[6
  * Attack in fact works with an underflow in any tag, not just the PMKID.
  * 
  */
-void wifi_attack_deauth_client_invalid_PMKID(const uint8_t client[6], const uint8_t bssid[6]);
+esp_err_t wifi_attack_deauth_client_invalid_PMKID(const uint8_t client[6], const uint8_t bssid[6]);
 
 
 /**
  * @brief Inject a 4-way message 1 frame that also has the Install flag set.
  * 
  */
-void wifi_attack_deauth_client_bad_msg1(const uint8_t client[6], const uint8_t bssid[6], const wifi_auth_mode_t authmode);
+esp_err_t wifi_attack_deauth_client_bad_msg1(const uint8_t client[6], const uint8_t bssid[6], const wifi_auth_mode_t authmode);
 
 
 /**
@@ -58,35 +58,35 @@ void wifi_attack_deauth_client_bad_msg1(const uint8_t client[6], const uint8_t b
  * causing a timeout that will cause the client to disconnect.
  * 
  */
-void wifi_attack_association_sleep(const uint8_t client[6], const uint8_t bssid[6], const char *ssid);
+esp_err_t wifi_attack_association_sleep(const uint8_t client[6], const uint8_t bssid[6], const char *ssid);
 
 
 /**
  * @brief Deauthentication using an EAPOL-Logoff.
  * 
  */
-void wifi_attack_deauth_ap_eapol_logoff(const uint8_t client[6], const uint8_t bssid[6]);
+esp_err_t wifi_attack_deauth_ap_eapol_logoff(const uint8_t client[6], const uint8_t bssid[6]);
 
 
 /**
  * @brief Deauthentication using an EAP-Failure.
  * 
  */
-void wifi_attack_deauth_client_eap_failure(const uint8_t client[6], const uint8_t bssid[6]);
+esp_err_t wifi_attack_deauth_client_eap_failure(const uint8_t client[6], const uint8_t bssid[6]);
 
 
 /**
  * @brief Deauthentication using an excessive number of EAP Rounds.
  * 
  */
-void wifi_attack_deauth_client_eap_rounds(const uint8_t client[6], const uint8_t bssid[6]);
+esp_err_t wifi_attack_deauth_client_eap_rounds(const uint8_t client[6], const uint8_t bssid[6]);
 
 
 /**
  * @brief Deauthentication using EAPOL-Starts.
  * 
  */
-void wifi_attack_deauth_ap_eapol_start(const uint8_t client[6], const uint8_t bssid[6]);
+esp_err_t wifi_attack_deauth_ap_eapol_start(const uint8_t client[6], const uint8_t bssid[6]);
 
 
 /**
@@ -94,7 +94,7 @@ void wifi_attack_deauth_ap_eapol_start(const uint8_t client[6], const uint8_t bs
  * some device may disconnect
  * 
  */
-void wifi_attack_deauth_client_negative_tx_power(const uint8_t bssid[6], uint8_t channel, const char *ssid);
+esp_err_t wifi_attack_deauth_client_negative_tx_power(const uint8_t bssid[6], uint8_t channel, const char *ssid);
 
 
 /**
@@ -102,7 +102,7 @@ void wifi_attack_deauth_client_negative_tx_power(const uint8_t bssid[6], uint8_t
  * 
  * @param target 
  */
-void wifi_attack_softap_beacon_spam(const char *ssid, uint8_t channel);
+esp_err_t wifi_attack_softap_beacon_spam(const char *ssid, uint8_t channel);
 
 
 /**
@@ -112,7 +112,7 @@ void wifi_attack_softap_beacon_spam(const char *ssid, uint8_t channel);
  * @param requested_ssid SSID requested by the victim device.
  * @param channel Channel to send the probe response on.
  */
-void wifi_attack_send_karma_probe_response(const uint8_t *victim_mac, const char *requested_ssid, uint8_t channel);
+esp_err_t wifi_attack_send_karma_probe_response(const uint8_t *victim_mac, const char *requested_ssid, uint8_t channel);
 
 
 /**
@@ -126,7 +126,7 @@ void wifi_attack_send_karma_probe_response(const uint8_t *victim_mac, const char
  * Duration field based on the current PHY rate and packet length, ignoring 
  * the user-supplied value (0x7FFF).
  */
-void wifi_attack_nav_abuse_rts(const uint8_t bssid[6]);
+esp_err_t wifi_attack_nav_abuse_rts(const uint8_t bssid[6]);
 
 
 /**
@@ -139,7 +139,7 @@ void wifi_attack_nav_abuse_rts(const uint8_t bssid[6]);
  * frames and overrides the Duration field with the standard calculated value 
  * (required time for SIFS + ACK), neutralizing the DoS attempt.
  */
-void wifi_attack_nav_abuse_cts(const uint8_t bssid[6]);
+esp_err_t wifi_attack_nav_abuse_cts(const uint8_t bssid[6]);
 
 
 /**
@@ -154,7 +154,7 @@ void wifi_attack_nav_abuse_cts(const uint8_t bssid[6]);
  * Duration field based on the current PHY rate and packet length, ignoring 
  * the user-supplied value (0x7FFF).
  */
-void wifi_attack_nav_abuse_qos_null(const uint8_t target[6], const uint8_t bssid[6]);
+esp_err_t wifi_attack_nav_abuse_qos_null(const uint8_t target[6], const uint8_t bssid[6]);
 
 
 /**
@@ -169,7 +169,7 @@ void wifi_attack_nav_abuse_qos_null(const uint8_t target[6], const uint8_t bssid
  * overwrites it, using a Broadcast Receiver address is the recommended bypass.
  * * @warning **NOT EFFECTIVE ON ESP32**. 
  */
-void wifi_attack_nav_abuse_qos_data(const uint8_t target[6], const uint8_t bssid[6]);
+esp_err_t wifi_attack_nav_abuse_qos_data(const uint8_t target[6], const uint8_t bssid[6]);
 
 
 /**
@@ -181,13 +181,13 @@ void wifi_attack_nav_abuse_qos_data(const uint8_t target[6], const uint8_t bssid
  * * @param ap_bssid The BSSID of the Access Point to spoof (Source address).
  * * @warning **NOT EFFECTIVE ON ESP32**. 
  */
-void wifi_attack_nav_abuse_qos_data_broadcast(const uint8_t ap_bssid[6]);
+esp_err_t wifi_attack_nav_abuse_qos_data_broadcast(const uint8_t ap_bssid[6]);
 
 
 /**
  * @brief Floods the AP with WPA3 SAE Commit frames to exhaust CPU resources.
  * @param bssid Target AP BSSID
  */
-void wifi_attack_wpa3_sae_flood(const uint8_t bssid[6]);
+esp_err_t wifi_attack_wpa3_sae_flood(const uint8_t bssid[6]);
 
 #endif

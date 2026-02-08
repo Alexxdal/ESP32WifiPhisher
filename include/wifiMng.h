@@ -44,4 +44,16 @@ esp_err_t wifi_set_channel_safe(uint8_t new_channel);
 esp_err_t wifi_set_temporary_channel(uint8_t new_channel, uint32_t window);
 
 
+/**
+ * @brief Get sent frames
+ */
+uint32_t wifi_get_sent_frames(void);
+
+
+/**
+ * @brief Get dropped frames
+ */
+uint32_t wifi_get_dropped_frames(void);
+
+
 #endif

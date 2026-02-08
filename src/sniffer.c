@@ -12,14 +12,15 @@
 #include "utils.h"
 #include "target.h"
 #include "server_api.h"
+#include "evil_twin.h"
+#include "karma_attack.h"
+#include "deauther.h"
 
-#define BEACON_RX_TIMEOUT_MS 5000
-#define HANDSHAKE_TIMEOUT_MS 5000
+#define HANDSHAKE_TIMEOUT_US 2000000 // 2 Seconds timeout between M1 and M2
 
 static const char *TAG = "SNIFFER";
 
 /* Tasks Priority and queue len */
-#define BEACON_TRACK_TASK_PRIO              10
 #define PACKET_PARSING_TASK_PRIO            10
 #define PACKET_QUEUE_LEN                    50
 #define CHANNEL_HOPPING_TASK_PRIO           3
@@ -27,12 +28,11 @@ static const char *TAG = "SNIFFER";
 /* Queue and semaphore */
 static QueueHandle_t packet_queue = NULL;
 static SemaphoreHandle_t clients_semaphore = NULL;
-static SemaphoreHandle_t target_semaphore = NULL;
 static SemaphoreHandle_t aps_semaphore = NULL;
+static SemaphoreHandle_t handshake_semaphore = NULL;
+static SemaphoreHandle_t probes_semaphore = NULL;
 
 /* Tasks handlers */
-static TimerHandle_t beacon_track_timer_handle = NULL;
-static TaskHandle_t beacon_track_task_handle = NULL;
 static TaskHandle_t packet_parsing_task_handle = NULL;
 static TaskHandle_t channel_hopping_task_handle = NULL;
 
@@ -45,30 +45,23 @@ static esp_event_handler_instance_t scan_done_event_instance = NULL;
 static esp_event_handler_instance_t roc_done_event_instance = NULL;
 
 /* Client and target info */
-static clients_t clients = {0};
-static handshake_info_t handshake_info = {0};
+static client_list_t clients = {0};
+static handshake_info_list_t captured_handshakes = {0};
 static probe_request_list_t captured_probes = {0};
 static aps_info_t detected_aps = {0};
 
-/* Global target pointer */
-static target_info_t *target = NULL;
-
-/* Current sniffer mode */
-static sniffer_mode_t current_sniff_mode = SNIFF_MODE_IDLE;
-
 /* Filters for promiscous mode */
-static int filter_type_main = 0;      // 0=All, 1=Mgmt, 2=Ctrl, 3=Data
-static uint32_t filter_subtype_mask = 0; // Maschera specifica
-static uint8_t filter_channel = 0; // Channel mask
+static int filter_type_main = 0;
+static uint32_t filter_subtype_mask = 0;
+static uint8_t filter_channel = 0;
+static uint8_t filter_bssid[6] = {0};
+static bool filter_bssid_enabled = false;
+static bool live_packet_analyzer = false;
 
 /* Callback */
 sniffer_packet_t callback_sniffer_pkt = {0};
-/* Parsing */
-sniffer_packet_t parsing_sniffer_pkt = {0};
 
 /* Private function */
-static void beacon_track_task(void *param);
-static void hopping_timer_callback(TimerHandle_t xTimer);
 static void add_client_to_list(const uint8_t *mac, const uint8_t *bssid);
 static void wifi_sniffer_channel_hopping_task(void *param);
 
@@ -78,7 +71,7 @@ static void wifi_event_scan_done_handler(void* arg, esp_event_base_t event_base,
     if(event_base != WIFI_EVENT) return;
     if (event_id == WIFI_EVENT_SCAN_DONE) 
     {
-        xEventGroupSetBits(scan_evt, SCAN_DONE_BIT);
+        if(scan_evt) xEventGroupSetBits(scan_evt, SCAN_DONE_BIT);
     }
 }
 
@@ -88,7 +81,7 @@ static void wifi_event_roc_done_handler(void* arg, esp_event_base_t event_base, 
     if(event_base != WIFI_EVENT) return;
     if (event_id == WIFI_EVENT_ROC_DONE) 
     {
-        xEventGroupSetBits(roc_evt, ROC_DONE_BIT);
+        if(roc_evt) xEventGroupSetBits(roc_evt, ROC_DONE_BIT);
     }
 }
 
@@ -96,12 +89,13 @@ static void wifi_event_roc_done_handler(void* arg, esp_event_base_t event_base, 
 IRAM_ATTR static void promiscuous_callback(void *buf, wifi_promiscuous_pkt_type_t type)
 {
     const wifi_promiscuous_pkt_t *packet = (wifi_promiscuous_pkt_t *)buf;
+    uint16_t len = packet->rx_ctrl.sig_len;
 
     if (packet_queue == NULL) {
         return; // Queue not initialized
     }
 
-    if (packet->rx_ctrl.sig_len == 0 || packet->rx_ctrl.sig_len > PACKET_MAX_PAYLOAD_LEN) {
+    if (len == 0 || len > PACKET_MAX_PAYLOAD_LEN) {
         return;
     }
 
@@ -109,8 +103,20 @@ IRAM_ATTR static void promiscuous_callback(void *buf, wifi_promiscuous_pkt_type_
         return;
     }
 
-    if (uxQueueSpacesAvailable(packet_queue) == 0) {
-        return;
+    if (filter_bssid_enabled) 
+    {
+        bool match = false;
+        const uint8_t *payload = packet->payload;
+        // Controllo Addr1 (Destinazione) - Presente se len >= 10
+        if (len >= 10 && memcmp(payload + 4, filter_bssid, 6) == 0) match = true;
+        // Controllo Addr2 (Sorgente) - Presente se len >= 16
+        else if (len >= 16 && memcmp(payload + 10, filter_bssid, 6) == 0) match = true;
+        // Controllo Addr3 (BSSID/Filtering) - Presente se len >= 22
+        else if (len >= 22 && memcmp(payload + 16, filter_bssid, 6) == 0) match = true;
+
+        if (!match) {
+            return;
+        }
     }
 
     callback_sniffer_pkt.length = packet->rx_ctrl.sig_len;
@@ -119,98 +125,33 @@ IRAM_ATTR static void promiscuous_callback(void *buf, wifi_promiscuous_pkt_type_
     memcpy(callback_sniffer_pkt.payload, packet->payload, callback_sniffer_pkt.length);
 
     if( xQueueSend(packet_queue, &callback_sniffer_pkt, 0) != pdTRUE ) {
-
-    }
-}
-
-
-/** 
- * @brief Handler for Global Monitor mode packet parsing
- * 
- * @param frame 
- */
-static void handle_global_monitor(struct libwifi_frame *frame, sniffer_packet_t *sniffer_pkt)
-{
-    // Scan for client associated with APs
-    if (frame->frame_control.type == TYPE_DATA)
-    {
-        uint8_t to_ds = frame->frame_control.flags.to_ds;
-        uint8_t from_ds = frame->frame_control.flags.from_ds;
-        const uint8_t *addr1 = (uint8_t *)&frame->header.data.addr1;
-        const uint8_t *addr2 = (uint8_t *)&frame->header.data.addr2;
-
-        // Caso 1: Client invia all'AP (ToDS=1, FromDS=0)
-        // Addr1 = BSSID (Dest), Addr2 = Client (Src)
-        if (to_ds == 1 && from_ds == 0) {
-            add_client_to_list(addr2, addr1); // Client, AP
-        }
-        // Caso 2: AP invia al Client (ToDS=0, FromDS=1)
-        // Addr1 = Client (Dest), Addr2 = BSSID (Src)
-        else if (to_ds == 0 && from_ds == 1) {
-            add_client_to_list(addr1, addr2); // Client, AP
-        }
-    }
-}
-
-
-/** 
- * @brief Handler for Target Only mode packet parsing
- * 
- * @param frame 
- */
-static void handle_target_monitor(struct libwifi_frame *frame)
-{
-    if (target == NULL)
         return;
-
-    const uint8_t *dest = (uint8_t *)&frame->header.mgmt_ordered.addr1;
-    const uint8_t *src = (uint8_t *)&frame->header.mgmt_ordered.addr2;
-    const uint8_t *bssid = (uint8_t *)&frame->header.mgmt_ordered.addr3;
-
-    // Filtra RIGIDAMENTE solo ciò che riguarda il target
-    if (isMacEqual(bssid, target->bssid) || isMacEqual(src, target->bssid) || isMacEqual(dest, target->bssid))
-    {
-        // 1. Aggiungi client alla lista (se è un client che parla col target)
-        if (!isMacEqual(src, target->bssid) && frame->frame_control.type == TYPE_DATA)
-        {
-            add_client_to_list(src, target->bssid);
-        }
-
-        // 2. Cerca Handshake / PMKID (solo se non li abbiamo già)
-        if (!handshake_info.handshake_captured)
-        {
-            // ... Tua logica di estrazione EAPOL / Handshake qui ...
-            // Questa è la parte "sicura": guardi ma non tocchi (no deauth)
-        }
     }
 }
 
 
-/** 
- * @brief Handler for Karma attack probe requests parsing
- * 
- * @param frame 
- * @param sniffer_pkt 
- */
-static void handle_karma_attack(struct libwifi_frame *frame, sniffer_packet_t *sniffer_pkt)
+static void wifi_sniffer_capture_probes(struct libwifi_frame *frame, sniffer_packet_t *sniffer_pkt)
 {
-    if (frame == NULL) return;
+    if(frame == NULL || sniffer_pkt == NULL) return;
 
-    if (frame->frame_control.type == TYPE_MANAGEMENT && frame->frame_control.subtype == SUBTYPE_PROBE_REQ)
+    if (frame->frame_control.type != TYPE_MANAGEMENT && frame->frame_control.subtype != SUBTYPE_PROBE_REQ) return;
+
+    struct libwifi_sta probe_req_info = {0};
+    if (libwifi_parse_probe_req(&probe_req_info, frame) == 0)
     {
-        struct libwifi_sta probe_req_info = {0};
-        if (libwifi_parse_probe_req(&probe_req_info, frame) == 0)
+        if(strlen(probe_req_info.ssid) == 0) {
+            goto cleanup;
+        }
+
+        if (xSemaphoreTake(probes_semaphore, pdMS_TO_TICKS(10)) == pdTRUE) 
         {
-            if(strlen(probe_req_info.ssid) == 0) {
-                goto cleanup;
-            }
             const uint8_t *src_mac = (uint8_t *)frame->header.mgmt_ordered.addr2;
             /* Check if this is a new probe request */
             for (int i = 0; i < captured_probes.num_probes; i++) {
                 if (memcmp(captured_probes.probes[i].mac, src_mac, 6) == 0 && strcmp(captured_probes.probes[i].ssid, probe_req_info.ssid) == 0) {
                     captured_probes.probes[i].rssi = sniffer_pkt->rssi;
                     captured_probes.probes[i].channel = sniffer_pkt->channel;
-                    wifi_attack_send_karma_probe_response(src_mac, probe_req_info.ssid, sniffer_pkt->channel);
+                    xSemaphoreGive(probes_semaphore);
                     goto cleanup;
                 }
             }
@@ -220,213 +161,178 @@ static void handle_karma_attack(struct libwifi_frame *frame, sniffer_packet_t *s
                 strncpy(captured_probes.probes[captured_probes.num_probes].ssid, probe_req_info.ssid, 32);
                 captured_probes.probes[captured_probes.num_probes].rssi = sniffer_pkt->rssi;
                 captured_probes.probes[captured_probes.num_probes].channel = sniffer_pkt->channel;
-                wifi_attack_send_karma_probe_response(src_mac, probe_req_info.ssid, sniffer_pkt->channel);
                 captured_probes.num_probes++;
                 ESP_LOGI(TAG, "New Probe: %s from %02x:%02x...", probe_req_info.ssid, src_mac[0], src_mac[1]);
             }
-        cleanup:
-            libwifi_free_sta(&probe_req_info);
+            xSemaphoreGive(probes_semaphore);
         }
+    cleanup:
+        libwifi_free_sta(&probe_req_info);
     }
 }
 
 
-/** 
- * @brief Handler for Evil Twin attack (Handshake capture and CSA handling)
- * 
- * @param frame 
- * @param sniffer_pkt 
- */
-static void handle_evil_twin(struct libwifi_frame *frame, sniffer_packet_t *sniffer_pkt)
+static void wifi_sniffer_capture_clients(struct libwifi_frame *frame, sniffer_packet_t *sniffer_pkt)
 {
-    if (frame == NULL || target == NULL)
-        return;
+    if(frame == NULL || sniffer_pkt == NULL) return;
 
-    static uint32_t last_m1_timestamp = 0;
-    static uint64_t temp_replay_counter = 0;
+    if (frame->frame_control.type != TYPE_DATA) return;
 
-    /* For better reading */
-    const uint8_t *dest_mac = (uint8_t *)&frame->header.mgmt_ordered.addr1; // Destination MAC address
-    const uint8_t *src_mac = (uint8_t *)&frame->header.mgmt_ordered.addr2;  // Source MAC address
-    const uint8_t *bssid = (uint8_t *)&frame->header.mgmt_ordered.addr3;    // BSSID
+    uint8_t to_ds = frame->frame_control.flags.to_ds;
+    uint8_t from_ds = frame->frame_control.flags.from_ds;
+    const uint8_t *addr1 = (uint8_t *)&frame->header.data.addr1;
+    const uint8_t *addr2 = (uint8_t *)&frame->header.data.addr2;
+
+    // Caso 1: Client invia all'AP (ToDS=1, FromDS=0)
+    // Addr1 = BSSID (Dest), Addr2 = Client (Src)
+    if (to_ds == 1 && from_ds == 0) {
+        add_client_to_list(addr2, addr1); // Client, AP
+    }
+    // Caso 2: AP invia al Client (ToDS=0, FromDS=1)
+    // Addr1 = Client (Dest), Addr2 = BSSID (Src)
+    else if (to_ds == 0 && from_ds == 1) {
+        add_client_to_list(addr1, addr2); // Client, AP
+    }
+}
+
+
+static void wifi_sniffer_capture_handshakes(struct libwifi_frame *frame, sniffer_packet_t *sniffer_pkt)
+{
+    if (frame == NULL || sniffer_pkt == NULL) return;
+
+    if (frame->frame_control.type != TYPE_DATA) return;
+
+    /* Check if it is a valid WPA Handshake frame */
+    if (!libwifi_check_wpa_handshake(frame)) return;
 
     struct libwifi_wpa_auth_data wpa_data = {0};
-    bool wpa_data_initialized = false;
+    if (libwifi_get_wpa_data(frame, &wpa_data) != 0) return;
 
-    /* Check frame type data for EAPOLs */
-    if (frame->frame_control.type == TYPE_DATA)
+    /* Extract MAC addresses */
+    // In Data frames: Addr1=Dest, Addr2=Src, Addr3=BSSID
+    const uint8_t *dest_mac = (uint8_t *)&frame->header.data.addr1;
+    const uint8_t *src_mac = (uint8_t *)&frame->header.data.addr2;
+    const uint8_t *bssid = (uint8_t *)&frame->header.data.addr3;
+    
+    int msg_type = libwifi_check_wpa_message(frame);
+    int64_t current_time = esp_timer_get_time(); // Time in microseconds
+
+    if (xSemaphoreTake(handshake_semaphore, pdMS_TO_TICKS(10)) == pdTRUE) 
     {
-        if (isMacEqual(bssid, target->bssid) || isMacEqual(src_mac, target->bssid) || isMacEqual(dest_mac, target->bssid))
+        /* --- HANDLE M1 (AP -> Station) --- */
+        if (msg_type == HANDSHAKE_M1)
         {
-            /* Add client to the list if MAC matches the target */
-            if (!isMacEqual(src_mac, target->bssid))
-            {
-                add_client_to_list(src_mac, target->bssid);
-            }
-            /* Check if handshake or pmkid already captured */
-            if (handshake_info.handshake_captured || handshake_info.pmkid_captured)
-            {
-                goto cleanup;
-            }
-            /* Timeout reset if M1 is received but no M2 for HANDSHAKE_TIMEOUT_MS */
-            if (!isMacZero(handshake_info.mac_sta) && (pdTICKS_TO_MS(xTaskGetTickCount()) - last_m1_timestamp > HANDSHAKE_TIMEOUT_MS))
-            {
-                ESP_LOGD(TAG, "Handshake M1 timeout, resetting state");
-                memset(handshake_info.mac_sta, 0, 6);
-                temp_replay_counter = 0;
-            }
-            /* Check for WPA Handshake frames */
-            if (libwifi_check_wpa_handshake(frame))
-            {
-                /* Extract WPA data from the frame */
-                int ret = libwifi_get_wpa_data(frame, &wpa_data);
-                if (ret != 0)
-                {
-                    goto cleanup;
+            /* Search for existing entry for this BSSID + STA pair */
+            handshake_info_t *entry = NULL;
+            for (int i = 0; i < captured_handshakes.count; i++) {
+                if (memcmp(captured_handshakes.handshake[i].bssid, bssid, 6) == 0 &&
+                    memcmp(captured_handshakes.handshake[i].mac_sta, dest_mac, 6) == 0) {
+                    entry = &captured_handshakes.handshake[i];
+                    break;
                 }
-                wpa_data_initialized = true;
-                int msg_type = libwifi_check_wpa_message(frame);
+            }
 
-                /* M1 Message */
-                if (msg_type == HANDSHAKE_M1 && isMacEqual(src_mac, target->bssid))
-                {
-                    // Se non stiamo tracciando nessuno O stiamo tracciando questo specifico client (ritrasmissione M1)
-                    if (isMacZero(handshake_info.mac_sta) || isMacEqual(handshake_info.mac_sta, dest_mac))
-                    {
-                        /* Extract ANonce from MSG 1 */
-                        memcpy(handshake_info.anonce, wpa_data.key_info.nonce, 32);
-                        memcpy(handshake_info.mac_sta, dest_mac, 6);
-                        /* Get key desccriptor version */
-                        handshake_info.key_decriptor_version = wpa_data.key_info.information & 0x0003;
-                        temp_replay_counter = wpa_data.key_info.replay_counter;
-                        last_m1_timestamp = pdTICKS_TO_MS(xTaskGetTickCount());
+            /* If not found, create a new entry */
+            if (entry == NULL && captured_handshakes.count < MAX_HANDSHAKE_NUM) {
+                entry = &captured_handshakes.handshake[captured_handshakes.count];
+                memset(entry, 0, sizeof(handshake_info_t));
+                memcpy(entry->bssid, bssid, 6);
+                memcpy(entry->mac_sta, dest_mac, 6);
+                captured_handshakes.count++;
+            }
 
-                        /* Try get PMKID */
-                        /* Minimum length for RSNIE with PMKID */
-                        if (!handshake_info.pmkid_captured && wpa_data.key_info.key_data_length >= 20)
-                        {
-                            struct libwifi_tag_iterator iterator = {0};
-                            if (libwifi_tag_iterator_init(&iterator, wpa_data.key_info.key_data, wpa_data.key_info.key_data_length) == 0)
-                            {
-                                const uint8_t *tag_data = iterator.tag_data;
-                                /* Check WPA OUI */
-                                if (tag_data[0] == 0x00 && tag_data[1] == 0x0F && tag_data[2] == 0xAC)
-                                {
-                                    memcpy(handshake_info.pmkid, tag_data + 4, 16);
-                                    handshake_info.pmkid_captured = true;
-                                    ESP_LOGI(TAG, "PMKID Captured!");
-                                }
-                            }
+            if (entry != NULL) {
+                /* Store ANonce and Key Version */
+                memcpy(entry->anonce, wpa_data.key_info.nonce, 32);
+                entry->key_decriptor_version = wpa_data.key_info.information & 0x0003;
+                
+                /* CRITICAL: Update State for Validation */
+                /* We overwrite previous data because a new M1 means a new session started */
+                entry->last_m1_timestamp = current_time;
+                entry->replay_counter = wpa_data.key_info.replay_counter;
+                
+                /* Capture PMKID if present in M1 (Robust Security Network IE) */
+                if (!entry->pmkid_captured && wpa_data.key_info.key_data_length >= 20) {
+                    struct libwifi_tag_iterator iterator = {0};
+                    if (libwifi_tag_iterator_init(&iterator, wpa_data.key_info.key_data, wpa_data.key_info.key_data_length) == 0) {
+                        const uint8_t *tag_data = iterator.tag_data;
+                        /* Check RSN OUI (00:0F:AC) and Type (04) */
+                        if (tag_data[0] == 0x00 && tag_data[1] == 0x0F && tag_data[2] == 0xAC && tag_data[3] == 0x04) {
+                            memcpy(entry->pmkid, tag_data + 4, 16);
+                            entry->pmkid_captured = true;
+                            ESP_LOGI(TAG, "PMKID Captured: %02X... (Client: %02X...)", bssid[0], dest_mac[0]);
+                            ws_log(TAG, "PMKID Captured: %02X... (Client: %02X...)", bssid[0], dest_mac[0]);
                         }
                     }
                 }
-                /* M2 Message */
-                else if (msg_type == HANDSHAKE_M2 && isMacEqual(src_mac, handshake_info.mac_sta))
-                {
-                    if (temp_replay_counter != wpa_data.key_info.replay_counter)
-                    {
-                        ESP_LOGD(TAG, "Received M2 with different replay counter, ignoring.");
-                        goto cleanup;
-                    }
-                    /* Extract SNonce and MIC from MSG 2 */
-                    memcpy(handshake_info.snonce, wpa_data.key_info.nonce, 32);
-                    memcpy(handshake_info.mic, wpa_data.key_info.mic, 16);
+            }
+        }
+        /* --- HANDLE M2 (Station -> AP) --- */
+        else if (msg_type == HANDSHAKE_M2)
+        {
+            /* Search for the entry created by M1 */
+            handshake_info_t *entry = NULL;
+            for (int i = 0; i < captured_handshakes.count; i++) {
+                /* Note: In M2, src_mac is the Station */
+                if (memcmp(captured_handshakes.handshake[i].bssid, bssid, 6) == 0 &&
+                    memcmp(captured_handshakes.handshake[i].mac_sta, src_mac, 6) == 0) {
+                    entry = &captured_handshakes.handshake[i];
+                    break;
+                }
+            }
 
+            if (entry != NULL) 
+            {
+                /* VALIDATION 1: Check Replay Counter */
+                /* The M2 counter MUST match the M1 counter. If not, it belongs to a different session. */
+                if (entry->replay_counter != wpa_data.key_info.replay_counter) {
+                    ESP_LOGD(TAG, "M2 discarded: Replay Counter mismatch (M1:%llu != M2:%llu)", 
+                            entry->replay_counter, wpa_data.key_info.replay_counter);
+                    // FIX: Non usare goto per uscire dal blocco semaforo senza rilasciarlo
+                }
+                /* VALIDATION 2: Check Timestamp (Timeout) */
+                /* If M1 is too old (e.g., > 2 seconds), discard M2 to avoid stale data */
+                else if ((current_time - entry->last_m1_timestamp) > HANDSHAKE_TIMEOUT_US) {
+                    ESP_LOGD(TAG, "M2 discarded: M1 timeout");
+                }
+                else {
+                    /* Validation Passed: Store SNonce and MIC */
+                    memcpy(entry->snonce, wpa_data.key_info.nonce, 32);
+                    memcpy(entry->mic, wpa_data.key_info.mic, 16);
+
+                    /* Extract Raw EAPOL frame (required for cracking tools like aircrack-ng) */
                     uint16_t raw_len = 0;
                     uint8_t *raw_ptr = find_eapol_frame(sniffer_pkt->payload, sniffer_pkt->length, &raw_len);
-                    if (raw_ptr && raw_len <= sizeof(handshake_info.eapol))
-                    {
-                        memcpy(handshake_info.eapol, raw_ptr, raw_len);
-                        handshake_info.eapol_len = raw_len;
-
-                        if (handshake_info.eapol_len > 81 + 16)
-                        {
-                            memset(handshake_info.eapol + 81, 0, 16);
+                    
+                    if (raw_ptr && raw_len <= sizeof(entry->eapol)) {
+                        memcpy(entry->eapol, raw_ptr, raw_len);
+                        entry->eapol_len = raw_len;
+                        
+                        /* Zero out the MIC in the raw frame if needed (standard practice) */
+                        if (entry->eapol_len > 81 + 16) {
+                            memset(entry->eapol + 81, 0, 16);
                         }
 
-                        handshake_info.handshake_captured = true;
-                        ESP_LOGI(TAG, "Handshake Captured (M1+M2)!");
+                        if (!entry->handshake_captured) {
+                            entry->handshake_captured = true;
+                            ESP_LOGI(TAG, "Handshake (M1+M2) Captured! AP: %02X... Client: %02X...", bssid[0], src_mac[0]);
+                            ws_log(TAG, "Handshake (M1+M2) Captured! AP: %02X... Client: %02X...", bssid[0], src_mac[0]);
+                        }
                     }
                 }
-            }
-        }
-    }
-    /* Check for management frames */
-    else if (frame->frame_control.type == TYPE_MANAGEMENT)
-    {
-        /* Capture beacon frames */
-        if (frame->frame_control.subtype == SUBTYPE_BEACON)
-        {
-            if (isMacBroadcast(dest_mac) == true && isMacEqual(src_mac, target->bssid))
-            {
-                /* Reset beacon timeout timer */
-                if (beacon_track_timer_handle != NULL)
-                {
-                    xTimerReset(beacon_track_timer_handle, 0);
-                }
-                struct libwifi_bss bss = {0};
-                if (libwifi_parse_beacon(&bss, frame) == 0)
-                {
-                    csa_event_t csa;
-                    if (libwifi_extract_csa(&bss, &csa))
-                    {
-                        ESP_LOGI(TAG, "BEACON: CSA detected from target AP, new_channel=%u count=%u", csa.new_channel, csa.count);
-                        if (csa.count <= 1)
-                            wifi_set_channel_safe(csa.new_channel);
-                    }
-                    libwifi_free_bss(&bss);
-                }
-            }
-        }
-        /* Capture probe response frames */
-        if (frame->frame_control.subtype == SUBTYPE_PROBE_RESP)
-        {
-            if (isMacEqual(src_mac, target->bssid))
-            {
-                struct libwifi_bss bss = {0};
-                if (libwifi_parse_probe_resp(&bss, frame) == 0)
-                {
-                    csa_event_t csa;
-                    if (libwifi_extract_csa(&bss, &csa))
-                    {
-                        ESP_LOGI(TAG, "PROBE_RESP: CSA detected from target AP, new_channel=%u count=%u", csa.new_channel, csa.count);
-                        if (csa.count <= 1)
-                            wifi_set_channel_safe(csa.new_channel);
-                    }
-                    libwifi_free_bss(&bss);
-                }
-            }
-        }
-        /* Capture action frames */
-        else if (frame->frame_control.subtype == SUBTYPE_ACTION)
-        {
-            csa_event_t csa;
-            if (libwifi_extract_csa_from_action_frame(frame, &csa))
-            {
-                ESP_LOGI(TAG, "ACTION_FRAME: CSA detected from target AP, new_channel=%u count=%u", csa.new_channel, csa.count);
-                if (csa.count <= 1)
-                    wifi_set_channel_safe(csa.new_channel);
-            }
-        }
-    }
+            } 
+        } // if M1 or M2
+        xSemaphoreGive(handshake_semaphore); // FIX: Release correct semaphore!
+    } // Semaphore
 
-cleanup:
-    /* Cleanup allocated resources */
-    if (wpa_data_initialized)
-    {
-        libwifi_free_wpa_data(&wpa_data);
-    }
+    libwifi_free_wpa_data(&wpa_data);
 }
 
 
-/** 
- * @brief Handler for Live Packet Analyzer
- * 
- * @param frame 
- * @param sniffer_pkt 
- */
-static void handle_raw_view(struct libwifi_frame *frame, sniffer_packet_t *sniffer_pkt)
+static void wifi_sniffer_packet_analyzer_handler(struct libwifi_frame *frame, sniffer_packet_t *sniffer_pkt)
 {
+    if (frame == NULL || sniffer_pkt == NULL) return;
+
     // Rate Limiting
     static int64_t last_pkt_time = 0;
     if (esp_timer_get_time() - last_pkt_time < 5000) return; 
@@ -635,6 +541,8 @@ static void handle_raw_view(struct libwifi_frame *frame, sniffer_packet_t *sniff
  */
 static void packet_parsing_task(void *param)
 {
+    sniffer_packet_t parsing_sniffer_pkt = {0};
+
     while (1)
     {
         if (xQueueReceive(packet_queue, &parsing_sniffer_pkt, portMAX_DELAY) == pdTRUE)
@@ -651,33 +559,20 @@ static void packet_parsing_task(void *param)
                 goto cleanup;
             }
 
-            switch (current_sniff_mode)
-            {
-            case SNIFF_MODE_RAW_VIEW:
-                handle_raw_view(&frame, &parsing_sniffer_pkt);
-                break;
-
-            case SNIFF_MODE_TARGET_ONLY:
-                handle_target_monitor(&frame);
-                break;
-
-            case SNIFF_MODE_ATTACK_EVIL_TWIN:
-                handle_evil_twin(&frame, &parsing_sniffer_pkt);
-                break;
-
-            case SNIFF_MODE_ATTACK_KARMA:
-                handle_karma_attack(&frame, &parsing_sniffer_pkt);
-                break;
-
-            case SNIFF_MODE_GLOBAL_MONITOR:
-                handle_global_monitor(&frame, &parsing_sniffer_pkt);
-                break;
-
-            case SNIFF_MODE_IDLE:
-            default:
-                /* Do nothing */
-                break;
+            if(live_packet_analyzer == true) {
+                wifi_sniffer_packet_analyzer_handler(&frame, &parsing_sniffer_pkt);
             }
+
+            if (frame.frame_control.type == TYPE_MANAGEMENT) {
+                if (frame.frame_control.subtype == SUBTYPE_PROBE_REQ) {
+                    wifi_sniffer_capture_probes(&frame, &parsing_sniffer_pkt);
+                }
+            }
+            else if (frame.frame_control.type == TYPE_DATA) {
+                wifi_sniffer_capture_handshakes(&frame, &parsing_sniffer_pkt);
+                wifi_sniffer_capture_clients(&frame, &parsing_sniffer_pkt);
+            }
+
         cleanup:
             /* Cleanup allocated resources */
             libwifi_free_wifi_frame(&frame);
@@ -686,7 +581,7 @@ static void packet_parsing_task(void *param)
 }
 
 
-esp_err_t wifi_start_sniffing(target_info_t * _target, sniffer_mode_t mode)
+esp_err_t wifi_start_sniffing(void)
 {
     bool en = false;
     ESP_ERROR_CHECK(esp_wifi_get_promiscuous(&en));
@@ -698,22 +593,10 @@ esp_err_t wifi_start_sniffing(target_info_t * _target, sniffer_mode_t mode)
     }
 
     /* Init semaphore */
-    if (clients_semaphore == NULL) {
-        clients_semaphore = xSemaphoreCreateMutex();
-    }
-    if (target_semaphore == NULL) {
-        target_semaphore = xSemaphoreCreateMutex();
-    }
-    if (aps_semaphore == NULL) {
-        aps_semaphore = xSemaphoreCreateMutex();
-    }
-
-    if (_target != NULL)
-    {
-        xSemaphoreTake(target_semaphore, portMAX_DELAY);
-        target = _target;
-        xSemaphoreGive(target_semaphore);
-    }
+    if (clients_semaphore == NULL) clients_semaphore = xSemaphoreCreateMutex();
+    if (aps_semaphore == NULL) aps_semaphore = xSemaphoreCreateMutex();
+    if (handshake_semaphore == NULL) handshake_semaphore = xSemaphoreCreateMutex();
+    if (probes_semaphore == NULL) probes_semaphore = xSemaphoreCreateMutex();
 
     /* Create packet queue */
     if (packet_queue == NULL)
@@ -738,8 +621,8 @@ esp_err_t wifi_start_sniffing(target_info_t * _target, sniffer_mode_t mode)
     }
 
     /* Reset client count */
-    memset(&clients, 0, sizeof(clients_t));
-    memset(&handshake_info, 0, sizeof(handshake_info_t));
+    memset(&clients, 0, sizeof(client_list_t));
+    memset(&captured_handshakes, 0, sizeof(handshake_info_list_t));
     memset(&captured_probes, 0, sizeof(probe_request_list_t));
 
     ESP_ERROR_CHECK(esp_wifi_set_promiscuous(true));
@@ -750,13 +633,6 @@ esp_err_t wifi_start_sniffing(target_info_t * _target, sniffer_mode_t mode)
     ESP_ERROR_CHECK(esp_wifi_set_promiscuous_ctrl_filter(&filter));
     ESP_ERROR_CHECK(esp_wifi_set_promiscuous_rx_cb(promiscuous_callback));
 
-    if (mode < SNIFF_MODE_IDLE || mode >= SNIFF_MODE_MAX)
-    {
-        ESP_LOGW(TAG, "Invalid sniffer mode %d", mode);
-        return ESP_ERR_INVALID_ARG;
-    }
-    current_sniff_mode = mode;
-
     return ESP_OK;
 }
 
@@ -766,7 +642,10 @@ esp_err_t wifi_stop_sniffing(void)
     bool en = false;
     ESP_ERROR_CHECK(esp_wifi_get_promiscuous(&en));
 
-    wifi_stop_beacon_tracking();
+    /* Clear filters and channel hopping */
+    wifi_sniffer_start_packet_analyzer(false);
+    wifi_sniffer_set_bssid_filter(NULL);
+    wifi_sniffer_set_fine_filter(0, 0, 0);
     wifi_sniffer_stop_channel_hopping();
 
     /* Disable promiscuous mode */
@@ -790,31 +669,18 @@ esp_err_t wifi_stop_sniffing(void)
     }
 
     /* Delete semaphore */
-    if (clients_semaphore != NULL)
-    {
-        vSemaphoreDelete(clients_semaphore);
-        clients_semaphore = NULL;
-    }
-    if (target_semaphore != NULL)
-    {
-        vSemaphoreDelete(target_semaphore);
-        target_semaphore = NULL;
-    }
-    if (aps_semaphore != NULL)
-    {
-        vSemaphoreDelete(aps_semaphore);
-        aps_semaphore = NULL;
-    }
+    if (clients_semaphore != NULL) { vSemaphoreDelete(clients_semaphore); clients_semaphore = NULL; }
+    if (aps_semaphore != NULL) { vSemaphoreDelete(aps_semaphore); aps_semaphore = NULL; }
+    if (handshake_semaphore != NULL) { vSemaphoreDelete(handshake_semaphore); handshake_semaphore = NULL; }
+    if (probes_semaphore != NULL) { vSemaphoreDelete(probes_semaphore); probes_semaphore = NULL; }
 
-    target = NULL;
-    current_sniff_mode = SNIFF_MODE_IDLE;
     filter_channel = 0;
-
     return ESP_OK;
 }
 
 
-void wifi_sniffer_set_fine_filter(int type, uint32_t subtype, uint8_t channel) {
+void wifi_sniffer_set_fine_filter(int type, uint32_t subtype, uint8_t channel) 
+{
     filter_type_main = type;
     filter_subtype_mask = subtype;
     filter_channel = channel;
@@ -857,59 +723,14 @@ void wifi_sniffer_set_fine_filter(int type, uint32_t subtype, uint8_t channel) {
 }
 
 
-void wifi_sniffer_set_mode(sniffer_mode_t mode)
+void wifi_sniffer_set_bssid_filter(uint8_t *bssid) 
 {
-    if (mode < SNIFF_MODE_IDLE || mode > SNIFF_MODE_ATTACK_EVIL_TWIN)
-    {
-        ESP_LOGW(TAG, "Invalid sniffer mode %d", mode);
-        return;
+    if(bssid) {
+        memcpy(filter_bssid, bssid, 6);
+        filter_bssid_enabled = true;
+    } else {
+        filter_bssid_enabled = false;
     }
-    current_sniff_mode = mode;
-}
-
-
-esp_err_t wifi_start_beacon_tracking(void)
-{
-    /* Start beacon timer for channel tracking */
-    if (beacon_track_timer_handle == NULL)
-    {
-        beacon_track_timer_handle = xTimerCreate("beacon_track_timer", pdMS_TO_TICKS(BEACON_RX_TIMEOUT_MS), pdTRUE, NULL, hopping_timer_callback);
-    }
-
-    if (beacon_track_timer_handle == NULL)
-    {
-        ESP_LOGE(TAG, "Error creating beacon track timer.");
-        return ESP_FAIL;
-    }
-
-    if (beacon_track_task_handle == NULL)
-    {
-        xTaskCreate(beacon_track_task, "beacon_track_task_handle", 4096, NULL, BEACON_TRACK_TASK_PRIO, &beacon_track_task_handle);
-        xTimerStart(beacon_track_timer_handle, 0);
-    }
-
-    return ESP_OK;
-}
-
-
-esp_err_t wifi_stop_beacon_tracking(void)
-{
-    /* Stop beacon timer for channel tracking */
-    if (beacon_track_timer_handle != NULL)
-    {
-        xTimerStop(beacon_track_timer_handle, 0);
-        xTimerDelete(beacon_track_timer_handle, 0);
-        beacon_track_timer_handle = NULL;
-    }
-
-    /* Stop task for beacon channel tracking */
-    if (beacon_track_task_handle != NULL)
-    {
-        vTaskDelete(beacon_track_task_handle);
-        beacon_track_task_handle = NULL;
-    }
-
-    return ESP_OK;
 }
 
 
@@ -980,29 +801,104 @@ esp_err_t wifi_sniffer_stop_channel_hopping(void)
 }
 
 
-const probe_request_list_t *wifi_sniffer_get_captured_probes(void)
+void wifi_sniffer_start_packet_analyzer(bool start)
 {
-    return &captured_probes;
+    live_packet_analyzer = start;
 }
 
-
-const handshake_info_t *wifi_sniffer_get_handshake(void)
-{
-    return &handshake_info;
-}
-
-
-esp_err_t wifi_sniffer_get_clients(clients_t *out)
+/* ################ GETTER FUNCTIONS ########################## */
+esp_err_t wifi_sniffer_get_probes(probe_request_list_t *out)
 {
     if(out == NULL) return ESP_ERR_INVALID_ARG;
 
+    if (probes_semaphore == NULL) {
+        probes_semaphore = xSemaphoreCreateMutex();
+    }
+
+    if (xSemaphoreTake(probes_semaphore, pdMS_TO_TICKS(100)) == pdTRUE) 
+    {
+        memcpy(out, &captured_probes, sizeof(probe_request_list_t));
+        xSemaphoreGive(probes_semaphore);
+        return ESP_OK;
+    }
+    return ESP_FAIL;
+}
+
+
+esp_err_t wifi_sniffer_get_handshake_for_target(const uint8_t *bssid, const uint8_t *client_mac, handshake_info_t *out)
+{
+    if (bssid == NULL || out == NULL) return ESP_ERR_INVALID_ARG;
+
+    if (handshake_semaphore == NULL) {
+        handshake_semaphore = xSemaphoreCreateMutex();
+    }
+
+    if (xSemaphoreTake(handshake_semaphore, pdMS_TO_TICKS(100)) == pdTRUE) 
+    {
+        for (int i = 0; i < captured_handshakes.count; i++) {
+            /* Check BSSID */
+            if (memcmp(captured_handshakes.handshake[i].bssid, bssid, 6) == 0) {
+                
+                /* Se client_mac è specificato, controllalo. Altrimenti prendi il primo handshake valido per quell'AP */
+                if (client_mac == NULL || memcmp(captured_handshakes.handshake[i].mac_sta, client_mac, 6) == 0) {
+                    
+                    /* Check valid data */
+                    if (captured_handshakes.handshake[i].handshake_captured || 
+                        captured_handshakes.handshake[i].pmkid_captured) {
+                        memcpy(out, &captured_handshakes.handshake[i], sizeof(handshake_info_t));
+                        xSemaphoreGive(handshake_semaphore);
+                        return ESP_OK;
+                    }
+                }
+            }
+        }
+        xSemaphoreGive(handshake_semaphore);
+    }
+    
+    return ESP_FAIL;
+}
+
+
+int wifi_sniffer_get_handshake_status_for_target(const uint8_t *bssid)
+{
+    if (bssid == NULL) return 0;
+
+    for (int i = 0; i < captured_handshakes.count; i++) {
+        /* Check BSSID */
+        if (memcmp(captured_handshakes.handshake[i].bssid, bssid, 6) == 0) {
+            if (captured_handshakes.handshake[i].handshake_captured ) {
+                return 1;
+            }
+            if (captured_handshakes.handshake[i].pmkid_captured) {
+                return 2;
+            }
+        }
+    }
+    return 0;
+}
+
+
+esp_err_t wifi_sniffer_get_clients(client_list_t *out)
+{
+    if(out == NULL) return ESP_ERR_INVALID_ARG;
+
+    if (clients_semaphore == NULL) {
+        clients_semaphore = xSemaphoreCreateMutex();
+    }
+
     if (xSemaphoreTake(clients_semaphore, pdMS_TO_TICKS(100)) == pdTRUE) 
     {
-        memcpy(out, &clients, sizeof(clients_t));
+        memcpy(out, &clients, sizeof(client_list_t));
         xSemaphoreGive(clients_semaphore);
         return ESP_OK;
     }
     return ESP_FAIL;
+}
+
+
+uint8_t wifi_sniffer_get_clients_count(void)
+{
+    return clients.count;
 }
 
 
@@ -1021,6 +917,12 @@ esp_err_t wifi_sniffer_get_aps(aps_info_t *out)
         return ESP_OK;
     }
     return ESP_FAIL;
+}
+
+
+uint8_t wifi_sniffer_get_aps_count(void)
+{
+    return detected_aps.count;
 }
 
 
@@ -1081,53 +983,14 @@ esp_err_t wifi_sniffer_scan_fill_aps(void)
     }
     return ESP_OK;
 }
-
-
-static void beacon_track_task(void *param)
-{
-    uint8_t new_channel = 0;
-    esp_err_t err = ESP_OK;
-    while (1)
-    {
-        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-
-        if (xSemaphoreTake(target_semaphore, pdMS_TO_TICKS(100)) == pdTRUE)
-        {
-            if (target == NULL)
-            {
-                xSemaphoreGive(target_semaphore);
-                xTimerReset(beacon_track_timer_handle, 0);
-                continue;
-            }
-
-            new_channel = getNextChannel(target->channel);
-            err = wifi_set_channel_safe(new_channel);
-            if (err == ESP_OK)
-            {
-                target->channel = new_channel;
-                ESP_LOGI(TAG, "Hopping to channel %d", target->channel);
-            }
-            xSemaphoreGive(target_semaphore);
-        }
-        xTimerReset(beacon_track_timer_handle, 0);
-    }
-}
-
-
-static void hopping_timer_callback(TimerHandle_t xTimer)
-{
-    if (beacon_track_task_handle) {
-        xTaskNotifyGive(beacon_track_task_handle);
-    }
-}
-
+/* ########################################################### */
 
 static void wifi_sniffer_channel_hopping_task(void *param)
 {
     uint8_t target_channel = (uint8_t)(uintptr_t)param;
     uint8_t current_channel = 1;
     const uint32_t ROC_DURATION_MS = 10;
-    const uint32_t AP_REST_TIME_MS = 50;
+    const uint32_t AP_REST_TIME_MS = 80;
 
     while (1)
     {
@@ -1143,7 +1006,7 @@ static void wifi_sniffer_channel_hopping_task(void *param)
         }
 
         wifi_roc_req_t req = {
-            .ifx = WIFI_IF_AP,
+            .ifx = WIFI_IF_STA,
             .type = WIFI_ROC_REQ,
             .channel = channel_to_scan,
             .sec_channel = WIFI_SECOND_CHAN_NONE,
