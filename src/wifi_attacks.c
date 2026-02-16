@@ -5,6 +5,7 @@
 #include <freertos/task.h>
 #include <freertos/timers.h>
 #include <esp_random.h>
+#include <esp_timer.h>
 #include <lwip/inet.h>
 #include <rom/ets_sys.h>
 #include "wifi_attacks.h"
@@ -652,50 +653,69 @@ esp_err_t wifi_attack_softap_beacon_spam(const char *ssid, uint8_t channel)
 {
     if(ssid == NULL) return ESP_ERR_INVALID_ARG;
 
+    static uint16_t seq_num = 0; // Variabile statica per incrementare la sequenza
     uint8_t mac[6] = { 0 };
-    uint8_t beacon_frame[256] = {
-        0x80, 0x00, // Frame Control (Beacon)
-        0x00, 0x00, // Duration
-        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, // Destination (Broadcast)
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Source (Fake Source or BSSID)
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // BSSID
-        0x00, 0x00, // Sequence Control
-        0x64, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // timestamp
-        0x64, 0x00, // Beacon Interval (102.4ms)
-        0x21, 0x00,  // Capability Information
-        0x00, 0x00  // SSID Tag Number and Length (Placeholder, will be set later)
-    };
-    // Time stamp
-    uint64_t timestamp = xTaskGetTickCount() / 1000; // Convert micro
-    timestamp = (timestamp << 32) | (timestamp & 0xFFFFFFFF);
-    memcpy(&beacon_frame[24], &timestamp, 8); // Set timestamp in beacon frame
-
-    // Set SSID
-    beacon_frame[36] = 0x00; // SSID Tag Number
-    beacon_frame[37] = (uint8_t)strlen(ssid);
     esp_wifi_get_mac(ESP_IF_WIFI_AP, mac);
-    memcpy(&beacon_frame[10], mac, 6);    // Source Address
-    memcpy(&beacon_frame[16], mac, 6);    // BSSID 
-    memcpy(&beacon_frame[38], ssid, strlen(ssid)); // SSID
-    uint16_t offset = 38 + strlen(ssid);
 
-    // 2. Tagged Parameters
-    // Supported Rates (1 Mbps, 2 Mbps, 5.5 Mbps, 11 Mbps)
-    beacon_frame[offset++] = 0x01;          // Supported Rates Tag Number
-    beacon_frame[offset++] = 0x08;             // Length
-    beacon_frame[offset++] = 0x82;          // 1 Mbps
-    beacon_frame[offset++] = 0x84;          // 2 Mbps
-    beacon_frame[offset++] = 0x8B;          // 5.5 Mbps
-    beacon_frame[offset++] = 0x96;          // 11 Mbps
-    beacon_frame[offset++] = 0x0C;          // 6 Mbps
-    beacon_frame[offset++] = 0x12;          // 9 Mbps
-    beacon_frame[offset++] = 0x18;          // 12 Mbps
-    beacon_frame[offset++] = 0x24;          // 18 Mbps
+    uint8_t beacon_frame[256];
+    uint16_t offset = 0;
 
-    // DS Parameter Set (Channel)
-    beacon_frame[offset++] = 0x03;          // DS Parameter Set Tag Number
-    beacon_frame[offset++] = 0x01;             // Length
-    beacon_frame[offset++] = channel;       // Channel Number
+    // --- MAC HEADER (24 Byte) ---
+    beacon_frame[offset++] = 0x80; beacon_frame[offset++] = 0x00; // Frame Control (Beacon)
+    beacon_frame[offset++] = 0x00; beacon_frame[offset++] = 0x00; // Duration
+    memset(&beacon_frame[offset], 0xFF, 6); offset += 6;          // Destination (Broadcast)
+    memcpy(&beacon_frame[offset], mac, 6);  offset += 6;          // Source
+    memcpy(&beacon_frame[offset], mac, 6);  offset += 6;          // BSSID
+    
+    // Sequence Control (Incrementale)
+    seq_num = (seq_num + 1) % 4096;
+    beacon_frame[offset++] = (seq_num << 4) & 0xFF; // Frag number 0
+    beacon_frame[offset++] = (seq_num >> 4) & 0xFF;
+
+    // --- FIXED PARAMETERS (12 Byte) ---
+    // Timestamp (8 Byte) - Microsecondi reali
+    uint64_t ts = esp_timer_get_time();
+    memcpy(&beacon_frame[offset], &ts, 8); 
+    offset += 8;
+
+    // Beacon Interval (2 Byte) - es. 100 TU (102.4ms)
+    beacon_frame[offset++] = 0x64; beacon_frame[offset++] = 0x00;
+
+    // Capability Info (2 Byte) - ESS + Short Preamble
+    beacon_frame[offset++] = 0x21; beacon_frame[offset++] = 0x00;
+
+    // --- TAGGED PARAMETERS ---
+    
+    // 1. SSID
+    beacon_frame[offset++] = 0x00; // Tag Number
+    beacon_frame[offset++] = strlen(ssid);
+    memcpy(&beacon_frame[offset], ssid, strlen(ssid));
+    offset += strlen(ssid);
+
+    // 2. Supported Rates
+    uint8_t rates[] = {0x82, 0x84, 0x8B, 0x96, 0x0C, 0x12, 0x18, 0x24};
+    beacon_frame[offset++] = 0x01;
+    beacon_frame[offset++] = sizeof(rates);
+    memcpy(&beacon_frame[offset], rates, sizeof(rates));
+    offset += sizeof(rates);
+
+    // 3. DS Parameter (Channel)
+    beacon_frame[offset++] = 0x03;
+    beacon_frame[offset++] = 0x01;
+    beacon_frame[offset++] = channel;
+
+    // 4. TIM (Traffic Indication Map) - FONDAMENTALE per i client moderni
+    // Tag 5, Len 4, DTIM Count 0, DTIM Period 1, Bitmap Control 0, Bitmap 0
+    uint8_t tim[] = {0x00, 0x01, 0x00, 0x00}; 
+    beacon_frame[offset++] = 0x05; // Tag TIM
+    beacon_frame[offset++] = sizeof(tim);
+    memcpy(&beacon_frame[offset], tim, sizeof(tim));
+    offset += sizeof(tim);
+
+    // 5. ERP Information (Opzionale ma utile per 802.11g/n)
+    beacon_frame[offset++] = 0x2A;
+    beacon_frame[offset++] = 0x01;
+    beacon_frame[offset++] = 0x00;
 
     return esp_wifi_80211_tx(WIFI_IF_STA, beacon_frame, offset, false);
 }
