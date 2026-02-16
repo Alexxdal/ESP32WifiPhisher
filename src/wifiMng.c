@@ -39,12 +39,12 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t e
     if (event_id == WIFI_EVENT_AP_STACONNECTED) 
     {
         wifi_event_ap_staconnected_t* event = (wifi_event_ap_staconnected_t*) event_data;
-        ESP_LOGI(TAG, "station "MACSTR" join, AID=%d", MAC2STR(event->mac), event->aid);
+        ESP_LOGI(TAG, "Station ("MACSTR") connected to AP, AID=%d", MAC2STR(event->mac), event->aid);
     } 
     else if (event_id == WIFI_EVENT_AP_STADISCONNECTED)
     {
         wifi_event_ap_stadisconnected_t* event = (wifi_event_ap_stadisconnected_t*) event_data;
-        ESP_LOGI(TAG, "station "MACSTR" leave, AID=%d, reason=NULL", MAC2STR(event->mac), event->aid);
+        ESP_LOGI(TAG, "Station ("MACSTR") disconnected from AP, AID=%d, reason=%d", MAC2STR(event->mac), event->aid, event->reason);
     }
 }
 
@@ -83,7 +83,7 @@ esp_err_t wifi_init(void)
 
     //ESP_ERROR_CHECK(esp_wifi_internal_set_fix_rate(WIFI_IF_STA, true, WIFI_PHY_RATE_11M_S));
     //ESP_ERROR_CHECK(esp_wifi_config_80211_tx_rate(WIFI_IF_STA, WIFI_PHY_RATE_6M));
-    ESP_ERROR_CHECK(esp_wifi_config_80211_tx_rate(WIFI_IF_STA, WIFI_PHY_RATE_5M_L));
+    ESP_ERROR_CHECK(esp_wifi_config_80211_tx_rate(WIFI_IF_STA, WIFI_PHY_RATE_9M));
 #if CONFIG_SOC_WIFI_SUPPORT_5G
     ESP_ERROR_CHECK(esp_wifi_set_band_mode(WIFI_BAND_MODE_AUTO));
 #endif
@@ -108,7 +108,7 @@ void wifi_start_softap(void)
             .ssid_len = strlen(DEFAULT_WIFI_SSID),
             .channel = DEFAULT_WIFI_CHAN,
             .authmode = DEFAULT_WIFI_AUTH,
-            .beacon_interval = 80,
+            .beacon_interval = 50,
             .max_connection = DEFAULT_WIFI_MAX_CONN,
             .pmf_cfg = {
                     /* Cannot set pmf to required when in wpa-wpa2 mixed mode! Setting pmf to optional mode. */
@@ -184,10 +184,6 @@ esp_err_t wifi_set_channel_safe(uint8_t new_channel)
 
 esp_err_t wifi_set_temporary_channel(uint8_t new_channel, uint32_t window)
 {
-    uint8_t cur_channel = 0;
-    esp_wifi_get_channel(&cur_channel, NULL);
-    if(cur_channel == new_channel) return ESP_OK;
-
     wifi_roc_req_t roc_req = {
         .ifx = WIFI_IF_STA,
         .type = WIFI_ROC_REQ,
