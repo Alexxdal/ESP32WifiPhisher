@@ -88,6 +88,7 @@ static void ws_frame_process_task(void *pvParameter)
                         if(heap_req->payload && heap_req->need_free) {
                             free(heap_req->payload);
                         }
+						free(heap_req);
                     }
                 } else {
 					ESP_LOGE(TAG, "Failed to alloc async req");
@@ -151,7 +152,7 @@ static esp_err_t ws_handler(httpd_req_t *req)
         return ESP_OK;
     }
 
-	if (frame.len > 0) {
+	if (frame.len > 0 && frame.len < 4096) {
         char *buf = malloc(frame.len + 1);
         if (!buf) {
             ESP_LOGE(TAG, "No mem for WS frame");
@@ -406,14 +407,14 @@ void http_server_start(void)
 
 void http_server_stop(void)
 {
+	if (ws_frame_process_task_handle != NULL) {
+        vTaskDelete(ws_frame_process_task_handle);
+        ws_frame_process_task_handle = NULL;
+    }
+
 	if( ws_frame_queue != NULL ) {
 		vQueueDelete(ws_frame_queue);
 		ws_frame_queue = NULL;
-	}
-
-	if( ws_frame_process_task_handle != NULL ) {
-		vTaskDelete(ws_frame_process_task_handle);
-		ws_frame_process_task_handle = NULL;
 	}
 
 	if( server != NULL ) {
