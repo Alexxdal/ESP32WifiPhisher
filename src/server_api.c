@@ -529,7 +529,11 @@ static esp_err_t api_get_passwords(ws_frame_req_t *req)
     cmd.payload = json_response;
     cmd.len = strlen(json_response);
     cmd.need_free = true;
-    ws_send_command_to_queue(&cmd);
+    
+    if (ws_send_command_to_queue(&cmd) != ESP_OK) {
+        free(json_response);
+        return ESP_FAIL;
+    }
 
     return ESP_OK;
 }
@@ -591,7 +595,11 @@ static esp_err_t api_get_karma_probes(ws_frame_req_t *req)
     cmd.payload = json;
     cmd.len = strlen(json);
     cmd.need_free = true;
-    ws_send_command_to_queue(&cmd);
+
+    if (ws_send_command_to_queue(&cmd) != ESP_OK) {
+        free(json);
+        return ESP_FAIL;
+    }
 
     return ESP_OK;
 }
