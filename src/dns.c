@@ -5,8 +5,9 @@
 
 #define DNS_PORT 53
 #define RESPONSE_IP_ADDR {192, 168, 4, 1}
-static const char *TAG= "DNS_SERVER:";
+static const char *TAG= "DNS_SERVER";
 static TaskHandle_t dns_server_task_handle = NULL;
+static volatile bool dns_server_running = false;
 
 static void dns_server_task(void *pvParameters) 
 {
@@ -44,7 +45,7 @@ static void dns_server_task(void *pvParameters)
     };
     const uint8_t ip_address[] = RESPONSE_IP_ADDR;
 
-    while (1) 
+    while (dns_server_running) 
     {
         int len = recvfrom(sock, buf, sizeof(buf), 0, (struct sockaddr *)&client_addr, &client_addr_len);
         if (len < 0) {
@@ -78,6 +79,8 @@ static void dns_server_task(void *pvParameters)
         response_len += sizeof(answer);
         sendto(sock, response, response_len, 0, (struct sockaddr *)&client_addr, client_addr_len);
     }
+    close(sock);
+    vTaskDelete(NULL);
 }
 
 
@@ -88,6 +91,7 @@ void dns_server_start(void)
         ESP_LOGE(TAG, "EvilTwin task already started.");
         return;
     }
+    dns_server_running = true;
     xTaskCreate(dns_server_task, "dns_server_task", 4096, NULL, 5, &dns_server_task_handle);
 }
 
@@ -99,6 +103,5 @@ void dns_server_stop(void)
         ESP_LOGE(TAG, "EvilTwin task is not running.");
         return;
     }
-    vTaskDelete(dns_server_task_handle);
-    dns_server_task_handle = NULL;
+    dns_server_running = false;
 }
