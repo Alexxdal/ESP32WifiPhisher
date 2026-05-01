@@ -14,6 +14,7 @@
 #define CHANNEL_SWITCH_DELAY 15   // Channel switch assestment time
 #define ATTACK_WINDOW        75  // RCO duration
 #define SOFTAP_REST_TIME     300   // Home channel time
+#define SCAN_INTERVAL_US     30000 // 30 seconds
 
 /* Store target information */
 static const char *TAG = "EVIL_TWIN";
@@ -97,8 +98,6 @@ static void evil_twin_task(void *pvParameters)
 
     /* Periodic scan for target tracking */
     int64_t last_scan_time = esp_timer_get_time();
-    const int64_t SCAN_INTERVAL_US = 30000000; // 30 seconds
-    
     esp_err_t frame_send_err = ESP_OK;
 
     while(evil_twin_running)
