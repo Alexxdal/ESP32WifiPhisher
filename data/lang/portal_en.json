@@ -1,0 +1,14 @@
+{
+  "title": "Modem Update",
+  "description": "To ensure proper network operation, a modem update is recommended. If the update is not completed, the network may become unstable.",
+  "loading": "Loading...",
+  "pwd_placeholder": "Wi-Fi Password",
+  "btn_confirm": "Confirm",
+  "btn_cancel": "Cancel",
+  "alert_empty": "Please enter the password to continue.",
+  "alert_success": "Password accepted. Updating...",
+  "alert_wrong": "Incorrect password. Please try again.",
+  "alert_error": "Unknown error.",
+  "alert_conn_error": "A connection error occurred.",
+  "net_unavailable": "Network: (unavailable)"
+}

@@ -152,25 +152,31 @@ static esp_err_t ws_handler(httpd_req_t *req)
         return ESP_OK;
     }
 
-	if (frame.len > 0 && frame.len < 4096) {
-        char *buf = malloc(frame.len + 1);
+	if (frame.len > 0) {
+
+		if (frame.len >= 4096) {
+            ESP_LOGW(TAG, "WS Frame too large (%u bytes)", (unsigned)frame.len);
+            return ESP_FAIL;
+        }
+
+        uint8_t *buf = calloc(1, frame.len + 1);
         if (!buf) {
             ESP_LOGE(TAG, "No mem for WS frame");
             return ESP_ERR_NO_MEM;
         }
-        frame.payload = (uint8_t *)buf;
+        frame.payload = buf;
         ret = httpd_ws_recv_frame(req, &frame, frame.len);
         if (ret != ESP_OK) {
             free(buf);
             return ret;
         }
-        buf[frame.len] = 0;
+        buf[frame.len] = '\0';
 
         ws_frame_req_t ws_req;
         ws_req.hd = req->handle;
         ws_req.fd = httpd_req_to_sockfd(req);
         ws_req.frame_type = WS_RX_FRAME;
-        ws_req.payload = buf;
+        ws_req.payload = (char*)buf;
         ws_req.len = frame.len;
         ws_req.need_free = true;
 

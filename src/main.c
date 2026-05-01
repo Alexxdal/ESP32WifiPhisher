@@ -10,14 +10,14 @@
 
 
 /**
- * @brief Block system when an unrecoverable error accurs.
+ * @brief Block system when an unrecoverable error occurs.
  * 
  */
 static void fatal_error_handler(void)
 { 
     while(true)
     {
-        ESP_LOGE("FATAL_ERROR:", "Fatal error occurs, system is blocked.");
+        ESP_LOGE("FATAL_ERROR:", "Fatal error occurred, system is blocked and can't continue execution.");
         vTaskDelay(pdMS_TO_TICKS(5000));
     } 
 }

@@ -118,16 +118,16 @@ void wifi_start_softap(void)
         }
     };
 
-    if(read_string_from_flash(WIFI_SSID_KEY, (char *)&wifi_config.ap.ssid) != ESP_OK )
+    if(read_string_from_nvs(WIFI_SSID_KEY, (char *)&wifi_config.ap.ssid) != ESP_OK )
     {
         strcpy((char *)&wifi_config.ap.ssid, DEFAULT_WIFI_SSID);
     }
     wifi_config.ap.ssid_len = strlen((char *)&wifi_config.ap.ssid);
-    if(read_string_from_flash(WIFI_PASS_KEY, (char *)&wifi_config.ap.password) != ESP_OK )
+    if(read_string_from_nvs(WIFI_PASS_KEY, (char *)&wifi_config.ap.password) != ESP_OK )
     {
         strcpy((char *)&wifi_config.ap.password, DEFAULT_WIFI_PASS);
     }
-    if(read_int_from_flash(WIFI_CHAN_KEY, (int32_t *)&wifi_config.ap.channel) != ESP_OK )
+    if(read_int_from_nvs(WIFI_CHAN_KEY, (int32_t *)&wifi_config.ap.channel) != ESP_OK )
     {
         wifi_config.ap.channel = DEFAULT_WIFI_CHAN;
     }
@@ -164,17 +164,22 @@ esp_err_t wifi_set_channel_safe(uint8_t new_channel)
     wifi_second_chan_t second = WIFI_SECOND_CHAN_NONE;
     esp_wifi_get_channel(&current_channel, &second);
     if(current_channel == new_channel) {
+        ESP_LOGD(TAG, "Already on channel %d, no switch needed", new_channel);
         return ESP_OK; // No need to switch
     }
 
     wifi_sta_list_t station_list;
-    esp_err_t err_list = esp_wifi_ap_get_sta_list(&station_list);
-    if (err_list == ESP_OK && station_list.num > 0) {
+    esp_err_t err = esp_wifi_ap_get_sta_list(&station_list);
+    if (err == ESP_OK && station_list.num > 0) {
         ESP_LOGW(TAG, "Forcing deauth of %d clients to switch channel", station_list.num);
-        esp_wifi_deauth_sta(0);
+        err = esp_wifi_deauth_sta(0);
+        if( err != ESP_OK) {
+            ESP_LOGW(TAG, "Failed to deauth clients: %s", esp_err_to_name(err));
+        }
         vTaskDelay(pdMS_TO_TICKS(100)); 
     }
-    esp_err_t err = esp_wifi_set_channel(new_channel, WIFI_SECOND_CHAN_NONE);
+    
+    err = esp_wifi_set_channel(new_channel, WIFI_SECOND_CHAN_NONE);
     if(err != ESP_OK) {
         ESP_LOGW(TAG, "Channel switch failed (%s) - Radio locked", esp_err_to_name(err));
     }

@@ -38,6 +38,7 @@ static void password_manager_save_spiffs(char *text)
 {
     if(password_manager_check_space(strlen(text)) != ESP_OK )
     {
+        ESP_LOGW(TAG, "Not enough space in SPIFFS to save password, skipping...");
         return;
     }
 
@@ -58,7 +59,7 @@ static void password_manager_task(void *arg)
     char text_buffer[PASSWORD_ITEM_SIZE] = { 0 };
 
     while (1) {
-        if (xQueueReceive(password_queue, text_buffer, pdMS_TO_TICKS(100))) {
+        if (xQueueReceive(password_queue, text_buffer, portMAX_DELAY)) {
             password_manager_save_spiffs(text_buffer);
         }
     }

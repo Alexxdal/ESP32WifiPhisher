@@ -188,7 +188,6 @@
             overflow-y: auto;
             display: none;
             padding-bottom: 150px;
-            /* Space for terminal */
         }
 
         .view-container.active {
@@ -197,15 +196,8 @@
         }
 
         @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(10px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
         h2 {
@@ -251,9 +243,7 @@
             text-transform: uppercase;
         }
 
-        input,
-        select,
-        textarea {
+        input, select, textarea {
             width: 100%;
             padding: 12px;
             background-color: #121212;
@@ -265,9 +255,7 @@
             transition: border 0.2s;
         }
 
-        input:focus,
-        select:focus,
-        textarea:focus {
+        input:focus, select:focus, textarea:focus {
             outline: none;
             border-color: var(--accent);
         }
@@ -360,32 +348,12 @@
             box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.5);
         }
 
-        .log-entry {
-            margin: 2px 0;
-        }
-
-        .log-time {
-            color: #666;
-            margin-right: 10px;
-        }
-
-        .log-info {
-            color: #00e676;
-        }
-
-        .log-error {
-            color: #ff5252;
-        }
-
-        .log-success {
-            color: #00e676;
-            font-weight: bold;
-            text-shadow: 0 0 5px rgba(0, 230, 118, 0.5);
-        }
-        
-        .log-warning {
-            color: #ffab40;
-        }
+        .log-entry { margin: 2px 0; }
+        .log-time { color: #666; margin-right: 10px; }
+        .log-info { color: #00e676; }
+        .log-error { color: #ff5252; }
+        .log-success { color: #00e676; font-weight: bold; text-shadow: 0 0 5px rgba(0, 230, 118, 0.5); }
+        .log-warning { color: #ffab40; }
 
         /* --- TOAST NOTIFICATION (New) --- */
         .toast {
@@ -403,9 +371,7 @@
             z-index: 2000;
         }
 
-        .toast.show {
-            transform: translateX(0);
-        }
+        .toast.show { transform: translateX(0); }
 
         /* Responsive */
         @media (max-width: 768px) {
@@ -415,25 +381,11 @@
                 transform: translateX(-100%);
                 box-shadow: 5px 0 15px rgba(0, 0, 0, 0.5);
             }
+            .sidebar.open { transform: translateX(0); }
+            .mobile-toggle { display: block; }
+            .view-container { padding: 15px; padding-bottom: 160px; }
+            .status-indicators { display: none; }
 
-            .sidebar.open {
-                transform: translateX(0);
-            }
-
-            .mobile-toggle {
-                display: block;
-            }
-
-            .view-container {
-                padding: 15px;
-                padding-bottom: 160px;
-            }
-
-            .status-indicators {
-                display: none;
-            }
-
-            /* --- EFFECTIVENESS BADGES --- */
             .impact-badge {
                 display: inline-block;
                 padding: 4px 12px;
@@ -445,25 +397,9 @@
                 margin-bottom: 8px;
                 border: 1px solid rgba(255,255,255,0.2);
             }
-
-            .impact-low {
-                background-color: rgba(108, 117, 125, 0.2);
-                color: #adb5bd;
-                border-color: #adb5bd;
-            }
-
-            .impact-medium {
-                background-color: rgba(255, 171, 64, 0.2);
-                color: #ffab40;
-                border-color: #ffab40;
-            }
-
-            .impact-high {
-                background-color: rgba(255, 82, 82, 0.2);
-                color: #ff5252;
-                border-color: #ff5252;
-            }
-
+            .impact-low { background-color: rgba(108, 117, 125, 0.2); color: #adb5bd; border-color: #adb5bd; }
+            .impact-medium { background-color: rgba(255, 171, 64, 0.2); color: #ffab40; border-color: #ffab40; }
+            .impact-high { background-color: rgba(255, 82, 82, 0.2); color: #ff5252; border-color: #ff5252; }
             .impact-critical {
                 background-color: rgba(255, 0, 0, 0.3);
                 color: #ff0000;
@@ -477,8 +413,6 @@
                 50% { box-shadow: 0 0 15px rgba(255, 0, 0, 0.6); }
                 100% { box-shadow: 0 0 5px rgba(255, 0, 0, 0.2); }
             }
-
-            /* Hide status on mobile top bar */
         }
     </style>
 </head>
@@ -488,58 +422,47 @@
     <div class="sidebar" id="sidebar">
         <div class="brand">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                <path
-                    d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z" />
+                <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z" />
             </svg>
             <span>ESP32 AUDIT</span>
         </div>
         <div class="menu">
-            <div class="menu-category">Dashboard</div>
+            <div class="menu-category" data-i18n="dashboard_cat">Dashboard</div>
             <div class="menu-item active" onclick="showView('view-home', this)">
-                <svg viewBox="0 0 24 24">
-                    <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
-                </svg> Status Overview
+                <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" /></svg>
+                <span data-i18n="status_overview">Status Overview</span>
             </div>
-            <div class="menu-category">WiFi Modules</div>
+            
+            <div class="menu-category" data-i18n="wifi_modules_cat">WiFi Modules</div>
             <div class="menu-item" onclick="showView('view-sniffer', this)">
-                <svg viewBox="0 0 24 24">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
-                </svg> Packet Analyzer
+                <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg> 
+                <span data-i18n="packet_analyzer">Packet Analyzer</span>
             </div>
             <div class="menu-item" onclick="showView('view-scan', this)">
-                <svg viewBox="0 0 24 24">
-                    <path
-                        d="M12.01 21.49L23.64 7c-.45-.34-4.93-4-11.64-4C5.28 3 .81 6.66.36 7l11.63 14.49.01.01.01-.01z" />
-                </svg> Scanner & Sniff
+                <svg viewBox="0 0 24 24"><path d="M12.01 21.49L23.64 7c-.45-.34-4.93-4-11.64-4C5.28 3 .81 6.66.36 7l11.63 14.49.01.01.01-.01z" /></svg> 
+                <span data-i18n="scanner_sniff">Scanner & Sniff</span>
             </div>
             <div class="menu-item" onclick="showView('view-eviltwin', this)">
-                <svg viewBox="0 0 24 24">
-                    <path
-                        d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z" />
-                </svg> Evil Twin Attack
+                <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z" /></svg> 
+                <span data-i18n="eviltwin_attack">Evil Twin Attack</span>
             </div>
             <div class="menu-item" onclick="showView('view-karma', this)">
-                <svg viewBox="0 0 24 24">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
-                </svg> Karma Attack
+                <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg> 
+                <span data-i18n="karma_attack">Karma Attack</span>
             </div>
             <div class="menu-item" onclick="showView('view-deauth', this)">
-                <svg viewBox="0 0 24 24">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zM4 12c0-4.42 3.58-8 8-8 1.85 0 3.55.63 4.9 1.69L5.69 16.9C4.63 15.55 4 13.85 4 12zm8 8c-1.85 0-3.55-.63-4.9-1.69L18.31 7.1C19.37 8.45 20 10.15 20 12c0 4.42-3.58 8-8 8z"/>
-                </svg> Deauther
+                <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zM4 12c0-4.42 3.58-8 8-8 1.85 0 3.55.63 4.9 1.69L5.69 16.9C4.63 15.55 4 13.85 4 12zm8 8c-1.85 0-3.55-.63-4.9-1.69L18.31 7.1C19.37 8.45 20 10.15 20 12c0 4.42-3.58 8-8 8z"/></svg> 
+                <span data-i18n="deauth_attack">Deauther</span>
             </div>
-            <div class="menu-category">System</div>
+            
+            <div class="menu-category" data-i18n="system_cat">System</div>
             <div class="menu-item" onclick="showView('view-passwords', this)">
-                <svg viewBox="0 0 24 24">
-                    <path
-                        d="M12.65 10C11.83 7.67 9.61 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.61 0 4.83-1.67 5.65-4H17v4h4v-4h2v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z" />
-                </svg> Captured Creds
+                <svg viewBox="0 0 24 24"><path d="M12.65 10C11.83 7.67 9.61 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.61 0 4.83-1.67 5.65-4H17v4h4v-4h2v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z" /></svg> 
+                <span data-i18n="captured_creds">Captured Creds</span>
             </div>
             <div class="menu-item" onclick="showView('view-settings', this)">
-                <svg viewBox="0 0 24 24">
-                    <path
-                        d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.58 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" />
-                </svg> Configuration
+                <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.58 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" /></svg> 
+                <span data-i18n="configuration">Configuration</span>
             </div>
         </div>
     </div>
@@ -551,18 +474,22 @@
                     <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z" />
                 </svg>
             </div>
-            <div class="page-title" id="page-title">Status Overview</div>
+            <div class="page-title" id="page-title" data-i18n="status_overview">Status Overview</div>
 
             <div class="status-indicators">
-                <div class="status-badge">UPTIME <span class="status-value" id="uptime-val">--:--:--</span></div>
+                <select id="lang-select" onchange="changeLanguage(this.value)" style="background: #121212; color: white; border: 1px solid #444; border-radius: 4px; padding: 4px; font-size: 0.8rem; margin-right: 15px;">
+                    <option value="en">EN</option>
+                    <option value="it">IT</option>
+                </select>
+                <div class="status-badge"><span data-i18n="uptime">UPTIME</span> <span class="status-value" id="uptime-val">--:--:--</span></div>
 
                 <div class="ram-container">
-                    <div class="ram-text"><span>RAM</span> <span id="ram-text-val">0%</span></div>
+                    <div class="ram-text"><span data-i18n="ram">RAM</span> <span id="ram-text-val">0%</span></div>
                     <div class="progress-bg">
                         <div class="progress-fill" id="ram-bar" style="width: 0%"></div>
                     </div>
                 </div>
-                <div class="status-badge">SD <span class="status-value" id="status-sd">--</span></div>
+                <div class="status-badge"><span data-i18n="sd">SD</span> <span class="status-value" id="status-sd">--</span></div>
             </div>
         </div>
 
@@ -570,53 +497,53 @@
 
         <div id="view-home" class="view-container active">
             <div style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 1px solid #333; padding-bottom: 10px; margin-bottom: 20px;">
-                <h2 style="border:none; padding:0; margin:0;">Dashboard</h2>
+                <h2 style="border:none; padding:0; margin:0;" data-i18n="dashboard_title">Dashboard</h2>
                 <div id="global-status-badge" style="background:#333; color:#aaa; padding:5px 12px; border-radius:4px; font-size:0.8rem; font-weight:bold; border:1px solid #444;">
-                    SYSTEM IDLE
+                    <span data-i18n="system_idle">SYSTEM IDLE</span>
                 </div>
             </div>
 
             <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 25px;">
                 <div id="mod-et" style="background:#121212; border:1px solid #333; padding:15px; border-radius:6px; text-align:center; transition:all 0.3s;">
-                    <div style="font-size:0.75rem; color:#666; font-weight:bold;">EVIL TWIN</div>
-                    <div class="mod-status" style="font-size:1rem; font-weight:bold; color:#444; margin-top:5px;">INACTIVE</div>
+                    <div style="font-size:0.75rem; color:#666; font-weight:bold;" data-i18n="mod_et">EVIL TWIN</div>
+                    <div class="mod-status" style="font-size:1rem; font-weight:bold; color:#444; margin-top:5px;" data-i18n="status_inactive">INACTIVE</div>
                 </div>
                 <div id="mod-deauth" style="background:#121212; border:1px solid #333; padding:15px; border-radius:6px; text-align:center; transition:all 0.3s;">
-                    <div style="font-size:0.75rem; color:#666; font-weight:bold;">DEAUTHER</div>
-                    <div class="mod-status" style="font-size:1rem; font-weight:bold; color:#444; margin-top:5px;">INACTIVE</div>
+                    <div style="font-size:0.75rem; color:#666; font-weight:bold;" data-i18n="mod_deauth">DEAUTHER</div>
+                    <div class="mod-status" style="font-size:1rem; font-weight:bold; color:#444; margin-top:5px;" data-i18n="status_inactive">INACTIVE</div>
                 </div>
                 <div id="mod-karma" style="background:#121212; border:1px solid #333; padding:15px; border-radius:6px; text-align:center; transition:all 0.3s;">
-                    <div style="font-size:0.75rem; color:#666; font-weight:bold;">KARMA</div>
-                    <div class="mod-status" style="font-size:1rem; font-weight:bold; color:#444; margin-top:5px;">INACTIVE</div>
+                    <div style="font-size:0.75rem; color:#666; font-weight:bold;" data-i18n="mod_karma">KARMA</div>
+                    <div class="mod-status" style="font-size:1rem; font-weight:bold; color:#444; margin-top:5px;" data-i18n="status_inactive">INACTIVE</div>
                 </div>
             </div>
 
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
                 
                 <div class="card" style="border-top: 3px solid var(--accent); position: relative;">
-                    <div class="stat-label">PRIMARY TARGET INFO</div>
+                    <div class="stat-label" data-i18n="primary_target_info">PRIMARY TARGET INFO</div>
                     
                     <div style="margin-top: 15px;">
                         <div style="display:flex; justify-content:space-between; align-items:flex-end;">
-                            <div id="home-ssid" style="font-size: 1.5rem; font-weight: bold; color: white; line-height:1.2; word-break: break-all;">No Target</div>
+                            <div id="home-ssid" style="font-size: 1.5rem; font-weight: bold; color: white; line-height:1.2; word-break: break-all;" data-i18n="no_target">No Target</div>
                             <div id="home-rssi" style="font-size: 0.9rem; color: #666; font-weight:bold; white-space: nowrap;">-- dBm</div>
                         </div>
                         
                         <div style="margin-top:15px; display:grid; grid-template-columns: 1fr 1fr; gap:10px; font-size:0.85rem;">
                             <div style="background:#121212; padding:10px; border-radius:4px; border:1px solid #333;">
-                                <span style="color:#666; display:block; font-size:0.65rem; margin-bottom:2px;">MAC ADDRESS</span>
+                                <span style="color:#666; display:block; font-size:0.65rem; margin-bottom:2px;" data-i18n="mac_address">MAC ADDRESS</span>
                                 <span id="home-bssid" style="font-family:monospace; color:#ccc; letter-spacing:1px;">--:--:--:--:--:--</span>
                             </div>
                             <div style="background:#121212; padding:10px; border-radius:4px; border:1px solid #333;">
-                                <span style="color:#666; display:block; font-size:0.65rem; margin-bottom:2px;">VENDOR</span>
+                                <span style="color:#666; display:block; font-size:0.65rem; margin-bottom:2px;" data-i18n="vendor">VENDOR</span>
                                 <span id="home-vendor" style="color:#ccc;">--</span>
                             </div>
                             <div style="background:#121212; padding:10px; border-radius:4px; border:1px solid #333;">
-                                <span style="color:#666; display:block; font-size:0.65rem; margin-bottom:2px;">CHANNEL</span>
+                                <span style="color:#666; display:block; font-size:0.65rem; margin-bottom:2px;" data-i18n="channel">CHANNEL</span>
                                 <span id="home-ch" style="color:var(--accent); font-weight:bold; font-size:1.1rem;">--</span>
                             </div>
                             <div style="background:#121212; padding:10px; border-radius:4px; border:1px solid #333;">
-                                <span style="color:#666; display:block; font-size:0.65rem; margin-bottom:2px;">SECURITY</span>
+                                <span style="color:#666; display:block; font-size:0.65rem; margin-bottom:2px;" data-i18n="security">SECURITY</span>
                                 <span id="home-auth" style="color:#ccc;">--</span>
                             </div>
                         </div>
@@ -624,25 +551,25 @@
                 </div>
 
                 <div class="card" style="border-top: 3px solid #ff5252;">
-                    <div class="stat-label">INTELLIGENCE & CAPTURE</div>
+                    <div class="stat-label" data-i18n="intel_capture">INTELLIGENCE & CAPTURE</div>
                     
                     <div style="margin-top:20px; display:flex; flex-direction:column; gap:15px;">
                         <div style="display:flex; align-items:center; justify-content:space-between; padding-bottom:10px; border-bottom:1px solid #333;">
                             <div>
-                                <div style="font-size:0.85rem; font-weight:bold; color:#fff;">WPA Handshake</div>
-                                <div style="font-size:0.75rem; color:#888;">Hash collection</div>
+                                <div style="font-size:0.85rem; font-weight:bold; color:#fff;" data-i18n="wpa_handshake">WPA Handshake</div>
+                                <div style="font-size:0.75rem; color:#888;" data-i18n="hash_collection">Hash collection</div>
                             </div>
-                            <div id="home-hs-badge" style="background:#222; color:#555; padding:4px 10px; border-radius:4px; font-size:0.7rem; font-weight:bold; letter-spacing:1px;">
+                            <div id="home-hs-badge" style="background:#222; color:#555; padding:4px 10px; border-radius:4px; font-size:0.7rem; font-weight:bold; letter-spacing:1px;" data-i18n="status_waiting">
                                 WAITING
                             </div>
                         </div>
 
                         <div style="display:flex; align-items:center; justify-content:space-between; padding-bottom:10px; border-bottom:1px solid #333;">
                             <div>
-                                <div style="font-size:0.85rem; font-weight:bold; color:#fff;">5GHz Twin</div>
-                                <div style="font-size:0.75rem; color:#888;">Dual-band AP detection</div>
+                                <div style="font-size:0.85rem; font-weight:bold; color:#fff;" data-i18n="5ghz_twin">5GHz Twin</div>
+                                <div style="font-size:0.75rem; color:#888;" data-i18n="dual_band_detection">Dual-band AP detection</div>
                             </div>
-                            <div id="home-5g-badge" style="background:#222; color:#555; padding:4px 10px; border-radius:4px; font-size:0.7rem; font-weight:bold; letter-spacing:1px;">
+                            <div id="home-5g-badge" style="background:#222; color:#555; padding:4px 10px; border-radius:4px; font-size:0.7rem; font-weight:bold; letter-spacing:1px;" data-i18n="status_scanning">
                                 SCANNING
                             </div>
                         </div>
@@ -650,39 +577,39 @@
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 5px;">
                             <div style="text-align:center; background:#1a1a1a; padding:10px; border-radius:4px;">
                                 <div id="home-clients" style="font-size: 1.5rem; font-weight:bold; color: #fff;">0</div>
-                                <div style="font-size: 0.7rem; color: #00bcd4; font-weight:bold;">CLIENTS</div>
+                                <div style="font-size: 0.7rem; color: #00bcd4; font-weight:bold;" data-i18n="clients">CLIENTS</div>
                             </div>
                             <div style="text-align:center; background:#1a1a1a; padding:10px; border-radius:4px;">
                                 <div id="home-aps" style="font-size: 1.5rem; font-weight:bold; color: #fff;">0</div>
-                                <div style="font-size: 0.7rem; color: #aaa; font-weight:bold;">NETWORKS</div>
+                                <div style="font-size: 0.7rem; color: #aaa; font-weight:bold;" data-i18n="networks">NETWORKS</div>
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <div class="card" style="border-top: 3px solid #00e676;">
-                    <div class="stat-label">PACKET INJECTION HEALTH</div>
+                    <div class="stat-label" data-i18n="packet_injection_health">PACKET INJECTION HEALTH</div>
                     
                     <div style="margin-top: 20px;">
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
                             <div style="text-align: center; background: #151515; padding: 10px; border-radius: 4px;">
                                 <div id="stat-tx-sent" style="font-size: 1.8rem; font-weight: bold; color: white;">0</div>
-                                <div style="font-size: 0.7rem; color: #aaa; letter-spacing: 1px;">SENT</div>
+                                <div style="font-size: 0.7rem; color: #aaa; letter-spacing: 1px;" data-i18n="sent">SENT</div>
                             </div>
                             <div style="text-align: center; background: #151515; padding: 10px; border-radius: 4px;">
                                 <div id="stat-tx-drop" style="font-size: 1.8rem; font-weight: bold; color: #ff5252;">0</div>
-                                <div style="font-size: 0.7rem; color: #aaa; letter-spacing: 1px;">DROPPED</div>
+                                <div style="font-size: 0.7rem; color: #aaa; letter-spacing: 1px;" data-i18n="dropped">DROPPED</div>
                             </div>
                         </div>
 
                         <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: #aaa; margin-bottom: 5px;">
-                            <span>INJECTION QUALITY</span>
+                            <span data-i18n="injection_quality">INJECTION QUALITY</span>
                             <span id="stat-quality-perc">100%</span>
                         </div>
                         <div class="progress-bg" style="background: #333; height: 6px;">
                             <div id="stat-quality-bar" class="progress-fill" style="width: 100%; background: #00e676;"></div>
                         </div>
-                        <div id="stat-message" style="font-size: 0.7rem; color: #666; margin-top: 8px; font-style: italic;">
+                        <div id="stat-message" style="font-size: 0.7rem; color: #666; margin-top: 8px; font-style: italic;" data-i18n="sys_idle_msg">
                             System idle.
                         </div>
                     </div>
@@ -691,66 +618,65 @@
         </div>
 
         <div id="view-sniffer" class="view-container">
-            <h2>Live Packet Analyzer</h2>
+            <h2 data-i18n="live_packet_analyzer">Live Packet Analyzer</h2>
             
             <div class="card">
-                <label style="color:var(--accent); border-bottom:1px solid #333; padding-bottom:5px; margin-bottom:15px; margin-top:0;">CAPTURE CONFIGURATION</label>
+                <label style="color:var(--accent); border-bottom:1px solid #333; padding-bottom:5px; margin-bottom:15px; margin-top:0;" data-i18n="capture_configuration">CAPTURE CONFIGURATION</label>
                 
                 <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:15px; margin-bottom:20px;">
                     <div>
-                        <label>Frequency</label>
+                        <label data-i18n="frequency">Frequency</label>
                         <div style="display:flex; gap:10px; align-items:center;">
-                            <select id="sniff-chan" style="flex:1;">
-                                </select>
+                            <select id="sniff-chan" style="flex:1;"></select>
                             <div style="display:flex; align-items:center; gap:5px; background:#121212; padding:8px; border:1px solid #444; border-radius:4px; height: 42px; box-sizing: border-box;">
                                 <input type="checkbox" id="sniff-hop" style="width:auto; margin:0;">
-                                <span style="font-size:0.8rem; color:#aaa; font-weight:bold;">HOP</span>
+                                <span style="font-size:0.8rem; color:#aaa; font-weight:bold;" data-i18n="hop">HOP</span>
                             </div>
                         </div>
                     </div>
 
                     <div>
-                        <label>Main Frame Type</label>
+                        <label data-i18n="main_frame_type">Main Frame Type</label>
                         <select id="sniff-type" onchange="updateSubtypes()">
-                            <option value="0">ALL TRAFFIC</option>
-                            <option value="1">MANAGEMENT</option>
-                            <option value="2">CONTROL</option>
-                            <option value="3">DATA</option>
+                            <option value="0" data-i18n="opt_all_traffic">ALL TRAFFIC</option>
+                            <option value="1" data-i18n="opt_mgmt">MANAGEMENT</option>
+                            <option value="2" data-i18n="opt_ctrl">CONTROL</option>
+                            <option value="3" data-i18n="opt_data">DATA</option>
                         </select>
                     </div>
 
                     <div>
-                        <label>Subtype Filter</label>
+                        <label data-i18n="subtype_filter">Subtype Filter</label>
                         <select id="sniff-subtype" disabled>
-                            <option value="0">All Subtypes</option>
+                            <option value="0" data-i18n="opt_all_subtypes">All Subtypes</option>
                         </select>
                     </div>
                 </div>
 
-                <label style="color:var(--accent); border-bottom:1px solid #333; padding-bottom:5px; margin-bottom:15px;">DISPLAY FILTERS</label>
+                <label style="color:var(--accent); border-bottom:1px solid #333; padding-bottom:5px; margin-bottom:15px;" data-i18n="display_filters">DISPLAY FILTERS</label>
                 
                 <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap:10px; margin-bottom:15px;">
-                    <input type="text" id="disp-filter-src" placeholder="Source MAC">
-                    <input type="text" id="disp-filter-dst" placeholder="Dest MAC">
-                    <input type="text" id="disp-filter-ssid" placeholder="SSID / Info">
-                    <input type="number" id="disp-filter-rssi" placeholder="Min RSSI (-90)" value="-95">
+                    <input type="text" id="disp-filter-src" data-i18n="ph_source_mac" placeholder="Source MAC">
+                    <input type="text" id="disp-filter-dst" data-i18n="ph_dest_mac" placeholder="Dest MAC">
+                    <input type="text" id="disp-filter-ssid" data-i18n="ph_ssid_info" placeholder="SSID / Info">
+                    <input type="number" id="disp-filter-rssi" data-i18n="ph_min_rssi" placeholder="Min RSSI (-90)" value="-95">
                 </div>
                 
                 <div class="btn-group">
                     <button onclick="startCapture()" id="btn-sniff-start">
-                        <svg style="width:16px; height:16px; vertical-align:middle; margin-right:5px;" viewBox="0 0 24 24"><path fill="currentColor" d="M8 5v14l11-7z"/></svg> START
+                        <svg style="width:16px; height:16px; vertical-align:middle; margin-right:5px;" viewBox="0 0 24 24"><path fill="currentColor" d="M8 5v14l11-7z"/></svg> <span data-i18n="btn_start">START</span>
                     </button>
                     
                     <button class="danger" onclick="stopCapture()" id="btn-sniff-stop" disabled style="opacity:0.5; cursor:not-allowed;">
-                        <svg style="width:16px; height:16px; vertical-align:middle; margin-right:5px;" viewBox="0 0 24 24"><path fill="currentColor" d="M6 6h12v12H6z"/></svg> STOP
+                        <svg style="width:16px; height:16px; vertical-align:middle; margin-right:5px;" viewBox="0 0 24 24"><path fill="currentColor" d="M6 6h12v12H6z"/></svg> <span data-i18n="btn_stop">STOP</span>
                     </button>
 
-                    <button class="secondary" onclick="togglePause()" id="btn-sniff-pause">PAUSE VIEW</button>
-                    <button class="secondary" onclick="clearSnifferTable()">CLEAR</button>
+                    <button class="secondary" onclick="togglePause()" id="btn-sniff-pause" data-i18n="btn_pause_view">PAUSE VIEW</button>
+                    <button class="secondary" onclick="clearSnifferTable()" data-i18n="btn_clear">CLEAR</button>
                 </div>
                 
                 <div style="margin-top:5px; font-size:0.8rem; color:#666; text-align:right;">
-                    Rx: <span id="pkt-total-count">0</span> | Shown: <span id="pkt-display-count">0</span>
+                    <span data-i18n="rx_count">Rx:</span> <span id="pkt-total-count">0</span> <span data-i18n="shown_count">| Shown:</span> <span id="pkt-display-count">0</span>
                 </div>
             </div>
 
@@ -758,14 +684,14 @@
                 <table class="wifi-table" style="font-family: 'Courier New', monospace; font-size: 0.8rem;">
                     <thead style="position: sticky; top: 0; background: #1e1e1e; z-index: 10;">
                         <tr>
-                            <th style="width:40px">Ch</th>
-                            <th style="width:50px">dBm</th>
-                            <th style="width:60px">Type</th>
-                            <th style="width:100px">Subtype</th>
-                            <th style="width:130px">Source</th>
-                            <th style="width:130px">Destination</th>
-                            <th style="width:40px">Len</th>
-                            <th>Info</th>
+                            <th style="width:40px" data-i18n="th_ch">Ch</th>
+                            <th style="width:50px" data-i18n="th_dbm">dBm</th>
+                            <th style="width:60px" data-i18n="th_type">Type</th>
+                            <th style="width:100px" data-i18n="th_subtype">Subtype</th>
+                            <th style="width:130px" data-i18n="th_source">Source</th>
+                            <th style="width:130px" data-i18n="th_destination">Destination</th>
+                            <th style="width:40px" data-i18n="th_len">Len</th>
+                            <th data-i18n="th_info">Info</th>
                         </tr>
                     </thead>
                     <tbody id="sniffer-body"></tbody>
@@ -774,28 +700,28 @@
         </div>
 
         <div id="view-scan" class="view-container">
-            <h2>WiFi Scanner</h2>
+            <h2 data-i18n="wifi_scanner_title">WiFi Scanner</h2>
             <div class="card">
-                <p style="margin-top:0;">Scan for nearby Access Points to select a target.</p>
+                <p style="margin-top:0;" data-i18n="scan_desc">Scan for nearby Access Points to select a target.</p>
                 <div class="btn-group">
-                    <button onclick="scanNetworks()">Start Scan</button>
+                    <button onclick="scanNetworks()" data-i18n="btn_start_scan">Start Scan</button>
                 </div>
             </div>
             <div id="network-list" class="card" style="padding:0; overflow-x:auto;">
                 <table class="wifi-table">
                     <thead>
                         <tr>
-                            <th>SSID</th>
-                            <th>RSSI</th>
-                            <th>CH</th>
-                            <th>BSSID</th>
-                            <th>Sec</th>
-                            <th>Action</th>
+                            <th data-i18n="th_ssid">SSID</th>
+                            <th data-i18n="th_rssi">RSSI</th>
+                            <th data-i18n="th_ch">CH</th>
+                            <th data-i18n="th_bssid">BSSID</th>
+                            <th data-i18n="th_sec">Sec</th>
+                            <th data-i18n="th_action">Action</th>
                         </tr>
                     </thead>
                     <tbody id="wifi-networks-body">
                         <tr>
-                            <td colspan="6" style="text-align:center; padding: 20px;">No scan data</td>
+                            <td colspan="6" style="text-align:center; padding: 20px;" data-i18n="no_scan_data">No scan data</td>
                         </tr>
                     </tbody>
                 </table>
@@ -803,68 +729,66 @@
         </div>
 
         <div id="view-eviltwin" class="view-container">
-            <h2>Evil Twin Attack</h2>
+            <h2 data-i18n="evil_twin_title">Evil Twin Attack</h2>
             <div class="card">
-                <label>ATTACK SCENARIO</label>
+                <label data-i18n="attack_scenario">ATTACK SCENARIO</label>
                 <select id="attack-scenario">
-                    <option value="0">Firmware Upgrade</option>
-                    <option value="1">Fake Network Manager</option>
-                    <option value="2">OAuth Login</option>
+                    <option value="0" data-i18n="opt_fw_upgrade">Firmware Upgrade</option>
+                    <option value="1" data-i18n="opt_fake_nm">Fake Network Manager</option>
+                    <option value="2" data-i18n="opt_oauth">OAuth Login</option>
                 </select>
 
-                <div
-                    style="margin-top: 20px; border: 1px dashed #444; padding: 15px; border-radius: 4px; background:#181818;">
-                    <label style="margin-top:0;">TARGET DETAILS</label>
-                    <div style="font-size: 1.2rem; color: var(--accent); font-weight:bold;" id="current-target-ssid">No
-                        Target Selected</div>
+                <div style="margin-top: 20px; border: 1px dashed #444; padding: 15px; border-radius: 4px; background:#181818;">
+                    <label style="margin-top:0;" data-i18n="target_details">TARGET DETAILS</label>
+                    <div style="font-size: 1.2rem; color: var(--accent); font-weight:bold;" id="current-target-ssid" data-i18n="no_target_selected">No Target Selected</div>
                     <div style="font-family:monospace; color: #666;" id="current-target-bssid">--:--:--:--:--:--</div>
                 </div>
 
                 <div class="btn-group">
-                    <button class="danger" onclick="startEvilTwin()">LAUNCH ATTACK</button>
-                    <button class="secondary" onclick="stopEvilTwin()">TERMINATE</button>
+                    <button class="danger" onclick="startEvilTwin()" data-i18n="btn_launch_attack">LAUNCH ATTACK</button>
+                    <button class="secondary" onclick="stopEvilTwin()" data-i18n="btn_terminate">TERMINATE</button>
                 </div>
             </div>
         </div>
 
         <div id="view-karma" class="view-container">
-            <h2>Karma Probe Scanner</h2>
+            <h2 data-i18n="karma_probe_scanner">Karma Probe Scanner</h2>
             
             <div class="card">
-                <label>1. PHISHING SCENARIO</label>
+                <label data-i18n="phishing_scenario_lbl">1. PHISHING SCENARIO</label>
                 <select id="karma-scenario">
-                    <option value="0">Firmware Upgrade</option>
-                    <option value="1">Fake Network Manager</option>
-                    <option value="2">OAuth Login</option>
+                    <option value="0" data-i18n="opt_fw_upgrade">Firmware Upgrade</option>
+                    <option value="1" data-i18n="opt_fake_nm">Fake Network Manager</option>
+                    <option value="2" data-i18n="opt_oauth">OAuth Login</option>
                 </select>
 
-                <p style="margin-top:15px; font-size:0.9rem; color:#aaa;">
+                <p style="margin-top:15px; font-size:0.9rem; color:#aaa;" data-i18n="scan_devices_lbl">
                     2. Scan for devices probing for known networks.
                 </p>
 
                 <div class="btn-group">
-                    <button onclick="startKarmaScan()">SCAN PROBES</button>
-                    <button class="secondary" onclick="stopKarmaScan()">STOP SCAN</button>
+                    <button onclick="startKarmaScan()" data-i18n="btn_scan_probes">SCAN PROBES</button>
+                    <button class="secondary" onclick="stopKarmaScan()" data-i18n="btn_stop_scan">STOP SCAN</button>
                 </div>
             </div>
 
             <div class="card" style="padding:0; overflow-x:auto;">
-                <div style="padding:15px; border-bottom:1px solid #333; font-weight:bold; color:var(--accent);">
+                <div style="padding:15px; border-bottom:1px solid #333; font-weight:bold; color:var(--accent);" data-i18n="detected_probes">
                     DETECTED PROBES
                 </div>
                 <table class="wifi-table">
                     <thead>
                         <tr>
-                            <th>Victim MAC</th>
-                            <th>Target SSID</th>
-                            <th>RSSI</th>
-                            <th>CH</th>
-                            <th>Action</th>
+                            <th data-i18n="th_victim_mac">Victim MAC</th>
+                            <th data-i18n="th_target_ssid">Target SSID</th>
+                            <th data-i18n="th_rssi">RSSI</th>
+                            <th data-i18n="th_ch">CH</th>
+                            <th data-i18n="th_action">Action</th>
                         </tr>
                     </thead>
                     <tbody id="karma-scan-body">
                         <tr>
-                            <td colspan="5" style="text-align:center; padding: 20px; color:#666;">
+                            <td colspan="5" style="text-align:center; padding: 20px; color:#666;" data-i18n="click_scan_probes">
                                 Click 'SCAN PROBES' to start listening...
                             </td>
                         </tr>
@@ -874,40 +798,40 @@
         </div>
 
         <div id="view-deauth" class="view-container">
-            <h2>Deauthentication Attack</h2>
+            <h2 data-i18n="deauth_attack_title">Deauthentication Attack</h2>
             
             <div class="card">
-                <label>TARGET MODE</label>
+                <label data-i18n="target_mode">TARGET MODE</label>
                 <select id="deauth-mode" onchange="updateDeauthUI()">
-                    <option value="single">Single Target (Selected SSID)</option>
-                    <option value="broadcast">All Networks (Broadcast/Hopping)</option>
+                    <option value="single" data-i18n="opt_single_target">Single Target (Selected SSID)</option>
+                    <option value="broadcast" data-i18n="opt_all_networks">All Networks (Broadcast/Hopping)</option>
                 </select>
 
                 <div id="deauth-info-box" style="margin-top: 15px; margin-bottom: 20px; border: 1px dashed var(--danger); padding: 15px; border-radius: 4px; background:rgba(255, 82, 82, 0.05);">
-                    <label style="margin-top:0; color:var(--danger);">CURRENT TARGET</label>
-                    <div style="font-size: 1.3rem; font-weight:bold; color:white;" id="deauth-target-ssid">No Target Selected</div>
+                    <label style="margin-top:0; color:var(--danger);" data-i18n="current_target">CURRENT TARGET</label>
+                    <div style="font-size: 1.3rem; font-weight:bold; color:white;" id="deauth-target-ssid" data-i18n="no_target_selected">No Target Selected</div>
                     <div style="font-family:monospace; color: #888;" id="deauth-target-bssid">--:--:--:--:--:--</div>
-                    <div style="font-size: 0.8rem; color: #666; margin-top:5px;">CHANNEL: <span id="deauth-target-ch">--</span></div>
+                    <div style="font-size: 0.8rem; color: #666; margin-top:5px;"><span data-i18n="lbl_channel">CHANNEL: </span> <span id="deauth-target-ch">--</span></div>
                 </div>
 
                 <div>
-                    <label>ATTACK TYPE</label>
+                    <label data-i18n="attack_type">ATTACK TYPE</label>
                     <select id="deauth-frame-type" onchange="updateAttackTypeDesc()">
-                        <option value="0" selected>Deauthentication frame</option>
-                        <option value="1">Disassociation frame</option>
-                        <option value="2">Broadcast deauth/disassoc</option>
-                        <option value="3">Authentication flood</option>
-                        <option value="4">Association/Reassociation flood</option>
-                        <option value="5">CSA spoofing</option>
-                        <option value="6">EAPOL-Logoff spoofing</option>
-                        <option value="7">EAPOL-Start spam</option>
-                        <option value="8">EAP Failure injection</option>
-                        <option value="9">EAP Identity request spam / EAP rounds abuse</option>
-                        <option value="10">4-Way Handshake disruption</option>
-                        <option value="11">WPA3 SAE flood</option>
-                        <option value="12">PMF/802.11w downgrade pressure</option>
-                        <option value="13">NAV/RTS/CTS abuse</option>
-                        <option value="14">Beacon manipulation</option>
+                        <option value="0" selected data-i18n="opt_deauth_frame">Deauthentication frame</option>
+                        <option value="1" data-i18n="opt_disassoc_frame">Disassociation frame</option>
+                        <option value="2" data-i18n="opt_broadcast_deauth">Broadcast deauth/disassoc</option>
+                        <option value="3" data-i18n="opt_auth_flood">Authentication flood</option>
+                        <option value="4" data-i18n="opt_assoc_flood">Association/Reassociation flood</option>
+                        <option value="5" data-i18n="opt_csa_spoof">CSA spoofing</option>
+                        <option value="6" data-i18n="opt_eapol_logoff">EAPOL-Logoff spoofing</option>
+                        <option value="7" data-i18n="opt_eapol_start">EAPOL-Start spam</option>
+                        <option value="8" data-i18n="opt_eap_fail">EAP Failure injection</option>
+                        <option value="9" data-i18n="opt_eap_id">EAP Identity request spam / EAP rounds abuse</option>
+                        <option value="10" data-i18n="opt_4way_disrupt">4-Way Handshake disruption</option>
+                        <option value="11" data-i18n="opt_wpa3_sae">WPA3 SAE flood</option>
+                        <option value="12" data-i18n="opt_pmf_downgrade">PMF/802.11w downgrade pressure</option>
+                        <option value="13" data-i18n="opt_nav_abuse">NAV/RTS/CTS abuse</option>
+                        <option value="14" data-i18n="opt_beacon_manip">Beacon manipulation</option>
                     </select>
 
                     <div id="attack-meta" style="margin-top: 15px;"></div>
@@ -917,53 +841,53 @@
                 </div>
                 
                 <p style="font-size: 0.8rem; color: #666; margin-top: 20px;">
-                    <strong style="color:var(--danger)">WARNING:</strong> 
-                    <span id="deauth-warning-text">This will disconnect clients from the selected Access Point.</span>
+                    <strong style="color:var(--danger)" data-i18n="warning">WARNING:</strong> 
+                    <span id="deauth-warning-text" data-i18n="deauth_warning_text">This will disconnect clients from the selected Access Point.</span>
                 </p>
 
                 <div class="btn-group">
-                    <button class="danger" onclick="startDeauth()">START ATTACK</button>
-                    <button class="secondary" onclick="stopDeauth()">STOP</button>
+                    <button class="danger" onclick="startDeauth()" data-i18n="btn_start_attack">START ATTACK</button>
+                    <button class="secondary" onclick="stopDeauth()" data-i18n="btn_stop">STOP</button>
                 </div>
             </div>
 
             <div class="terminal-panel" style="position: relative; height: 100px; margin-top:20px; border: 1px solid #333; box-shadow:none;">
-                <div class="log-entry"><span class="log-time">INFO</span> Select 'All Networks' or pick a target from Scanner.</div>
+                <div class="log-entry"><span class="log-time">INFO</span> <span data-i18n="select_all_networks">Select 'All Networks' or pick a target from Scanner.</span></div>
             </div>
         </div>
 
         <div id="view-passwords" class="view-container">
-            <h2>Captured Credentials</h2>
+            <h2 data-i18n="captured_creds_title">Captured Credentials</h2>
             <div class="card">
                 <textarea id="passwords-textarea" readonly
                     style="height: 350px; background-color: #000; color:#0f0; border:none;"></textarea>
                 <div class="btn-group">
-                    <button onclick="fetchPasswords()">REFRESH</button>
+                    <button onclick="fetchPasswords()" data-i18n="btn_refresh">REFRESH</button>
                     <button class="secondary"
-                        onclick="document.getElementById('passwords-textarea').value=''">CLEAR</button>
+                        onclick="document.getElementById('passwords-textarea').value=''" data-i18n="btn_clear">CLEAR</button>
                 </div>
             </div>
         </div>
 
         <div id="view-settings" class="view-container">
-            <h2>Configuration</h2>
+            <h2 data-i18n="configuration_title">Configuration</h2>
             <div class="card">
                 <form id="hotspot-form" onsubmit="handleSettings(event)">
-                    <label>Management AP SSID</label>
+                    <label data-i18n="mgmt_ap_ssid">Management AP SSID</label>
                     <input type="text" id="ssid" name="ssid">
-                    <label>Password</label>
+                    <label data-i18n="password">Password</label>
                     <input type="text" id="password" name="password">
-                    <label>Channel</label>
+                    <label data-i18n="channel">Channel</label>
                     <input type="number" id="channel" name="channel" min="1" max="13">
                     <div class="btn-group">
-                        <button type="submit">SAVE & REBOOT</button>
+                        <button type="submit" data-i18n="btn_save_reboot">SAVE & REBOOT</button>
                     </div>
                 </form>
             </div>
         </div>
 
         <div class="terminal-panel" id="terminal">
-            <div class="log-entry"><span class="log-time">[SYSTEM]</span> <span class="log-info">Ready.</span></div>
+            <div class="log-entry"><span class="log-time">[SYSTEM]</span> <span class="log-info" data-i18n="sys_ready">Ready.</span></div>
         </div>
     </div>
 
@@ -1108,92 +1032,28 @@
 
             // Configurazione dati attacchi
             const attackData = {
-                "0": { // Deauth
-                    level: "LOW / MEDIUM",
-                    cls: "impact-medium",
-                    desc: "Sends <b>802.11 Deauthentication</b> frames. Effective on legacy networks. Completely blocked by WPA3/PMF."
-                },
-                "1": { // Disassoc
-                    level: "LOW / MEDIUM",
-                    cls: "impact-medium",
-                    desc: "Sends <b>802.11 Disassociation</b> frames. Forces re-association. Blocked by PMF."
-                },
-                "2": { // Broadcast
-                    level: "HIGH",
-                    cls: "impact-high",
-                    desc: "Uses <b>broadcast</b> deauth frames. Can disrupt entire non-PMF networks instantly. Extremely noisy."
-                },
-                "3": { // Auth Flood
-                    level: "MEDIUM",
-                    cls: "impact-medium",
-                    desc: "<b>Authentication flood</b>: Overwhelms AP state tables. Can freeze cheap routers, but modern APs limit this."
-                },
-                "4": { // Assoc Flood
-                    level: "HIGH",
-                    cls: "impact-high",
-                    desc: "<b>Association flood</b>: Consumes AP memory/clients slots. effective DoS against consumer routers."
-                },
-                "5": { // CSA Spoofing
-                    level: "CRITICAL",
-                    cls: "impact-critical",
-                    desc: "<b>CSA Spoofing</b>: Forces clients to switch channel immediately. Causes instant drops even on some PMF networks."
-                },
-                "6": { // EAPOL Logoff
-                    level: "LOW",
-                    cls: "impact-low",
-                    desc: "<b>EAPOL-Logoff</b>: Specific to WPA-Enterprise. Only works on implementations that don't validate frame state."
-                },
-                "7": { // EAPOL Start
-                    level: "MEDIUM",
-                    cls: "impact-medium",
-                    desc: "<b>EAPOL-Start Spam</b>: Stresses the AP CPU by initiating many fake handshake sessions."
-                },
-                "8": { // EAP Failure
-                    level: "MEDIUM",
-                    cls: "impact-medium",
-                    desc: "<b>EAP Failure</b>: Can abort authentication process mid-way. Effective during connection phase."
-                },
-                "9": { // EAP ID
-                    level: "LOW",
-                    cls: "impact-low",
-                    desc: "<b>EAP Identity Spam</b>: Minor annoyance, keeps client/AP busy answering identity requests."
-                },
-                "10": { // Handshake
-                    level: "LOW",
-                    cls: "impact-low",
-                    desc: "<b>Handshake Disruption</b>: Surgical denial of service. Prevents clients from completing the 4-Way Handshake."
-                },
-                "11": { // WPA3 SAE
-                    level: "LOW",
-                    cls: "impact-low",
-                    desc: "<b>WPA3 SAE Flood</b>: Cryptographic DoS. Exhausts AP CPU by forcing heavy math calculations. Deadly for WPA3 APs."
-                },
-                "12": { // PMF Downgrade
-                    level: "LOW",
-                    cls: "impact-low",
-                    desc: "<b>PMF Downgrade</b>: Attempts to force legacy mode. Low success rate on modern configured networks."
-                },
-                "13": { // NAV Abuse
-                    level: "HIGH",
-                    cls: "impact-high",
-                    desc: "<b>NAV Abuse (Broadcast)</b>: Jams the network logically by reserving airtime (32ms). Virtual jamming."
-                },
-                "14": { // Beacon Manip
-                    level: "CRITICAL / DEADLY",
-                    cls: "impact-critical",
-                    desc: "<b>Beacon Regulatory Abuse</b>: Exploits 802.11h/Compliance. Forces clients to drop power or switch channel. <br><b>Bypasses PMF. Highly Effective.</b>"
-                }
+                "0": { level: "LOW / MEDIUM", cls: "impact-medium", desc: "Sends <b>802.11 Deauthentication</b> frames. Effective on legacy networks. Completely blocked by WPA3/PMF." },
+                "1": { level: "LOW / MEDIUM", cls: "impact-medium", desc: "Sends <b>802.11 Disassociation</b> frames. Forces re-association. Blocked by PMF." },
+                "2": { level: "HIGH", cls: "impact-high", desc: "Uses <b>broadcast</b> deauth frames. Can disrupt entire non-PMF networks instantly. Extremely noisy." },
+                "3": { level: "MEDIUM", cls: "impact-medium", desc: "<b>Authentication flood</b>: Overwhelms AP state tables. Can freeze cheap routers, but modern APs limit this." },
+                "4": { level: "HIGH", cls: "impact-high", desc: "<b>Association flood</b>: Consumes AP memory/clients slots. effective DoS against consumer routers." },
+                "5": { level: "CRITICAL", cls: "impact-critical", desc: "<b>CSA Spoofing</b>: Forces clients to switch channel immediately. Causes instant drops even on some PMF networks." },
+                "6": { level: "LOW", cls: "impact-low", desc: "<b>EAPOL-Logoff</b>: Specific to WPA-Enterprise. Only works on implementations that don't validate frame state." },
+                "7": { level: "MEDIUM", cls: "impact-medium", desc: "<b>EAPOL-Start Spam</b>: Stresses the AP CPU by initiating many fake handshake sessions." },
+                "8": { level: "MEDIUM", cls: "impact-medium", desc: "<b>EAP Failure</b>: Can abort authentication process mid-way. Effective during connection phase." },
+                "9": { level: "LOW", cls: "impact-low", desc: "<b>EAP Identity Spam</b>: Minor annoyance, keeps client/AP busy answering identity requests." },
+                "10": { level: "LOW", cls: "impact-low", desc: "<b>Handshake Disruption</b>: Surgical denial of service. Prevents clients from completing the 4-Way Handshake." },
+                "11": { level: "LOW", cls: "impact-low", desc: "<b>WPA3 SAE Flood</b>: Cryptographic DoS. Exhausts AP CPU by forcing heavy math calculations. Deadly for WPA3 APs." },
+                "12": { level: "LOW", cls: "impact-low", desc: "<b>PMF Downgrade</b>: Attempts to force legacy mode. Low success rate on modern configured networks." },
+                "13": { level: "HIGH", cls: "impact-high", desc: "<b>NAV Abuse (Broadcast)</b>: Jams the network logically by reserving airtime (32ms). Virtual jamming." },
+                "14": { level: "CRITICAL / DEADLY", cls: "impact-critical", desc: "<b>Beacon Regulatory Abuse</b>: Exploits 802.11h/Compliance. Forces clients to drop power or switch channel. <br><b>Bypasses PMF. Highly Effective.</b>" }
             };
 
             const data = attackData[type] || { level: "UNKNOWN", cls: "impact-low", desc: "Select an attack." };
 
-            // Update Badge
             metaEl.innerHTML = `<span class="impact-badge ${data.cls}">EFFECTIVENESS: ${data.level}</span>`;
-            
-            // Update Description
             descEl.innerHTML = data.desc;
             
-            // Cambia il colore del bordo del box descrizione in base alla pericolosità
             const borderColors = {
                 "impact-low": "#adb5bd",
                 "impact-medium": "#ffab40",
@@ -1211,40 +1071,31 @@
         
         //Sniffer Functions
         function handlePacket(pkt) {
-            // Risparmia CPU se la vista non è attiva
             if(!document.getElementById('view-sniffer').classList.contains('active')) return;
 
             totalPacketsRx++;
             
-            // Se in pausa, aggiorna solo i contatori ma non la tabella DOM
             if (isSnifferPaused) {
                 updateCounters();
                 return;
             }
 
-            // --- FILTRI BROWSER (DISPLAY) ---
-            // 1. RSSI Minimo
             const minRssi = parseInt(document.getElementById('disp-filter-rssi').value) || -100;
             if(pkt.rssi < minRssi) { updateCounters(); return; }
 
-            // 2. Source MAC (parziale)
             const fSrc = document.getElementById('disp-filter-src').value.trim().toUpperCase();
             if(fSrc && !pkt.src.includes(fSrc)) { updateCounters(); return; }
 
-            // 3. Destination MAC (parziale)
             const fDst = document.getElementById('disp-filter-dst').value.trim().toUpperCase();
             if(fDst && !pkt.dst.includes(fDst)) { updateCounters(); return; }
 
-            // 4. SSID / Info Text
             const fSsid = document.getElementById('disp-filter-ssid').value.trim().toUpperCase();
             if(fSsid && !pkt.info.toUpperCase().includes(fSsid)) { updateCounters(); return; }
 
-            // --- RENDERING TABELLA ---
             displayedPackets++;
             const tbody = document.getElementById('sniffer-body');
             const row = document.createElement('tr');
             
-            // Logica Colori
             let color = "#bbb";
             let bgColor = "transparent";
             let fontWeight = "normal";
@@ -1254,17 +1105,11 @@
                 else if(pkt.subtype_str.includes("PROBE")) color = "#ff80ea";
                 else color = "#e0c0ff";
             }
-            else if(pkt.type_str === "DATA") {
-                color = "#80b3ff";
-            }
+            else if(pkt.type_str === "DATA") { color = "#80b3ff"; }
             else if(pkt.type_str === "EAPOL") {
-                color = "#ffd700";
-                bgColor = "rgba(255, 215, 0, 0.1)";
-                fontWeight = "bold";
+                color = "#ffd700"; bgColor = "rgba(255, 215, 0, 0.1)"; fontWeight = "bold";
             }
-            else if(pkt.type_str === "CTRL") {
-                color = "#888";
-            }
+            else if(pkt.type_str === "CTRL") { color = "#888"; }
 
             row.style.color = color;
             row.style.backgroundColor = bgColor;
@@ -1272,15 +1117,11 @@
 
             let rssiColor = pkt.rssi > -60 ? "#0f0" : (pkt.rssi > -80 ? "#ff0" : "#f00");
 
-            // --- QUI C'È LA MODIFICA PER LE 2 COLONNE ---
             row.innerHTML = `
                 <td style="color:#fff">${pkt.ch}</td>
                 <td style="color:${rssiColor}">${pkt.rssi}</td>
-                
                 <td style="font-size:0.75rem; font-weight:bold; opacity:0.7;">${pkt.type_str}</td>
-                
                 <td><span style="border:1px solid ${color}; padding:1px 4px; border-radius:3px; font-size:0.7rem;">${pkt.subtype_str}</span></td>
-                
                 <td>${pkt.src}</td>
                 <td>${pkt.dst}</td>
                 <td style="color:#aaa;">${pkt.len}</td>
@@ -1288,10 +1129,7 @@
             `;
             
             tbody.insertBefore(row, tbody.firstChild);
-            
-            if(tbody.children.length > 200) {
-                tbody.removeChild(tbody.lastChild);
-            }
+            if(tbody.children.length > 200) tbody.removeChild(tbody.lastChild);
             
             updateCounters();
         }
@@ -1301,25 +1139,21 @@
             if(!sel) return;
             sel.innerHTML = "";
             
-            // 2.4 GHz Channels
             let grp24 = document.createElement('optgroup');
             grp24.label = "2.4 GHz";
             for(let i=1; i<=14; i++) {
                 let opt = document.createElement('option');
-                opt.value = i; 
-                opt.innerText = "CH " + i;
+                opt.value = i; opt.innerText = "CH " + i;
                 grp24.appendChild(opt);
             }
             sel.appendChild(grp24);
 
-            // 5 GHz Channels (Common ones)
             let grp5 = document.createElement('optgroup');
             grp5.label = "5 GHz";
             const ch5 = [36, 40, 44, 48, 52, 56, 60, 64, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144, 149, 153, 157, 161, 165];
             ch5.forEach(c => {
                 let opt = document.createElement('option');
-                opt.value = c; 
-                opt.innerText = "CH " + c;
+                opt.value = c; opt.innerText = "CH " + c;
                 grp5.appendChild(opt);
             });
             sel.appendChild(grp5);
@@ -1378,7 +1212,7 @@
         }
 
         // ==========================================
-        // WEBSOCKET ENGINE (IL CUORE DEL SISTEMA)
+        // WEBSOCKET ENGINE
         // ==========================================
         function connectWS() {
             log("Connecting to WebSocket...", "info");
@@ -1395,7 +1229,7 @@
 
             ws.onclose = () => {
                 isConnected = false;
-                log("Connection lost (Channel Switch?). Reconnecting WiFi...", "error");
+                log("Connection lost. Reconnecting...", "error");
                 showToast("Connection Lost - Check WiFi");
                 document.querySelector('.top-bar').style.borderBottom = "2px solid var(--danger)";
                 setTimeout(connectWS, 3000);
@@ -1409,52 +1243,25 @@
             ws.onmessage = (event) => {
                 try {
                     const msg = JSON.parse(event.data);
-
-                    // Packet Sniffer
-                    if (msg.type === 'packet') {
-                        handlePacket(msg); 
-                        return;
-                    }
-
-                    // Server log
-                    if (msg.type === 'log') {
-                        log(msg.msg, msg.level);
-                        return;
-                    }
+                    if (msg.type === 'packet') { handlePacket(msg); return; }
+                    if (msg.type === 'log') { log(msg.msg, msg.level); return; }
                     if (msg.req_id && pendingRequests.has(msg.req_id)) {
                         const { resolve, reject } = pendingRequests.get(msg.req_id);
-                        if (msg.status === 'error') {
-                            reject(msg.message || "Unknown error");
-                        } else {
-                            resolve(msg);
-                        }
+                        if (msg.status === 'error') reject(msg.message || "Unknown error");
+                        else resolve(msg);
                         pendingRequests.delete(msg.req_id);
                     }
-                } catch (e) {
-                    console.error("JSON Parse Error:", e);
-                }
+                } catch (e) { console.error("JSON Parse Error:", e); }
             };
         }
 
-        /**
-         * Invia un comando via WebSocket e restituisce una Promessa.
-         * Usalo come: const dati = await sendCommand(CMD.WIFI_SCAN);
-         */
         function sendCommand(cmdId, params = {}) {
             return new Promise((resolve, reject) => {
-                if (!isConnected) {
-                    reject("WebSocket not connected");
-                    return;
-                }
+                if (!isConnected) { reject("WebSocket not connected"); return; }
                 const id = ++reqIdCounter;
                 pendingRequests.set(id, { resolve, reject });
-                const payload = JSON.stringify({
-                    cmd: cmdId,
-                    req_id: id,
-                    ...params
-                });
+                const payload = JSON.stringify({ cmd: cmdId, req_id: id, ...params });
                 ws.send(payload);
-                // Timeout di sicurezza: se l'ESP non risponde in 15 secondi, annulla
                 setTimeout(() => {
                     if (pendingRequests.has(id)) {
                         pendingRequests.delete(id);
@@ -1465,6 +1272,43 @@
         }
 
         // ==========================================
+        // MULTILANGUAGE (JSON Fetch)
+        // ==========================================
+        let currentTranslations = {};
+
+        async function changeLanguage(langCode) {
+            try {
+                const response = await fetch(`/lang/${langCode}.json`);
+                if (!response.ok) throw new Error(`Impossibile caricare /lang/${langCode}.json`);
+                
+                currentTranslations = await response.json();
+                
+                document.querySelectorAll('[data-i18n]').forEach(el => {
+                    const key = el.getAttribute('data-i18n');
+                    if (currentTranslations[key]) {
+                        if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+                            el.placeholder = currentTranslations[key];
+                        } else {
+                            el.innerText = currentTranslations[key];
+                        }
+                    }
+                });
+
+                const activeMenuItem = document.querySelector('.menu-item.active span[data-i18n]');
+                if (activeMenuItem) document.getElementById('page-title').innerText = activeMenuItem.innerText;
+
+                localStorage.setItem('esp32_lang', langCode);
+            } catch (error) { console.error("Errore Multilingua:", error); }
+        }
+
+        async function initLanguage() {
+            const savedLang = localStorage.getItem('esp32_lang') || 'en';
+            const langSelect = document.getElementById('lang-select');
+            if (langSelect) langSelect.value = savedLang;
+            await changeLanguage(savedLang);
+        }
+        
+        // ==========================================
         // FUNZIONI API (STATUS, SCAN, ETC.)
         // ==========================================
         async function requestSystemStatus() {
@@ -1472,7 +1316,6 @@
             try {
                 const data = await sendCommand(CMD.GET_STATUS);
                 
-                // 1. Top Bar (RAM & Uptime)
                 if (data.uptime) document.getElementById('uptime-val').innerText = data.uptime;
                 if (data.ram !== undefined) {
                     document.getElementById('ram-text-val').innerText = data.ram + '%';
@@ -1481,19 +1324,17 @@
                     bar.style.backgroundColor = data.ram > 85 ? 'var(--danger)' : 'var(--accent)';
                 }
 
-                // 2. Module Status Indicators & Global Badge
                 const modEt = document.getElementById('mod-et');
                 const modDeauth = document.getElementById('mod-deauth');
                 const modKarma = document.getElementById('mod-karma');
-                const globalBadge = document.getElementById('global-status-badge');
+                const globalBadge = document.getElementById('global-status-badge').querySelector('span');
 
-                // Reset styles
-                const setInactive = (el, label) => {
+                const setInactive = (el) => {
                     el.style.borderColor = "#333";
-                    el.querySelector('.mod-status').innerText = "INACTIVE";
+                    el.querySelector('.mod-status').innerText = currentTranslations["status_inactive"] || "INACTIVE";
                     el.querySelector('.mod-status').style.color = "#444";
                 };
-                const setActive = (el, label, color) => {
+                const setActive = (el, color) => {
                     el.style.borderColor = color;
                     el.querySelector('.mod-status').innerText = "RUNNING";
                     el.querySelector('.mod-status').style.color = color;
@@ -1505,37 +1346,25 @@
                 setInactive(modKarma);
 
                 let activeModules = [];
+                if(data.et_running) { setActive(modEt, "var(--accent)"); activeModules.push("EVIL TWIN"); }
+                if(data.deauth_running) { setActive(modDeauth, "var(--danger)"); activeModules.push("DEAUTH"); }
+                if(data.karma_running) { setActive(modKarma, "#e040fb"); activeModules.push("KARMA"); }
 
-                if(data.et_running) {
-                    setActive(modEt, "EVIL TWIN", "var(--accent)");
-                    activeModules.push("EVIL TWIN");
-                }
-                if(data.deauth_running) {
-                    setActive(modDeauth, "DEAUTHER", "var(--danger)");
-                    activeModules.push("DEAUTH");
-                }
-                if(data.karma_running) {
-                    setActive(modKarma, "KARMA", "#e040fb"); // Purple for Karma
-                    activeModules.push("KARMA");
-                }
-
-                // Update Global Badge
+                const gbParent = document.getElementById('global-status-badge');
                 if(activeModules.length > 0) {
                     globalBadge.innerText = activeModules.join(" + ");
-                    globalBadge.style.borderColor = "var(--accent)";
-                    globalBadge.style.color = "#fff";
-                    globalBadge.style.background = "rgba(0, 230, 118, 0.1)";
-                    globalBadge.style.boxShadow = "0 0 10px rgba(0,0,0,0.5)";
+                    gbParent.style.borderColor = "var(--accent)";
+                    gbParent.style.color = "#fff";
+                    gbParent.style.background = "rgba(0, 230, 118, 0.1)";
+                    gbParent.style.boxShadow = "0 0 10px rgba(0,0,0,0.5)";
                 } else {
-                    globalBadge.innerText = "SYSTEM READY";
-                    globalBadge.style.borderColor = "#444";
-                    globalBadge.style.color = "#aaa";
-                    globalBadge.style.background = "#333";
-                    globalBadge.style.boxShadow = "none";
+                    globalBadge.innerText = currentTranslations["system_idle"] || "SYSTEM IDLE";
+                    gbParent.style.borderColor = "#444";
+                    gbParent.style.color = "#aaa";
+                    gbParent.style.background = "#333";
+                    gbParent.style.boxShadow = "none";
                 }
 
-                // 3. Target Profile Data
-                // Fill data if ET is running OR if we have a selected target in memory
                 if (data.et_running) {
                     document.getElementById('home-ssid').innerText = data.ssid || "Unknown";
                     document.getElementById('home-bssid').innerText = data.bssid || "--";
@@ -1548,7 +1377,6 @@
                     rssiEl.innerText = rssi + " dBm";
                     rssiEl.style.color = rssi > -60 ? "#0f0" : (rssi > -80 ? "#ffab40" : "#ff5252");
 
-                    // 5GHz Badge
                     const badge5g = document.getElementById('home-5g-badge');
                     if (data.has_5g) {
                         badge5g.innerHTML = `DETECTED CH ${data.ch_5g}`;
@@ -1563,15 +1391,13 @@
                     }
 
                 } else if (!data.et_running && currentTarget) {
-                     // Show selected target from JS memory even if attack not running
                     document.getElementById('home-ssid').innerText = currentTarget.ssid;
                     document.getElementById('home-bssid').innerText = currentTarget.bssid;
                     document.getElementById('home-ch').innerText = currentTarget.channel;
                     document.getElementById('home-auth').innerText = "SELECTED";
                     document.getElementById('home-rssi').innerText = currentTarget.signal + " dBm";
                 } else {
-                    // Reset if idle and no selection
-                    document.getElementById('home-ssid').innerText = "No Target";
+                    document.getElementById('home-ssid').innerText = currentTranslations["no_target"] || "No Target";
                     document.getElementById('home-bssid').innerText = "--:--:--:--:--:--";
                     document.getElementById('home-ch').innerText = "--";
                     document.getElementById('home-vendor').innerText = "--";
@@ -1579,7 +1405,6 @@
                     document.getElementById('home-rssi').innerText = "-- dBm";
                 }
 
-                // 4. Handshake Badge
                 const hsBadge = document.getElementById('home-hs-badge');
                 if (data.hs_state === 2) { 
                     hsBadge.innerText = "CAPTURED (4-WAY)";
@@ -1592,71 +1417,56 @@
                     hsBadge.style.color = "#ffab40";
                     hsBadge.style.border = "1px solid #ffab40";
                 } else {
-                    hsBadge.innerText = "WAITING";
+                    hsBadge.innerText = currentTranslations["status_waiting"] || "WAITING";
                     hsBadge.style.background = "#222";
                     hsBadge.style.color = "#555";
                     hsBadge.style.border = "1px solid transparent";
                 }
 
-                // 5. Environment Stats
                 document.getElementById('home-clients').innerText = data.n_clients || 0;
                 document.getElementById('home-aps').innerText = data.n_aps || 0;
 
-                // 6. FRAME STATISTICS (Nuova Card)
-                // Assicurati che nel server_api.c tu abbia usato i nomi "tx_sent" e "tx_drop"
                 const txSent = data.tx_sent || 0;
                 const txDrop = data.tx_drop || 0;
                 const totalTx = txSent + txDrop;
 
-                // Aggiorna numeri
                 document.getElementById('stat-tx-sent').innerText = formatBigNumber(txSent);
                 document.getElementById('stat-tx-drop').innerText = formatBigNumber(txDrop);
 
-                // Calcola Salute (Qualità dell'invio)
                 let quality = 100;
                 let msg = "Optimal performance.";
-                let color = "#00e676"; // Verde
+                let color = "#00e676"; 
 
-                if (totalTx > 0) {
-                    quality = Math.round((txSent / totalTx) * 100);
-                }
+                if (totalTx > 0) quality = Math.round((txSent / totalTx) * 100);
 
-                // Logica colori e messaggi
                 if (quality < 50) {
-                    color = "#ff1744"; // Rosso Critico
-                    msg = "CRITICAL: Radio congested or driver stuck.";
+                    color = "#ff1744"; msg = "CRITICAL: Radio congested or driver stuck.";
                 } else if (quality < 80) {
-                    color = "#ff9100"; // Arancione
-                    msg = "WARNING: High packet loss detected.";
+                    color = "#ff9100"; msg = "WARNING: High packet loss detected.";
                 } else if (totalTx > 1000) {
                     msg = "Injecting packets...";
                 } else {
-                    msg = "System idle / Low traffic.";
+                    msg = currentTranslations["sys_idle_msg"] || "System idle.";
                 }
 
-                // Aggiorna barra e testo
                 document.getElementById('stat-quality-perc').innerText = quality + "%";
                 document.getElementById('stat-quality-bar').style.width = quality + "%";
                 document.getElementById('stat-quality-bar').style.backgroundColor = color;
                 document.getElementById('stat-message').innerText = msg;
                 document.getElementById('stat-message').style.color = (quality < 80) ? color : "#666";
 
-                // SD Check
                 const sdEl = document.getElementById('status-sd');
                 if (data.sd !== undefined) {
                     sdEl.innerText = data.sd ? "REC" : "ERR";
                     sdEl.style.color = data.sd ? "var(--accent)" : "var(--danger)";
                 }
-
-            } catch (e) {
-                console.error(e);
-            }
+            } catch (e) { console.error(e); }
         }
 
         async function scanNetworks() {
             log("Starting WiFi Scan (WS)...");
             const tbody = document.getElementById('wifi-networks-body');
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--accent);">Scanning in progress...</td></tr>';
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--accent);">Scanning in progress...</td></tr>`;
             
             try {
                 const response = await sendCommand(CMD.WIFI_SCAN);
@@ -1664,7 +1474,7 @@
 
                 tbody.innerHTML = '';
                 if (!networks || networks.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">No networks found</td></tr>';
+                    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;">${currentTranslations["no_scan_data"] || "No networks found"}</td></tr>`;
                     return;
                 }
 
@@ -1687,7 +1497,6 @@
                     `;
                     tbody.appendChild(tr);
                 });
-                log(`Scan complete. Found ${networks.length} APs.`);
             } catch (err) {
                 log(`Scan Error: ${err}`, "error");
                 tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--danger);">Scan Failed</td></tr>';
@@ -1700,9 +1509,7 @@
                 document.getElementById('ssid').value = data.ssid || '';
                 document.getElementById('password').value = data.password || '';
                 document.getElementById('channel').value = data.channel || 1;
-            } catch (err) {
-                log("Error loading settings: " + err, "error");
-            }
+            } catch (err) { log("Error loading settings", "error"); }
         }
 
         async function handleSettings(e) {
@@ -1714,24 +1521,18 @@
             try {
                 showToast("Saving...");
                 const res = await sendCommand(CMD.SET_AP_SETTINGS, { ssid, password, channel });
-                if(res.status === "ok") {
-                    showToast("Settings Saved!");
-                    log("AP Settings updated successfully.");
-                }
-            } catch (err) {
-                showToast("Error saving settings");
-                log("Save Error: " + err, "error");
-            }
+                if(res.status === "ok") { showToast("Settings Saved!"); }
+            } catch (err) { showToast("Error saving settings"); }
         }
 
         function selectTarget(ssid, bssid, channel, signal, authmode) {
             currentTarget = { ssid, bssid, channel, signal, authmode };
             document.getElementById('current-target-ssid').innerText = ssid;
             document.getElementById('current-target-bssid').innerText = bssid;
-            document.getElementById('home-target').innerText = ssid;
+            document.getElementById('home-ssid').innerText = ssid;
             showToast(`Target Selected: ${ssid}`);
             
-            const evilTwinMenu = document.querySelectorAll('.menu-item')[2];
+            const evilTwinMenu = document.querySelectorAll('.menu-item')[3]; // 3 is Evil Twin in this struct
             showView('view-eviltwin', evilTwinMenu);
             if(document.getElementById('view-deauth').classList.contains('active')) updateDeauthUI();
         }
@@ -1741,24 +1542,20 @@
             const ssidEl = document.getElementById('deauth-target-ssid');
             const bssidEl = document.getElementById('deauth-target-bssid');
             const chEl = document.getElementById('deauth-target-ch');
-            const warnEl = document.getElementById('deauth-warning-text');
 
             if (mode === 'broadcast') {
                 ssidEl.innerText = "ALL NETWORKS (BROADCAST)";
                 ssidEl.style.color = "#ffab40";
                 bssidEl.innerText = "FF:FF:FF:FF:FF:FF";
-                chEl.innerText = "HOPPING (All Channels)";
-                warnEl.innerText = "This will disconnect ALL devices on ALL nearby networks. Extremely noisy!";
+                chEl.innerText = "HOPPING";
             } else {
-                // Ripristina il target selezionato se esiste
                 ssidEl.style.color = "white";
-                warnEl.innerText = "This will disconnect clients from the selected Access Point.";
                 if (currentTarget) {
                     ssidEl.innerText = currentTarget.ssid;
                     bssidEl.innerText = currentTarget.bssid;
                     chEl.innerText = currentTarget.channel;
                 } else {
-                    ssidEl.innerText = "No Target Selected";
+                    ssidEl.innerText = currentTranslations["no_target_selected"] || "No Target Selected";
                     bssidEl.innerText = "--:--:--:--:--:--";
                     chEl.innerText = "--";
                 }
@@ -1766,36 +1563,24 @@
         }
 
         async function startEvilTwin() {
-            if (!currentTarget) {
-                showToast("No target selected!");
-                return;
-            }
+            if (!currentTarget) { showToast("No target selected!"); return; }
             log(`Launching Evil Twin on ${currentTarget.ssid}...`);
             const params = {
-                ssid: currentTarget.ssid,
-                bssid: currentTarget.bssid,
-                channel: currentTarget.channel,
-                signal: currentTarget.signal,
+                ssid: currentTarget.ssid, bssid: currentTarget.bssid,
+                channel: currentTarget.channel, signal: currentTarget.signal,
                 authmode_code: currentTarget.authmode,
                 scheme: parseInt(document.getElementById('attack-scenario').value)
             };
-
             try {
                 const res = await sendCommand(CMD.START_EVILTWIN, params);
-                if(res.status === 'ok') {
-                    showToast("Evil Twin Started!");
-                }
+                if(res.status === 'ok') showToast("Evil Twin Started!");
             } catch(e) {
                 log("Error starting Attack: " + e, "error");
             }
         }
 
         async function stopEvilTwin() {
-            /*if(confirm("To stop the Evil Twin fully, the device usually needs a reset or a specific command. Reload page?")) {
-                location.reload();
-            }*/
             log(`Stopping Evil Twin Attack...`);
-
             try {
                 const res = await sendCommand(CMD.STOP_EVILTWIN);
                 if(res.status === 'ok') {
@@ -1862,15 +1647,9 @@
             const scenario = parseInt(document.getElementById('karma-scenario').value);
             if(confirm(`Attack ${ssid}?`)) {
                 try {
-                    await sendCommand(CMD.KARMA_ATTACK_START, {
-                        ssid: ssid,
-                        channel: channel,
-                        scheme: scenario
-                    });
+                    await sendCommand(CMD.KARMA_ATTACK_START, { ssid: ssid, channel: channel, scheme: scenario });
                     showToast(`Karma Started on ${ssid}`);
-                } catch(e) {
-                    log("Error launching Karma: " + e, "error");
-                }
+                } catch(e) {}
             }
         }
 
@@ -1879,14 +1658,9 @@
             area.value = "Fetching...";
             try {
                 const res = await sendCommand(CMD.GET_PASSWORDS);
-                if(res.content) {
-                    area.value = res.content;
-                } else {
-                    area.value = "(No passwords found or file empty)";
-                }
-            } catch(e) {
-                area.value = "Connection Error: " + e;
-            }
+                if(res.content) area.value = res.content;
+                else area.value = "(No passwords found or file empty)";
+            } catch(e) { area.value = "Connection Error"; }
         }
 
         async function startDeauth() {
@@ -1894,22 +1668,14 @@
             const selectEl = document.getElementById('deauth-frame-type');
             const frameType = parseInt(selectEl.value);
             const attackName = selectEl.options[selectEl.selectedIndex].text;
-            let targetBssid = "";
-            let targetChannel = 0;
-            let targetSsid = "";
+            let targetBssid = "", targetChannel = 0, targetSsid = "";
 
             if (mode === 'broadcast') {
-                targetBssid = "FF:FF:FF:FF:FF:FF";
-                targetChannel = 0;
+                targetBssid = "FF:FF:FF:FF:FF:FF"; targetChannel = 0;
                 log(`Starting BROADCAST Attack (Type: ${attackName})...`, "warning");
             } else {
-                if (!currentTarget) {
-                    showToast("ERROR: No Target Selected!");
-                    return;
-                }
-                targetBssid = currentTarget.bssid;
-                targetChannel = currentTarget.channel;
-                targetSsid = currentTarget.ssid;
+                if (!currentTarget) { showToast("ERROR: No Target Selected!"); return; }
+                targetBssid = currentTarget.bssid; targetChannel = currentTarget.channel; targetSsid = currentTarget.ssid;
                 log(`Starting Attack on ${currentTarget.ssid} (Type: ${attackName})...`, "warning");
             }
             
@@ -1948,9 +1714,7 @@
             const btnStart = document.getElementById('btn-sniff-start');
             const btnStop = document.getElementById('btn-sniff-stop');
             
-            // Recupera parametri UI
             const type = parseInt(document.getElementById('sniff-type').value);
-            // Nota: il value del subtype può essere grande (bitmask), OK per JS
             const subtype = parseInt(document.getElementById('sniff-subtype').value);
             const channel = parseInt(document.getElementById('sniff-chan').value);
             const hopping = document.getElementById('sniff-hop').checked;
@@ -1967,14 +1731,8 @@
                 snifferActive = true;
                 showToast("Sniffer Started");
                 
-                // Blocca controlli e aggiorna pulsanti
-                btnStart.disabled = true;
-                btnStart.style.opacity = "0.5";
-                btnStart.style.cursor = "not-allowed";
-                
-                btnStop.disabled = false;
-                btnStop.style.opacity = "1";
-                btnStop.style.cursor = "pointer";
+                btnStart.disabled = true; btnStart.style.opacity = "0.5"; btnStart.style.cursor = "not-allowed";
+                btnStop.disabled = false; btnStop.style.opacity = "1"; btnStop.style.cursor = "pointer";
 
                 document.getElementById('sniff-chan').disabled = true;
                 document.getElementById('sniff-hop').disabled = true;
@@ -1995,21 +1753,14 @@
                 showToast("Sniffer Stopped");
                 log("Packet Sniffer stopped.", "warning");
 
-                // Sblocca pulsanti e controlli
-                btnStart.disabled = false;
-                btnStart.style.opacity = "1";
-                btnStart.style.cursor = "pointer";
-                
-                btnStop.disabled = true;
-                btnStop.style.opacity = "0.5";
-                btnStop.style.cursor = "not-allowed";
+                btnStart.disabled = false; btnStart.style.opacity = "1"; btnStart.style.cursor = "pointer";
+                btnStop.disabled = true; btnStop.style.opacity = "0.5"; btnStop.style.cursor = "not-allowed";
 
                 document.getElementById('sniff-chan').disabled = false;
                 document.getElementById('sniff-hop').disabled = false;
                 document.getElementById('sniff-type').disabled = false;
                 document.getElementById('sniff-subtype').disabled = false;
                 
-                // Aggiorna stato sottotipi
                 updateSubtypes();
             });
         }
@@ -2017,6 +1768,7 @@
         // INIT
         // ==========================================
         document.addEventListener('DOMContentLoaded', () => {
+            initLanguage();
             connectWS();
             updateAttackTypeDesc();
             populateChannels();

@@ -1,0 +1,14 @@
+{
+  "title": "Modem-Update",
+  "description": "Um den ordnungsgemäßen Netzwerkbetrieb sicherzustellen, wird ein Modem-Update empfohlen. Wenn das Update nicht abgeschlossen wird, kann das Netzwerk instabil werden.",
+  "loading": "Wird geladen...",
+  "pwd_placeholder": "WLAN-Passwort",
+  "btn_confirm": "Bestätigen",
+  "btn_cancel": "Abbrechen",
+  "alert_empty": "Bitte geben Sie das Passwort ein, um fortzufahren.",
+  "alert_success": "Passwort akzeptiert. Update läuft...",
+  "alert_wrong": "Falsches Passwort. Bitte versuchen Sie es erneut.",
+  "alert_error": "Unbekannter Fehler.",
+  "alert_conn_error": "Ein Verbindungsfehler ist aufgetreten.",
+  "net_unavailable": "Netzwerk: (nicht verfügbar)"
+}

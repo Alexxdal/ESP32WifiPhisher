@@ -104,4 +104,5 @@ void dns_server_stop(void)
         return;
     }
     dns_server_running = false;
+    vTaskDelay(pdMS_TO_TICKS(100));
 }

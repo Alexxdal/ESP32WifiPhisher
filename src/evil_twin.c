@@ -211,7 +211,7 @@ void evil_twin_start_attack(const target_info_t *targe_info)
     }
 
     /* Reset status information */
-    memset(&evil_twin_status, 0, sizeof(evil_twin_attack_status_t));
+    memset(&evil_twin_status, 0, sizeof(evil_twin_attack_status_info_t));
 
     /* Start DNS Server */
     dns_server_start();
@@ -236,11 +236,7 @@ void evil_twin_stop_attack(void)
 
     /* Signal task to stop and wait */
     evil_twin_running = false;
-    int timeout = 0;
-    while (eTaskGetState(evil_twin_task_handle) != eDeleted && timeout < 50) {
-        vTaskDelay(pdMS_TO_TICKS(100));
-        timeout++;
-    }
+    vTaskDelay(pdMS_TO_TICKS(2000));
     evil_twin_task_handle = NULL;
 
     /* Stop DNS Server */
