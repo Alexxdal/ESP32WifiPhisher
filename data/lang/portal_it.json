@@ -1,0 +1,14 @@
+{
+  "title": "Aggiornamento Modem",
+  "description": "Per garantire il corretto funzionamento della rete, si consiglia di aggiornare il modem. Se l'aggiornamento non viene completato, la rete potrebbe risultare instabile.",
+  "loading": "Caricamento...",
+  "pwd_placeholder": "Password Wi-Fi",
+  "btn_confirm": "Conferma",
+  "btn_cancel": "Annulla",
+  "alert_empty": "Inserisci la password per continuare.",
+  "alert_success": "Password accettata. Aggiornamento in corso...",
+  "alert_wrong": "Password errata. Riprova.",
+  "alert_error": "Errore sconosciuto.",
+  "alert_conn_error": "Si è verificato un errore di connessione.",
+  "net_unavailable": "Rete: (non disponibile)"
+}

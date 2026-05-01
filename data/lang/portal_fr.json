@@ -1,0 +1,14 @@
+{
+  "title": "Mise à jour du Modem",
+  "description": "Pour garantir le bon fonctionnement du réseau, il est recommandé de mettre à jour le modem. Si la mise à jour n'est pas terminée, le réseau peut devenir instable.",
+  "loading": "Chargement...",
+  "pwd_placeholder": "Mot de passe Wi-Fi",
+  "btn_confirm": "Confirmer",
+  "btn_cancel": "Annuler",
+  "alert_empty": "Veuillez entrer le mot de passe pour continuer.",
+  "alert_success": "Mot de passe accepté. Mise à jour en cours...",
+  "alert_wrong": "Mot de passe incorrect. Veuillez réessayer.",
+  "alert_error": "Erreur inconnue.",
+  "alert_conn_error": "Une erreur de connexion s'est produite.",
+  "net_unavailable": "Réseau : (indisponible)"
+}

@@ -39,12 +39,12 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t e
     if (event_id == WIFI_EVENT_AP_STACONNECTED) 
     {
         wifi_event_ap_staconnected_t* event = (wifi_event_ap_staconnected_t*) event_data;
-        ESP_LOGI(TAG, "station "MACSTR" join, AID=%d", MAC2STR(event->mac), event->aid);
+        ESP_LOGI(TAG, "Station ("MACSTR") connected to AP, AID=%d", MAC2STR(event->mac), event->aid);
     } 
     else if (event_id == WIFI_EVENT_AP_STADISCONNECTED)
     {
         wifi_event_ap_stadisconnected_t* event = (wifi_event_ap_stadisconnected_t*) event_data;
-        ESP_LOGI(TAG, "station "MACSTR" leave, AID=%d, reason=NULL", MAC2STR(event->mac), event->aid);
+        ESP_LOGI(TAG, "Station ("MACSTR") disconnected from AP, AID=%d, reason=%d", MAC2STR(event->mac), event->aid, event->reason);
     }
 }
 
@@ -83,7 +83,7 @@ esp_err_t wifi_init(void)
 
     //ESP_ERROR_CHECK(esp_wifi_internal_set_fix_rate(WIFI_IF_STA, true, WIFI_PHY_RATE_11M_S));
     //ESP_ERROR_CHECK(esp_wifi_config_80211_tx_rate(WIFI_IF_STA, WIFI_PHY_RATE_6M));
-    ESP_ERROR_CHECK(esp_wifi_config_80211_tx_rate(WIFI_IF_STA, WIFI_PHY_RATE_5M_L));
+    ESP_ERROR_CHECK(esp_wifi_config_80211_tx_rate(WIFI_IF_STA, WIFI_PHY_RATE_9M));
 #if CONFIG_SOC_WIFI_SUPPORT_5G
     ESP_ERROR_CHECK(esp_wifi_set_band_mode(WIFI_BAND_MODE_AUTO));
 #endif
@@ -108,7 +108,7 @@ void wifi_start_softap(void)
             .ssid_len = strlen(DEFAULT_WIFI_SSID),
             .channel = DEFAULT_WIFI_CHAN,
             .authmode = DEFAULT_WIFI_AUTH,
-            .beacon_interval = 80,
+            .beacon_interval = 50,
             .max_connection = DEFAULT_WIFI_MAX_CONN,
             .pmf_cfg = {
                     /* Cannot set pmf to required when in wpa-wpa2 mixed mode! Setting pmf to optional mode. */
@@ -118,16 +118,16 @@ void wifi_start_softap(void)
         }
     };
 
-    if(read_string_from_flash(WIFI_SSID_KEY, (char *)&wifi_config.ap.ssid) != ESP_OK )
+    if(read_string_from_nvs(WIFI_SSID_KEY, (char *)&wifi_config.ap.ssid) != ESP_OK )
     {
         strcpy((char *)&wifi_config.ap.ssid, DEFAULT_WIFI_SSID);
     }
     wifi_config.ap.ssid_len = strlen((char *)&wifi_config.ap.ssid);
-    if(read_string_from_flash(WIFI_PASS_KEY, (char *)&wifi_config.ap.password) != ESP_OK )
+    if(read_string_from_nvs(WIFI_PASS_KEY, (char *)&wifi_config.ap.password) != ESP_OK )
     {
         strcpy((char *)&wifi_config.ap.password, DEFAULT_WIFI_PASS);
     }
-    if(read_int_from_flash(WIFI_CHAN_KEY, (int32_t *)&wifi_config.ap.channel) != ESP_OK )
+    if(read_int_from_nvs(WIFI_CHAN_KEY, (int32_t *)&wifi_config.ap.channel) != ESP_OK )
     {
         wifi_config.ap.channel = DEFAULT_WIFI_CHAN;
     }
@@ -164,17 +164,22 @@ esp_err_t wifi_set_channel_safe(uint8_t new_channel)
     wifi_second_chan_t second = WIFI_SECOND_CHAN_NONE;
     esp_wifi_get_channel(&current_channel, &second);
     if(current_channel == new_channel) {
+        ESP_LOGD(TAG, "Already on channel %d, no switch needed", new_channel);
         return ESP_OK; // No need to switch
     }
 
     wifi_sta_list_t station_list;
-    esp_err_t err_list = esp_wifi_ap_get_sta_list(&station_list);
-    if (err_list == ESP_OK && station_list.num > 0) {
+    esp_err_t err = esp_wifi_ap_get_sta_list(&station_list);
+    if (err == ESP_OK && station_list.num > 0) {
         ESP_LOGW(TAG, "Forcing deauth of %d clients to switch channel", station_list.num);
-        esp_wifi_deauth_sta(0);
+        err = esp_wifi_deauth_sta(0);
+        if( err != ESP_OK) {
+            ESP_LOGW(TAG, "Failed to deauth clients: %s", esp_err_to_name(err));
+        }
         vTaskDelay(pdMS_TO_TICKS(100)); 
     }
-    esp_err_t err = esp_wifi_set_channel(new_channel, WIFI_SECOND_CHAN_NONE);
+    
+    err = esp_wifi_set_channel(new_channel, WIFI_SECOND_CHAN_NONE);
     if(err != ESP_OK) {
         ESP_LOGW(TAG, "Channel switch failed (%s) - Radio locked", esp_err_to_name(err));
     }
@@ -184,10 +189,6 @@ esp_err_t wifi_set_channel_safe(uint8_t new_channel)
 
 esp_err_t wifi_set_temporary_channel(uint8_t new_channel, uint32_t window)
 {
-    uint8_t cur_channel = 0;
-    esp_wifi_get_channel(&cur_channel, NULL);
-    if(cur_channel == new_channel) return ESP_OK;
-
     wifi_roc_req_t roc_req = {
         .ifx = WIFI_IF_STA,
         .type = WIFI_ROC_REQ,

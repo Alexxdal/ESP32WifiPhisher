@@ -18,7 +18,7 @@
  * @param key 
  * @param value 
  */
-void save_string_to_flash(const char* key, const char* value);
+void save_string_to_nvs(const char* key, const char* value);
 
 
 /**
@@ -26,7 +26,7 @@ void save_string_to_flash(const char* key, const char* value);
  * 
  * @param key 
  */
-esp_err_t read_string_from_flash(const char* key, char* value);
+esp_err_t read_string_from_nvs(const char* key, char* value);
 
 
 /**
@@ -35,7 +35,7 @@ esp_err_t read_string_from_flash(const char* key, char* value);
  * @param key 
  * @param value 
  */
-void save_int_to_flash(const char* key, int32_t value);
+void save_int_to_nvs(const char* key, int32_t value);
 
 
 /**
@@ -45,7 +45,7 @@ void save_int_to_flash(const char* key, int32_t value);
  * @param value 
  * @return esp_err_t 
  */
-esp_err_t read_int_from_flash(const char* key, int32_t *value);
+esp_err_t read_int_from_nvs(const char* key, int32_t *value);
 
 
 #endif

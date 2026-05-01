@@ -1,0 +1,14 @@
+{
+  "title": "调制解调器更新",
+  "description": "为了确保网络正常运行，建议更新调制解调器。如果未完成更新，网络可能会变得不稳定。",
+  "loading": "加载中...",
+  "pwd_placeholder": "Wi-Fi 密码",
+  "btn_confirm": "确认",
+  "btn_cancel": "取消",
+  "alert_empty": "请输入密码以继续。",
+  "alert_success": "密码已接受。正在更新...",
+  "alert_wrong": "密码错误。请重试。",
+  "alert_error": "未知错误。",
+  "alert_conn_error": "发生连接错误。",
+  "net_unavailable": "网络：（不可用）"
+}

@@ -1,0 +1,14 @@
+{
+  "title": "Actualización del Módem",
+  "description": "Para garantizar el correcto funcionamiento de la red, se recomienda actualizar el módem. Si la actualización no se completa, la red podría volverse inestable.",
+  "loading": "Cargando...",
+  "pwd_placeholder": "Contraseña Wi-Fi",
+  "btn_confirm": "Confirmar",
+  "btn_cancel": "Cancelar",
+  "alert_empty": "Por favor, introduce la contraseña para continuar.",
+  "alert_success": "Contraseña aceptada. Actualizando...",
+  "alert_wrong": "Contraseña incorrecta. Inténtalo de nuevo.",
+  "alert_error": "Error desconocido.",
+  "alert_conn_error": "Se ha producido un error de conexión.",
+  "net_unavailable": "Red: (no disponible)"
+}

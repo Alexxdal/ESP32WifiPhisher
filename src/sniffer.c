@@ -2,8 +2,10 @@
 #include <esp_wifi.h>
 #include <esp_log.h>
 #include <esp_timer.h>
+#include <esp_err.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include <freertos/event_groups.h>
 #include <cJSON.h>
 #include "wifi_attacks.h"
 #include "sniffer.h"
@@ -24,6 +26,9 @@ static const char *TAG = "SNIFFER";
 #define PACKET_PARSING_TASK_PRIO            10
 #define PACKET_QUEUE_LEN                    50
 #define CHANNEL_HOPPING_TASK_PRIO           3
+/* Sniffer task status bits */
+#define SNIFFER_EVT_TASK_RUNNING            (1 << 0)
+#define SNIFFER_EVT_TASK_EXITED             (1 << 1)
 
 /* Queue and semaphore */
 static QueueHandle_t packet_queue = NULL;
@@ -32,9 +37,13 @@ static SemaphoreHandle_t aps_semaphore = NULL;
 static SemaphoreHandle_t handshake_semaphore = NULL;
 static SemaphoreHandle_t probes_semaphore = NULL;
 
+static portMUX_TYPE sniffer_init_mux = portMUX_INITIALIZER_UNLOCKED;
+static EventGroupHandle_t sniffer_evt = NULL;
+
 /* Tasks handlers */
 static TaskHandle_t packet_parsing_task_handle = NULL;
 static TaskHandle_t channel_hopping_task_handle = NULL;
+static volatile bool packet_parsing_task_running = false;
 
 /* Group Bits */
 #define SCAN_DONE_BIT (1<<0)
@@ -61,9 +70,52 @@ static bool live_packet_analyzer = false;
 /* Callback */
 sniffer_packet_t callback_sniffer_pkt = {0};
 
-/* Private function */
-static void add_client_to_list(const uint8_t *mac, const uint8_t *bssid);
+/* Private Functions */
 static void wifi_sniffer_channel_hopping_task(void *param);
+static void add_client_to_list(const uint8_t *mac, const uint8_t *bssid);
+
+
+static esp_err_t create_mutex_once(SemaphoreHandle_t *h)
+{
+    if (h == NULL) return ESP_ERR_INVALID_ARG;
+    if (*h != NULL) return ESP_OK;
+
+    SemaphoreHandle_t tmp = xSemaphoreCreateMutex();
+    if (tmp == NULL) return ESP_ERR_NO_MEM;
+
+    taskENTER_CRITICAL(&sniffer_init_mux);
+    if (*h == NULL) {
+        *h = tmp;
+        tmp = NULL;
+    }
+    taskEXIT_CRITICAL(&sniffer_init_mux);
+
+    if (tmp != NULL) {
+        vSemaphoreDelete(tmp);
+    }
+
+    return ESP_OK;
+}
+
+
+static esp_err_t create_eventgroup_once(EventGroupHandle_t *eg)
+{
+    if (eg == NULL) return ESP_ERR_INVALID_ARG;
+    if (*eg != NULL) return ESP_OK;
+
+    EventGroupHandle_t tmp = xEventGroupCreate();
+    if (tmp == NULL) return ESP_ERR_NO_MEM;
+
+    taskENTER_CRITICAL(&sniffer_init_mux);
+    if (*eg == NULL) {
+        *eg = tmp;
+        tmp = NULL;
+    }
+    taskEXIT_CRITICAL(&sniffer_init_mux);
+
+    if (tmp != NULL) vEventGroupDelete(tmp);
+    return ESP_OK;
+}
 
 
 static void wifi_event_scan_done_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data)
@@ -335,7 +387,7 @@ static void wifi_sniffer_packet_analyzer_handler(struct libwifi_frame *frame, sn
 
     // Rate Limiting
     static int64_t last_pkt_time = 0;
-    if (esp_timer_get_time() - last_pkt_time < 5000) return; 
+    if (esp_timer_get_time() - last_pkt_time < 30000) return; 
 
     uint16_t type = frame->frame_control.type;       
     uint16_t subtype = frame->frame_control.subtype; 
@@ -541,11 +593,17 @@ static void wifi_sniffer_packet_analyzer_handler(struct libwifi_frame *frame, sn
  */
 static void packet_parsing_task(void *param)
 {
+    ESP_ERROR_CHECK_WITHOUT_ABORT(create_eventgroup_once(&sniffer_evt));
+    if (sniffer_evt) {
+        xEventGroupClearBits(sniffer_evt, SNIFFER_EVT_TASK_EXITED);
+        xEventGroupSetBits(sniffer_evt, SNIFFER_EVT_TASK_RUNNING);
+    }
+
     sniffer_packet_t parsing_sniffer_pkt = {0};
 
-    while (1)
+    while (packet_parsing_task_running)
     {
-        if (xQueueReceive(packet_queue, &parsing_sniffer_pkt, portMAX_DELAY) == pdTRUE)
+        if (xQueueReceive(packet_queue, &parsing_sniffer_pkt, pdMS_TO_TICKS(1000)) == pdTRUE)
         {
             struct libwifi_frame frame = {0};
             int ret = libwifi_get_wifi_frame(&frame, (uint8_t *)parsing_sniffer_pkt.payload, parsing_sniffer_pkt.length, false);
@@ -578,6 +636,68 @@ static void packet_parsing_task(void *param)
             libwifi_free_wifi_frame(&frame);
         }
     }
+
+    if (sniffer_evt) {
+        xEventGroupClearBits(sniffer_evt, SNIFFER_EVT_TASK_RUNNING);
+        xEventGroupSetBits(sniffer_evt, SNIFFER_EVT_TASK_EXITED);
+    }
+    vTaskDelete(NULL);
+}
+
+
+static void wifi_sniffer_resource_cleanup(void)
+{
+    bool en = false;
+    ESP_ERROR_CHECK(esp_wifi_get_promiscuous(&en));
+    if (en) {
+        ESP_ERROR_CHECK(esp_wifi_set_promiscuous_rx_cb(NULL));
+        ESP_ERROR_CHECK(esp_wifi_set_promiscuous(false));
+    }
+
+    if (packet_parsing_task_handle != NULL) {
+        packet_parsing_task_running = false;
+
+        if (packet_queue != NULL) {
+            sniffer_packet_t dummy = {0};
+            xQueueSend(packet_queue, &dummy, 0);
+        }
+
+        ESP_ERROR_CHECK_WITHOUT_ABORT(create_eventgroup_once(&sniffer_evt));
+
+        if (sniffer_evt != NULL) {
+            EventBits_t bits = xEventGroupWaitBits(
+                sniffer_evt,
+                SNIFFER_EVT_TASK_EXITED,
+                pdTRUE,
+                pdFALSE,
+                pdMS_TO_TICKS(2000)
+            );
+
+            if ((bits & SNIFFER_EVT_TASK_EXITED) == 0) {
+                vTaskDelete(packet_parsing_task_handle);
+            }
+        } else {
+            vTaskDelay(pdMS_TO_TICKS(50));
+            vTaskDelete(packet_parsing_task_handle);
+        }
+
+        packet_parsing_task_handle = NULL;
+    }
+
+    if (packet_queue != NULL) {
+        vQueueDelete(packet_queue);
+        packet_queue = NULL;
+    }
+
+    if (clients_semaphore)   { vSemaphoreDelete(clients_semaphore); clients_semaphore = NULL; }
+    if (aps_semaphore)       { vSemaphoreDelete(aps_semaphore); aps_semaphore = NULL; }
+    if (handshake_semaphore) { vSemaphoreDelete(handshake_semaphore); handshake_semaphore = NULL; }
+    if (probes_semaphore)    { vSemaphoreDelete(probes_semaphore); probes_semaphore = NULL; }
+
+    if (sniffer_evt) {
+        vEventGroupDelete(sniffer_evt);
+        sniffer_evt = NULL;
+    }
 }
 
 
@@ -593,30 +713,25 @@ esp_err_t wifi_start_sniffing(void)
     }
 
     /* Init semaphore */
-    if (clients_semaphore == NULL) clients_semaphore = xSemaphoreCreateMutex();
-    if (aps_semaphore == NULL) aps_semaphore = xSemaphoreCreateMutex();
-    if (handshake_semaphore == NULL) handshake_semaphore = xSemaphoreCreateMutex();
-    if (probes_semaphore == NULL) probes_semaphore = xSemaphoreCreateMutex();
+    ESP_ERROR_CHECK(create_mutex_once(&clients_semaphore));
+    ESP_ERROR_CHECK(create_mutex_once(&aps_semaphore));
+    ESP_ERROR_CHECK(create_mutex_once(&handshake_semaphore));
+    ESP_ERROR_CHECK(create_mutex_once(&probes_semaphore));
+    ESP_ERROR_CHECK(create_eventgroup_once(&sniffer_evt));
 
     /* Create packet queue */
-    if (packet_queue == NULL)
-    {
+    if (packet_queue == NULL) {
         packet_queue = xQueueCreate(PACKET_QUEUE_LEN, sizeof(sniffer_packet_t));
-        if (packet_queue == NULL)
-        {
-            ESP_LOGE(TAG, "Failed to create packet queue");
-            return ESP_FAIL;
-        }
+        if (!packet_queue) goto fail;
     }
 
     /* Create packet parsing task */
-    if (packet_parsing_task_handle == NULL)
-    {
-        BaseType_t result = xTaskCreate(packet_parsing_task, "packet_parsing_task", 8192, NULL, PACKET_PARSING_TASK_PRIO, &packet_parsing_task_handle);
-        if (result != pdPASS)
-        {
-            ESP_LOGE(TAG, "Failed to create packet parsing task");
-            return ESP_FAIL;
+    if (packet_parsing_task_handle == NULL) {
+        packet_parsing_task_running = true;
+        if (xTaskCreate(packet_parsing_task, "packet_parsing_task", 8192, NULL,
+                        PACKET_PARSING_TASK_PRIO, &packet_parsing_task_handle) != pdPASS) {
+            packet_parsing_task_running = false;
+            goto fail;
         }
     }
 
@@ -626,54 +741,28 @@ esp_err_t wifi_start_sniffing(void)
     memset(&captured_probes, 0, sizeof(probe_request_list_t));
 
     ESP_ERROR_CHECK(esp_wifi_set_promiscuous(true));
-    wifi_promiscuous_filter_t filter = {
-        .filter_mask = WIFI_PROMIS_FILTER_MASK_DATA | WIFI_PROMIS_FILTER_MASK_MGMT};
+    wifi_promiscuous_filter_t filter = {.filter_mask = WIFI_PROMIS_FILTER_MASK_DATA | WIFI_PROMIS_FILTER_MASK_MGMT};
     ESP_ERROR_CHECK(esp_wifi_set_promiscuous_filter(&filter));
     filter.filter_mask = 0;
     ESP_ERROR_CHECK(esp_wifi_set_promiscuous_ctrl_filter(&filter));
     ESP_ERROR_CHECK(esp_wifi_set_promiscuous_rx_cb(promiscuous_callback));
 
     return ESP_OK;
+
+fail:
+    wifi_sniffer_resource_cleanup();
+    return ESP_ERR_NO_MEM;
 }
 
 
 esp_err_t wifi_stop_sniffing(void)
 {
-    bool en = false;
-    ESP_ERROR_CHECK(esp_wifi_get_promiscuous(&en));
-
     /* Clear filters and channel hopping */
     wifi_sniffer_start_packet_analyzer(false);
     wifi_sniffer_set_bssid_filter(NULL);
     wifi_sniffer_set_fine_filter(0, 0, 0);
     wifi_sniffer_stop_channel_hopping();
-
-    /* Disable promiscuous mode */
-    if (en == true)
-    {
-        ESP_ERROR_CHECK(esp_wifi_set_promiscuous(false));
-    }
-
-    /* Delete packet parsing task */
-    if (packet_parsing_task_handle != NULL)
-    {
-        vTaskDelete(packet_parsing_task_handle);
-        packet_parsing_task_handle = NULL;
-    }
-
-    /* Delete packet queue */
-    if (packet_queue != NULL)
-    {
-        vQueueDelete(packet_queue);
-        packet_queue = NULL;
-    }
-
-    /* Delete semaphore */
-    if (clients_semaphore != NULL) { vSemaphoreDelete(clients_semaphore); clients_semaphore = NULL; }
-    if (aps_semaphore != NULL) { vSemaphoreDelete(aps_semaphore); aps_semaphore = NULL; }
-    if (handshake_semaphore != NULL) { vSemaphoreDelete(handshake_semaphore); handshake_semaphore = NULL; }
-    if (probes_semaphore != NULL) { vSemaphoreDelete(probes_semaphore); probes_semaphore = NULL; }
-
+    wifi_sniffer_resource_cleanup();
     filter_channel = 0;
     return ESP_OK;
 }
@@ -811,9 +900,7 @@ esp_err_t wifi_sniffer_get_probes(probe_request_list_t *out)
 {
     if(out == NULL) return ESP_ERR_INVALID_ARG;
 
-    if (probes_semaphore == NULL) {
-        probes_semaphore = xSemaphoreCreateMutex();
-    }
+    ESP_ERROR_CHECK(create_mutex_once(&aps_semaphore));
 
     if (xSemaphoreTake(probes_semaphore, pdMS_TO_TICKS(100)) == pdTRUE) 
     {
@@ -829,9 +916,7 @@ esp_err_t wifi_sniffer_get_handshake_for_target(const uint8_t *bssid, const uint
 {
     if (bssid == NULL || out == NULL) return ESP_ERR_INVALID_ARG;
 
-    if (handshake_semaphore == NULL) {
-        handshake_semaphore = xSemaphoreCreateMutex();
-    }
+    ESP_ERROR_CHECK(create_mutex_once(&handshake_semaphore));
 
     if (xSemaphoreTake(handshake_semaphore, pdMS_TO_TICKS(100)) == pdTRUE) 
     {
@@ -863,18 +948,28 @@ int wifi_sniffer_get_handshake_status_for_target(const uint8_t *bssid)
 {
     if (bssid == NULL) return 0;
 
-    for (int i = 0; i < captured_handshakes.count; i++) {
-        /* Check BSSID */
-        if (memcmp(captured_handshakes.handshake[i].bssid, bssid, 6) == 0) {
-            if (captured_handshakes.handshake[i].handshake_captured ) {
-                return 1;
-            }
-            if (captured_handshakes.handshake[i].pmkid_captured) {
-                return 2;
+    ESP_ERROR_CHECK(create_mutex_once(&handshake_semaphore));
+
+    int ret_value = 0;
+
+    if (xSemaphoreTake(handshake_semaphore, pdMS_TO_TICKS(100)) == pdTRUE) {
+        for (int i = 0; i < captured_handshakes.count; i++) {
+            /* Check BSSID */
+            if (memcmp(captured_handshakes.handshake[i].bssid, bssid, 6) == 0) {
+                if (captured_handshakes.handshake[i].handshake_captured ) {
+                    ret_value = 2;
+                    break;
+                }
+                if (captured_handshakes.handshake[i].pmkid_captured) {
+                    ret_value = 1;
+                    break;
+                }
             }
         }
+        xSemaphoreGive(handshake_semaphore);
     }
-    return 0;
+
+    return ret_value;
 }
 
 
@@ -882,9 +977,7 @@ esp_err_t wifi_sniffer_get_clients(client_list_t *out)
 {
     if(out == NULL) return ESP_ERR_INVALID_ARG;
 
-    if (clients_semaphore == NULL) {
-        clients_semaphore = xSemaphoreCreateMutex();
-    }
+    ESP_ERROR_CHECK(create_mutex_once(&clients_semaphore));
 
     if (xSemaphoreTake(clients_semaphore, pdMS_TO_TICKS(100)) == pdTRUE) 
     {
@@ -898,7 +991,14 @@ esp_err_t wifi_sniffer_get_clients(client_list_t *out)
 
 uint8_t wifi_sniffer_get_clients_count(void)
 {
-    return clients.count;
+    uint8_t ret_value = 0;
+    ESP_ERROR_CHECK(create_mutex_once(&clients_semaphore));
+    if (xSemaphoreTake(clients_semaphore, pdMS_TO_TICKS(100)) == pdTRUE) 
+    {
+        ret_value = clients.count;
+        xSemaphoreGive(clients_semaphore);
+    }
+    return ret_value;
 }
 
 
@@ -906,10 +1006,8 @@ esp_err_t wifi_sniffer_get_aps(aps_info_t *out)
 {
     if(out == NULL) return ESP_ERR_INVALID_ARG;
 
-    if (aps_semaphore == NULL) {
-        aps_semaphore = xSemaphoreCreateMutex();
-    }
-
+    ESP_ERROR_CHECK(create_mutex_once(&aps_semaphore));
+    
     if (xSemaphoreTake(aps_semaphore, pdMS_TO_TICKS(100)) == pdTRUE) 
     {
         memcpy(out, &detected_aps, sizeof(aps_info_t));
@@ -922,15 +1020,19 @@ esp_err_t wifi_sniffer_get_aps(aps_info_t *out)
 
 uint8_t wifi_sniffer_get_aps_count(void)
 {
-    return detected_aps.count;
+    uint8_t ret_value = 0;
+    ESP_ERROR_CHECK(create_mutex_once(&aps_semaphore));
+    if (xSemaphoreTake(aps_semaphore, pdMS_TO_TICKS(100)) == pdTRUE) {
+        ret_value = detected_aps.count;
+        xSemaphoreGive(aps_semaphore);
+    }
+    return ret_value;
 }
 
 
 esp_err_t wifi_sniffer_scan_fill_aps(void) 
 {
-    if (aps_semaphore == NULL) {
-        aps_semaphore = xSemaphoreCreateMutex();
-    }
+    ESP_ERROR_CHECK(create_mutex_once(&aps_semaphore));
 
     wifi_scan_config_t scan_config = {
         .ssid = NULL,
@@ -989,7 +1091,7 @@ static void wifi_sniffer_channel_hopping_task(void *param)
 {
     uint8_t target_channel = (uint8_t)(uintptr_t)param;
     uint8_t current_channel = 1;
-    const uint32_t ROC_DURATION_MS = 10;
+    const uint32_t ROC_DURATION_MS = 20;
     const uint32_t AP_REST_TIME_MS = 80;
 
     while (1)
@@ -1023,7 +1125,7 @@ static void wifi_sniffer_channel_hopping_task(void *param)
              ESP_LOGW(TAG, "ROC request failed: %s", esp_err_to_name(err));
         }
 
-        vTaskDelay(pdMS_TO_TICKS(AP_REST_TIME_MS));
+        vTaskDelay(pdMS_TO_TICKS(AP_REST_TIME_MS + ROC_DURATION_MS));
         if (target_channel == 0) {
             current_channel++;
             if (current_channel > 13) current_channel = 1;
@@ -1043,6 +1145,8 @@ static void add_client_to_list(const uint8_t *mac, const uint8_t *bssid)
         return;
     }
 
+    if (clients_semaphore == NULL) return;
+
     if (xSemaphoreTake(clients_semaphore, pdMS_TO_TICKS(CLIENT_SEM_WAIT)) == pdTRUE)
     {
         /* Dont add duplicates */
@@ -1057,8 +1161,8 @@ static void add_client_to_list(const uint8_t *mac, const uint8_t *bssid)
             memcpy(clients.client[clients.count].mac, mac, 6);
             memcpy(clients.client[clients.count].bssid, bssid, 6);
             clients.count++;
-            ws_log(TAG, "New Client: %02X:%02X:%02X:%02X:%02X:%02X Linked to AP: %02X:%02X:%02X:%02X:%02X:%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5]);
-            ESP_LOGI(TAG, "New Client: %02X:%02X:%02X:%02X:%02X:%02X Linked to AP: %02X:%02X:%02X:%02X:%02X:%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5]);
+            ws_log(TAG, "New Client: "MACSTR" Linked to AP: "MACSTR"", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5]);
+            ESP_LOGI(TAG, "New Client: "MACSTR" Linked to AP: "MACSTR"", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5]);
         }
         xSemaphoreGive(clients_semaphore);
     }

@@ -6,7 +6,7 @@
 static const char *TAG = "CONFIG";
 
 
-void save_string_to_flash(const char* key, const char* value) 
+void save_string_to_nvs(const char* key, const char* value) 
 {
     nvs_handle_t nvs_handle;
     esp_err_t err;
@@ -31,7 +31,7 @@ void save_string_to_flash(const char* key, const char* value)
 }
 
 
-esp_err_t read_string_from_flash(const char* key, char* value) 
+esp_err_t read_string_from_nvs(const char* key, char* value) 
 {
     nvs_handle_t nvs_handle;
     esp_err_t err;
@@ -63,7 +63,7 @@ esp_err_t read_string_from_flash(const char* key, char* value)
 }
 
 
-void save_int_to_flash(const char* key, int32_t value) 
+void save_int_to_nvs(const char* key, int32_t value) 
 {
     nvs_handle_t nvs_handle;
     esp_err_t err;
@@ -88,7 +88,7 @@ void save_int_to_flash(const char* key, int32_t value)
 }
 
 
-esp_err_t read_int_from_flash(const char* key, int32_t *value) 
+esp_err_t read_int_from_nvs(const char* key, int32_t *value) 
 {
     nvs_handle_t nvs_handle;
     esp_err_t err;
