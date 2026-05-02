@@ -19,4 +19,11 @@
  */
 #define WIFI_CHAN_KEY   "wifi_chan"
 
+
+/**
+ * @brief Key for storage on wifi tx rate
+ * 
+ */
+#define WIFI_TX_RATE_KEY    "wifi_tx_rate"
+
 #endif

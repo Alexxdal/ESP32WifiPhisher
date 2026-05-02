@@ -81,6 +81,7 @@ esp_err_t password_manager_init(void)
         return ESP_FAIL;
     }
 
+    ESP_LOGI(TAG, "Checking SPIFFS partition...");
     ret = esp_spiffs_check(conf.partition_label);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "SPIFFS_check() failed (%s)", esp_err_to_name(ret));

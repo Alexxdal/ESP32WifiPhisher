@@ -9,6 +9,7 @@
 #include "config.h"
 #include "wifiMng.h"
 #include "nvs_keys.h"
+#include "utils.h"
 
 
 static const char *TAG = "WIFI_MNG";
@@ -65,6 +66,38 @@ static esp_err_t set_wifi_region() {
 }
 
 
+static esp_err_t wifi_set_tx_rate(wifi_interface_t ifx, wifi_phy_rate_t target_rate) 
+{
+    wifi_tx_rate_config_t rate_config = {
+        .ersu = false,
+        .dcm = false,
+        .rate = target_rate
+    };
+
+    if (target_rate >= WIFI_PHY_RATE_1M_L && target_rate <= WIFI_PHY_RATE_11M_S) {
+        // 0x00 - 0x07 standard 802.11b
+        rate_config.phymode = WIFI_PHY_MODE_11B;
+        ESP_LOGI(TAG, "Setting TX Rate to 802.11b mode (%s)", wifi_rate_to_str(target_rate));
+        
+    } else if (target_rate >= WIFI_PHY_RATE_48M && target_rate <= WIFI_PHY_RATE_9M) {
+        // 0x08 - 0x0F standard 802.11g
+        rate_config.phymode = WIFI_PHY_MODE_11G;
+        ESP_LOGI(TAG, "Setting TX Rate to 802.11g mode (%s)", wifi_rate_to_str(target_rate));
+        
+    } else {
+        // 0x10 in poi sono indici MCS (802.11n / HT20)
+        rate_config.phymode = WIFI_PHY_MODE_HT20;
+        ESP_LOGI(TAG, "Setting TX Rate to 802.11n (HT20) mode (%s)", wifi_rate_to_str(target_rate));
+    }
+
+    esp_err_t err = esp_wifi_config_80211_tx(ifx, &rate_config);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to set TX rate: %s", esp_err_to_name(err));
+    }
+    return err;
+}
+
+
 esp_err_t wifi_init(void)
 {
     ESP_ERROR_CHECK(esp_netif_init());
@@ -81,9 +114,13 @@ esp_err_t wifi_init(void)
     ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
     ESP_ERROR_CHECK(esp_wifi_set_max_tx_power(84));
 
-    //ESP_ERROR_CHECK(esp_wifi_internal_set_fix_rate(WIFI_IF_STA, true, WIFI_PHY_RATE_11M_S));
-    //ESP_ERROR_CHECK(esp_wifi_config_80211_tx_rate(WIFI_IF_STA, WIFI_PHY_RATE_6M));
-    ESP_ERROR_CHECK(esp_wifi_config_80211_tx_rate(WIFI_IF_STA, WIFI_PHY_RATE_9M));
+    wifi_phy_rate_t target_rate = 0;
+    if(read_int_from_nvs(WIFI_TX_RATE_KEY, (int32_t *)&target_rate) != ESP_OK )
+    {
+        target_rate = DEFAULT_WIFI_TX_RATE;
+    }
+    ESP_ERROR_CHECK(wifi_set_tx_rate(WIFI_IF_STA, target_rate));
+
 #if CONFIG_SOC_WIFI_SUPPORT_5G
     ESP_ERROR_CHECK(esp_wifi_set_band_mode(WIFI_BAND_MODE_AUTO));
 #endif

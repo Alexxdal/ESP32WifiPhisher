@@ -90,6 +90,15 @@ const char *authmode_to_str(wifi_auth_mode_t m);
 
 
 /**
+ * @brief Convert wifi_phy_rate_t to string
+ * 
+ * @param rate 
+ * @return const char* 
+ */
+const char *wifi_rate_to_str(wifi_phy_rate_t rate);
+
+
+/**
  * @brief Hex dump bytes
  * 
  * @param tag 

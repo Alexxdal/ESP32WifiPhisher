@@ -114,6 +114,63 @@ const char *authmode_to_str(wifi_auth_mode_t m)
 }
 
 
+const char *wifi_rate_to_str(wifi_phy_rate_t rate)
+{
+    switch (rate) {
+        // 802.11b Rates (Long Preamble)
+        case WIFI_PHY_RATE_1M_L:      return "1 Mbps (Long Preamble)";
+        case WIFI_PHY_RATE_2M_L:      return "2 Mbps (Long Preamble)";
+        case WIFI_PHY_RATE_5M_L:      return "5.5 Mbps (Long Preamble)";
+        case WIFI_PHY_RATE_11M_L:     return "11 Mbps (Long Preamble)";
+        // 802.11b Rates (Short Preamble)
+        case WIFI_PHY_RATE_2M_S:      return "2 Mbps (Short Preamble)";
+        case WIFI_PHY_RATE_5M_S:      return "5.5 Mbps (Short Preamble)";
+        case WIFI_PHY_RATE_11M_S:     return "11 Mbps (Short Preamble)";
+        // 802.11g Rates
+        case WIFI_PHY_RATE_48M:       return "48 Mbps";
+        case WIFI_PHY_RATE_24M:       return "24 Mbps";
+        case WIFI_PHY_RATE_12M:       return "12 Mbps";
+        case WIFI_PHY_RATE_6M:        return "6 Mbps";
+        case WIFI_PHY_RATE_54M:       return "54 Mbps";
+        case WIFI_PHY_RATE_36M:       return "36 Mbps";
+        case WIFI_PHY_RATE_18M:       return "18 Mbps";
+        case WIFI_PHY_RATE_9M:        return "9 Mbps";
+        // 802.11n/ac/ax MCS Rates (Long Guard Interval)
+        case WIFI_PHY_RATE_MCS0_LGI:  return "MCS0 (LGI)";
+        case WIFI_PHY_RATE_MCS1_LGI:  return "MCS1 (LGI)";
+        case WIFI_PHY_RATE_MCS2_LGI:  return "MCS2 (LGI)";
+        case WIFI_PHY_RATE_MCS3_LGI:  return "MCS3 (LGI)";
+        case WIFI_PHY_RATE_MCS4_LGI:  return "MCS4 (LGI)";
+        case WIFI_PHY_RATE_MCS5_LGI:  return "MCS5 (LGI)";
+        case WIFI_PHY_RATE_MCS6_LGI:  return "MCS6 (LGI)";
+        case WIFI_PHY_RATE_MCS7_LGI:  return "MCS7 (LGI)";
+#if CONFIG_SOC_WIFI_HE_SUPPORT || !CONFIG_SOC_WIFI_SUPPORTED
+        case WIFI_PHY_RATE_MCS8_LGI:  return "MCS8 (LGI)";
+        case WIFI_PHY_RATE_MCS9_LGI:  return "MCS9 (LGI)";
+#endif
+        // 802.11n/ac/ax MCS Rates (Short Guard Interval)
+        case WIFI_PHY_RATE_MCS0_SGI:  return "MCS0 (SGI)";
+        case WIFI_PHY_RATE_MCS1_SGI:  return "MCS1 (SGI)";
+        case WIFI_PHY_RATE_MCS2_SGI:  return "MCS2 (SGI)";
+        case WIFI_PHY_RATE_MCS3_SGI:  return "MCS3 (SGI)";
+        case WIFI_PHY_RATE_MCS4_SGI:  return "MCS4 (SGI)";
+        case WIFI_PHY_RATE_MCS5_SGI:  return "MCS5 (SGI)";
+        case WIFI_PHY_RATE_MCS6_SGI:  return "MCS6 (SGI)";
+        case WIFI_PHY_RATE_MCS7_SGI:  return "MCS7 (SGI)";
+        
+#if CONFIG_SOC_WIFI_HE_SUPPORT || !CONFIG_SOC_WIFI_SUPPORTED
+        case WIFI_PHY_RATE_MCS8_SGI:  return "MCS8 (SGI)";
+        case WIFI_PHY_RATE_MCS9_SGI:  return "MCS9 (SGI)";
+#endif
+        // Proprietary LoRa Rates
+        case WIFI_PHY_RATE_LORA_250K: return "LoRa 250 Kbps";
+        case WIFI_PHY_RATE_LORA_500K: return "LoRa 500 Kbps";
+        
+        default:                      return "UNKNOWN_RATE";
+    }
+}
+
+
 void hex_dump_bytes(const char *tag, const uint8_t *buf, size_t len)
 {
     if (!buf || len == 0) return;

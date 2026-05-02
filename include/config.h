@@ -10,6 +10,7 @@
 #define DEFAULT_WIFI_MAX_CONN       5
 #define DEFAULT_WIFI_CHAN           1
 #define DEFAULT_WIFI_AUTH           WIFI_AUTH_WPA_WPA2_PSK
+#define DEFAULT_WIFI_TX_RATE        WIFI_PHY_RATE_9M
 
 
 /**

@@ -884,6 +884,24 @@
                     <input type="text" id="password" name="password">
                     <label data-i18n="channel">Channel</label>
                     <input type="number" id="channel" name="channel" min="1" max="13">
+                    <label data-i18n="tx_rate">TX Power Rate</label>
+                    <select id="tx_rate" name="tx_rate">
+                        <optgroup label="Max Range / Attack (802.11b)">
+                            <option value="0">1 Mbps (Long Preamble)</option>
+                            <option value="2">5.5 Mbps (Long Preamble)</option>
+                        </optgroup>
+                        <optgroup label="Balanced / Default (802.11g)">
+                            <option value="11">6 Mbps</option>
+                            <option value="15">9 Mbps (Default)</option>
+                            <option value="10">12 Mbps</option>
+                            <option value="9">24 Mbps</option>
+                        </optgroup>
+                        <optgroup label="High Speed (802.11g/n)">
+                            <option value="12">54 Mbps</option>
+                            <option value="16">MCS0 (6.5 Mbps / LGI)</option>
+                            <option value="23">MCS7 (65 Mbps / LGI)</option>
+                        </optgroup>
+                    </select>
                     <div class="btn-group">
                         <button type="submit" data-i18n="btn_save_reboot">SAVE & REBOOT</button>
                     </div>
@@ -1514,6 +1532,7 @@
                 document.getElementById('ssid').value = data.ssid || '';
                 document.getElementById('password').value = data.password || '';
                 document.getElementById('channel').value = data.channel || 1;
+                document.getElementById('tx_rate').value = data.tx_rate !== undefined ? data.tx_rate : 15;
             } catch (err) { log("Error loading settings", "error"); }
         }
 
@@ -1522,10 +1541,11 @@
             const ssid = document.getElementById('ssid').value;
             const password = document.getElementById('password').value;
             const channel = parseInt(document.getElementById('channel').value);
+            const tx_rate = parseInt(document.getElementById('tx_rate').value);
 
             try {
                 showToast("Saving...");
-                const res = await sendCommand(CMD.SET_AP_SETTINGS, { ssid, password, channel });
+                const res = await sendCommand(CMD.SET_AP_SETTINGS, { ssid, password, channel, tx_rate });
                 if(res.status === "ok") { showToast("Settings Saved!"); }
             } catch (err) { showToast("Error saving settings"); }
         }
