@@ -107,8 +107,6 @@ esp_err_t wifi_init(void)
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
-/*#ifndef CONFIG_IDF_TARGET_ESP32C5
- #endif*/
     ESP_ERROR_CHECK(set_wifi_region());
     ESP_ERROR_CHECK(esp_wifi_start());
     ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
@@ -122,8 +120,15 @@ esp_err_t wifi_init(void)
     ESP_ERROR_CHECK(wifi_set_tx_rate(WIFI_IF_STA, target_rate));
 
 #if CONFIG_SOC_WIFI_SUPPORT_5G
-    ESP_ERROR_CHECK(esp_wifi_set_band_mode(WIFI_BAND_MODE_AUTO));
+    wifi_bandwidths_t bands = {
+        .ghz_2g = WIFI_BW_HT20,
+        .ghz_5g = WIFI_BW_HT20
+    };
+    ESP_ERROR_CHECK(esp_wifi_set_bandwidths(WIFI_IF_AP, &bands));
+#else
+    ESP_ERROR_CHECK(esp_wifi_set_bandwidth(WIFI_IF_AP, WIFI_BW_HT20));
 #endif
+
     ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL));
 
     /* Callback for frame statistics */
@@ -171,6 +176,23 @@ void wifi_start_softap(void)
     wifi_config.ap.authmode = DEFAULT_WIFI_AUTH;
 
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config));
+    
+    /* Force only 11b and 11g for max stability */
+    #if CONFIG_SOC_WIFI_SUPPORT_5G
+    wifi_protocols_t protos = {
+        .ghz_2g = WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G,
+        .ghz_5g = WIFI_PROTOCOL_11A
+    };
+    esp_err_t err_prot = esp_wifi_set_protocols(WIFI_IF_AP, &protos);
+    if(err_prot != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to set AP protocols (dual-band API): %s", esp_err_to_name(err_prot));
+    }
+#else
+    esp_err_t err_prot = esp_wifi_set_protocol(WIFI_IF_AP, WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G);
+    if(err_prot != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to set AP protocol (single-band API): %s", esp_err_to_name(err_prot));
+    }
+#endif
 }
 
 

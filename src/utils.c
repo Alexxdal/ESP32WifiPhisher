@@ -1,4 +1,5 @@
 #include <string.h>
+#include "oui_database.h"
 #include "utils.h"
 
 bool isMacBroadcast(const uint8_t *mac)
@@ -189,4 +190,31 @@ void hex_dump_bytes(const char *tag, const uint8_t *buf, size_t len)
         }
         printf("|\n");
     }
+}
+
+
+static int oui_compare(const void *key, const void *element) 
+{
+    uint32_t target = *(const uint32_t *)key;
+    const mac_oui_t *entry = (const mac_oui_t *)element;
+    if (target < entry->oui) return -1;
+    if (target > entry->oui) return 1;
+    return 0;
+}
+
+
+const char* resolve_mac_oui(const uint8_t mac[6]) 
+{
+    uint32_t target_oui = (mac[0] << 16) | (mac[1] << 8) | mac[2];
+
+    if ((mac[0] & 0x02) == 0x02) {
+        return "Randomized MAC"; 
+    }
+    
+    size_t db_size = sizeof(oui_db) / sizeof(oui_db[0]);
+    mac_oui_t *result = bsearch(&target_oui, oui_db, db_size, sizeof(mac_oui_t), oui_compare);
+    if (result != NULL) {
+        return result->vendor;
+    }
+    return "Unknown Vendor";
 }
