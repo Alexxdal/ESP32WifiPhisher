@@ -7,6 +7,7 @@
 #include "wifiMng.h"
 #include "dns.h"
 #include "passwordMng.h"
+#include "portmap.h"
 
 
 /**
@@ -50,12 +51,22 @@ void app_main()
         fatal_error_handler();
     }
 
+    /* Configure DNAT for captive portal */
+    if(setup_dnat_for_captive_portal() != ESP_OK)
+    {
+        fatal_error_handler();
+    }
+
     #ifdef DEBUG
     esp_log_level_set("wifi", ESP_LOG_DEBUG);
     esp_log_level_set("esp_netif_lwip", ESP_LOG_DEBUG);
+    esp_log_level_set("httpd_txrx", ESP_LOG_WARN);
+    esp_log_level_set("httpd_ws", ESP_LOG_WARN);
     #else
     esp_log_level_set("wifi", ESP_LOG_ERROR);
     esp_log_level_set("esp_netif_lwip", ESP_LOG_WARN);
+    esp_log_level_set("httpd_txrx", ESP_LOG_ERROR);
+    esp_log_level_set("httpd_ws", ESP_LOG_ERROR);
     #endif
 
     /* Start wifi AP */
