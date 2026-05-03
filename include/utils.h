@@ -90,6 +90,15 @@ const char *authmode_to_str(wifi_auth_mode_t m);
 
 
 /**
+ * @brief Convert wifi_phy_rate_t to string
+ * 
+ * @param rate 
+ * @return const char* 
+ */
+const char *wifi_rate_to_str(wifi_phy_rate_t rate);
+
+
+/**
  * @brief Hex dump bytes
  * 
  * @param tag 
@@ -98,5 +107,13 @@ const char *authmode_to_str(wifi_auth_mode_t m);
  */
 void hex_dump_bytes(const char *tag, const uint8_t *buf, size_t len);
 
+
+/**
+ * @brief Resolve MAC OUI to Vendor Name
+ * 
+ * @param mac 
+ * @return const char* 
+ */
+const char* resolve_mac_oui(const uint8_t mac[6]);
 
 #endif

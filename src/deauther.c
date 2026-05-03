@@ -350,11 +350,7 @@ void deauther_stop(void)
     }
 
     deauther_running = false;
-    int timeout = 0;
-    while (eTaskGetState(deauther_task_handle) != eDeleted && timeout < 50) {
-        vTaskDelay(pdMS_TO_TICKS(100));
-        timeout++;
-    }
+    vTaskDelay(pdMS_TO_TICKS(5000));
     deauther_task_handle = NULL;
     wifi_stop_sniffing();
 

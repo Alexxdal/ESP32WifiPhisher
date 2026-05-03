@@ -717,6 +717,16 @@ esp_err_t wifi_attack_softap_beacon_spam(const char *ssid, uint8_t channel)
     beacon_frame[offset++] = 0x01;
     beacon_frame[offset++] = 0x00;
 
+    // 6. Interworking (802.11u) - Suggerisce che è una rete pubblica gratuita
+    beacon_frame[offset++] = 0x6B; // Tag 107 (Interworking)
+    beacon_frame[offset++] = 0x05; // Length
+    beacon_frame[offset++] = 0x0F; // Access Network Type: Free public network (0x00) + Internet (0x0F)
+    // Venue Info (Unspecified)
+    beacon_frame[offset++] = 0x00; 
+    beacon_frame[offset++] = 0x00; 
+    beacon_frame[offset++] = 0x00; 
+    beacon_frame[offset++] = 0x00;
+
     return esp_wifi_80211_tx(WIFI_IF_STA, beacon_frame, offset, false);
 }
 

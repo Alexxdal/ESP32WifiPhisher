@@ -1161,8 +1161,8 @@ static void add_client_to_list(const uint8_t *mac, const uint8_t *bssid)
             memcpy(clients.client[clients.count].mac, mac, 6);
             memcpy(clients.client[clients.count].bssid, bssid, 6);
             clients.count++;
-            ws_log(TAG, "New Client: "MACSTR" Linked to AP: "MACSTR"", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5]);
-            ESP_LOGI(TAG, "New Client: "MACSTR" Linked to AP: "MACSTR"", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5]);
+            ws_log(TAG, "New Client: "MACSTR"(%s) Linked to AP: "MACSTR"(%s)", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], resolve_mac_oui(mac), bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5], resolve_mac_oui(bssid));
+            ESP_LOGI(TAG, "New Client: "MACSTR"(%s) Linked to AP: "MACSTR"(%s)", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], resolve_mac_oui(mac), bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5], resolve_mac_oui(bssid));
         }
         xSemaphoreGive(clients_semaphore);
     }

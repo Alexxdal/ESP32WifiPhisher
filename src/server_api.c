@@ -23,6 +23,13 @@ typedef struct {
 } api_cmd_t;
 
 
+static void delayed_restart_timer_cb(TimerHandle_t xTimer)
+{
+    ESP_LOGI(TAG, "Rebooting now...");
+    esp_restart();
+}
+
+
 const char* mime_from_path(const char* path) {
     if (strstr(path, ".html")) return "text/html";
     if (strstr(path, ".css"))  return "text/css";
@@ -174,20 +181,25 @@ static esp_err_t api_admin_get_ap_settings(ws_frame_req_t *req)
 {
     char ssid[32] = {0};
     char password[64] = {0};
-    int32_t channel = 1;
+    int32_t channel = DEFAULT_WIFI_CHAN;
+    wifi_phy_rate_t tx_rate = DEFAULT_WIFI_TX_RATE;
 
     /* Read value from flash */
-    if( read_string_from_nvs("wifi_ssid", ssid) != ESP_OK )
+    if( read_string_from_nvs(WIFI_SSID_KEY, ssid) != ESP_OK )
     {
         strcpy(ssid, DEFAULT_WIFI_SSID);
     }
-    if( read_string_from_nvs("wifi_pass", password) != ESP_OK )
+    if( read_string_from_nvs(WIFI_PASS_KEY, password) != ESP_OK )
     {
         strcpy(password, DEFAULT_WIFI_PASS);
     }
-    if( read_int_from_nvs("wifi_chan", &channel) != ESP_OK )
+    if( read_int_from_nvs(WIFI_CHAN_KEY, &channel) != ESP_OK )
     {
         channel = DEFAULT_WIFI_CHAN;
+    }
+    if( read_int_from_nvs(WIFI_TX_RATE_KEY, (int32_t *)&tx_rate) != ESP_OK )
+    {
+        tx_rate = DEFAULT_WIFI_TX_RATE;
     }
 
     cJSON *root = cJSON_CreateObject();
@@ -196,7 +208,7 @@ static esp_err_t api_admin_get_ap_settings(ws_frame_req_t *req)
     cJSON_AddStringToObject(root, "ssid", ssid);
     cJSON_AddStringToObject(root, "password", password);
     cJSON_AddNumberToObject(root, "channel", channel);
-
+    cJSON_AddNumberToObject(root, "tx_rate", tx_rate);
     char *json_response = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
 
@@ -230,10 +242,12 @@ static esp_err_t api_admin_set_ap_settings(ws_frame_req_t *req)
     const cJSON *j_ssid = cJSON_GetObjectItemCaseSensitive(json, "ssid");
     const cJSON *j_password = cJSON_GetObjectItemCaseSensitive(json, "password");
     const cJSON *j_channel = cJSON_GetObjectItemCaseSensitive(json, "channel");
+    const cJSON *j_tx_rate = cJSON_GetObjectItemCaseSensitive(json, "tx_rate");
 
     char ssid[32] = {0};
     char password[64] = {0};
     int channel = 1;
+    wifi_phy_rate_t tx_rate = DEFAULT_WIFI_TX_RATE;
 
     if (cJSON_IsString(j_ssid)) {
         strlcpy(ssid, j_ssid->valuestring, sizeof(ssid));
@@ -244,13 +258,26 @@ static esp_err_t api_admin_set_ap_settings(ws_frame_req_t *req)
     if (cJSON_IsNumber(j_channel)) {
         channel = j_channel->valueint;
     }
+    if (cJSON_IsNumber(j_tx_rate)) {
+        tx_rate = (wifi_phy_rate_t)j_tx_rate->valueint;
+    }
     cJSON_Delete(json);
 
     save_string_to_nvs(WIFI_SSID_KEY, (const char *)ssid);
     save_string_to_nvs(WIFI_PASS_KEY, (const char *)password);
     save_int_to_nvs(WIFI_CHAN_KEY, channel);
+    save_int_to_nvs(WIFI_TX_RATE_KEY, (int32_t)tx_rate);
 
     api_send_status_frame(req, "ok", "AP settings saved successfully.");
+
+    TimerHandle_t restart_timer = xTimerCreate("restart_timer", pdMS_TO_TICKS(2000), pdFALSE, NULL, delayed_restart_timer_cb);
+    if (restart_timer != NULL) {
+        xTimerStart(restart_timer, 0);
+        ESP_LOGI(TAG, "Restart scheduled in 2 seconds.");
+    } else {
+        ESP_LOGE(TAG, "Failed to create restart timer! Forcing immediate reboot.");
+        esp_restart(); // Fallback
+    }
 
     return ESP_OK;
 }
@@ -752,7 +779,7 @@ void http_api_parse(ws_frame_req_t *req)
 {
     cJSON *root = cJSON_Parse(req->payload);
     if (root == NULL) {
-        ESP_LOGE(TAG, "Invalid JSON received: %s", req->payload);
+        ESP_LOGD(TAG, "Invalid JSON received: %s", req->payload);
         return;
     }
 
