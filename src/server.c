@@ -244,7 +244,7 @@ static esp_err_t redirect_handler(httpd_req_t *req)
 		captive_portal_redirect(req);
 		return ESP_OK;
 	}
-	else if(strcmp(uri, "/success.txt") == 0 ) {
+	else if(strncmp(uri, "/success.txt", 12) == 0 ) {
         captive_portal_redirect(req);
         return ESP_OK;
     }
