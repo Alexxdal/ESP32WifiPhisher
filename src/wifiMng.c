@@ -125,8 +125,10 @@ esp_err_t wifi_init(void)
         .ghz_5g = WIFI_BW_HT20
     };
     ESP_ERROR_CHECK(esp_wifi_set_bandwidths(WIFI_IF_AP, &bands));
+    ESP_ERROR_CHECK(esp_wifi_set_bandwidths(WIFI_IF_STA, &bands));
 #else
     ESP_ERROR_CHECK(esp_wifi_set_bandwidth(WIFI_IF_AP, WIFI_BW_HT20));
+    ESP_ERROR_CHECK(esp_wifi_set_bandwidth(WIFI_IF_STA, WIFI_BW_HT20));
 #endif
 
     ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL));

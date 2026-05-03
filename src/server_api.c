@@ -779,7 +779,7 @@ void http_api_parse(ws_frame_req_t *req)
 {
     cJSON *root = cJSON_Parse(req->payload);
     if (root == NULL) {
-        ESP_LOGE(TAG, "Invalid JSON received: %s", req->payload);
+        ESP_LOGD(TAG, "Invalid JSON received: %s", req->payload);
         return;
     }
 
