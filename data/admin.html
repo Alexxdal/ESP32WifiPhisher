@@ -605,6 +605,10 @@
                                 <div id="stat-tx-drop" style="font-size: 1.8rem; font-weight: bold; color: #ff5252;">0</div>
                                 <div style="font-size: 0.7rem; color: #aaa; letter-spacing: 1px;" data-i18n="dropped">DROPPED</div>
                             </div>
+                            <div style="text-align: center; background: #151515; padding: 10px; border-radius: 4px;">
+                                <div id="stat-tx-pps" style="font-size: 1.8rem; font-weight: bold; color: #00bcd4;">0</div>
+                                <div style="font-size: 0.7rem; color: #aaa; letter-spacing: 1px;" data-i18n="pps">PPS</div>
+                            </div>
                         </div>
 
                         <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: #aaa; margin-bottom: 5px;">
@@ -1451,10 +1455,12 @@
 
                 const txSent = data.tx_sent || 0;
                 const txDrop = data.tx_drop || 0;
+                const txPps = data.tx_pps || 0;
                 const totalTx = txSent + txDrop;
 
                 document.getElementById('stat-tx-sent').innerText = formatBigNumber(txSent);
                 document.getElementById('stat-tx-drop').innerText = formatBigNumber(txDrop);
+                document.getElementById('stat-tx-pps').innerText = formatBigNumber(txPps);
 
                 let quality = 100;
                 let msg = "Optimal performance.";

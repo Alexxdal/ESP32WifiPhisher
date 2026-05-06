@@ -74,4 +74,9 @@ void wifi_dropped_frame_increment(void);
 void wifi_reset_frame_counters(void);
 
 
+/**
+ * @brief Get current frames per second (PPS)
+ */
+uint32_t wifi_get_frame_pps(void);
+
 #endif

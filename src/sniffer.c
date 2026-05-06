@@ -1038,11 +1038,68 @@ esp_err_t wifi_sniffer_scan_fill_aps(void)
         .ssid = NULL,
         .bssid = NULL,
         .channel = 0,
-        .show_hidden = false,
+        .show_hidden = true,
         .scan_type = WIFI_SCAN_TYPE_ACTIVE,
         .scan_time.active.min = 0,
         .scan_time.active.max = 150,
         .home_chan_dwell_time = 150,
+    };
+    
+    if(esp_wifi_scan_start(&scan_config, true) != ESP_OK ) return ESP_FAIL;
+    uint16_t ap_count = 0;
+    esp_wifi_scan_get_ap_num(&ap_count);
+
+    if (ap_count > 0) 
+    {
+        wifi_ap_record_t *ap_records = (wifi_ap_record_t *)calloc(ap_count, sizeof(wifi_ap_record_t));
+        if (ap_records) 
+        {
+            if (esp_wifi_scan_get_ap_records(&ap_count, ap_records) == ESP_OK) 
+            {
+                if (xSemaphoreTake(aps_semaphore, pdMS_TO_TICKS(100)) == pdTRUE) 
+                {
+                    for (int i = 0; i < ap_count; i++) 
+                    {
+                        if (ap_records[i].rssi < -95) continue; 
+                        bool found = false;
+                        for (int k = 0; k < detected_aps.count; k++) 
+                        {
+                            if (memcmp(detected_aps.ap[k].bssid, ap_records[i].bssid, 6) == 0) 
+                            {
+                                memcpy(&detected_aps.ap[k], &ap_records[i], sizeof(wifi_ap_record_t));
+                                found = true;
+                                break;
+                            }
+                        }
+                        if (!found && detected_aps.count < MAX_AP) 
+                        {
+                            memcpy(&detected_aps.ap[detected_aps.count], &ap_records[i], sizeof(wifi_ap_record_t));
+                            detected_aps.count++;
+                        }
+                    }
+                    xSemaphoreGive(aps_semaphore);
+                }
+            }
+            free(ap_records);
+        }
+    }
+    return ESP_OK;
+}
+
+
+esp_err_t wifi_sniffer_scan_fill_aps_fast(void) 
+{
+    ESP_ERROR_CHECK(create_mutex_once(&aps_semaphore));
+
+    wifi_scan_config_t scan_config = {
+        .ssid = NULL,
+        .bssid = NULL,
+        .channel = 0,
+        .show_hidden = true,
+        .scan_type = WIFI_SCAN_TYPE_ACTIVE,
+        .scan_time.active.min = 20,
+        .scan_time.active.max = 70,
+        .home_chan_dwell_time = 30,
     };
     
     if(esp_wifi_scan_start(&scan_config, true) != ESP_OK ) return ESP_FAIL;

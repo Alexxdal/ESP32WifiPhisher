@@ -16,6 +16,10 @@ static const char *TAG = "WIFI_MNG";
 
 static volatile uint32_t g_tx_packets_success = 0;
 static volatile uint32_t g_tx_packets_dropped = 0;
+/* --- PPS VARIABLES--- */
+static volatile uint32_t g_tx_pps = 0;
+static uint32_t last_tx_success_count = 0;
+static TimerHandle_t pps_timer = NULL;
 
 
 static void IRAM_ATTR wifi_80211_tx_done_cb(const esp_80211_tx_info_t *tx_info) {
@@ -24,6 +28,14 @@ static void IRAM_ATTR wifi_80211_tx_done_cb(const esp_80211_tx_info_t *tx_info) 
     } else {
         g_tx_packets_dropped++;
     }
+}
+
+
+static void pps_timer_cb(TimerHandle_t xTimer) 
+{
+    uint32_t current_count = g_tx_packets_success;
+    g_tx_pps = current_count - last_tx_success_count;
+    last_tx_success_count = current_count;
 }
 
 
@@ -137,6 +149,12 @@ esp_err_t wifi_init(void)
     esp_err_t err = esp_wifi_register_80211_tx_cb(wifi_80211_tx_done_cb);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to register TX callback: %s", esp_err_to_name(err));
+    }
+
+    /* Timer for PPS Calculation */
+    pps_timer = xTimerCreate("pps_timer", pdMS_TO_TICKS(1000), pdTRUE, (void *)0, pps_timer_cb);
+    if (pps_timer != NULL) {
+        xTimerStart(pps_timer, 0);
     }
 
     return ESP_OK;
@@ -293,4 +311,11 @@ void wifi_reset_frame_counters(void)
 {
     g_tx_packets_success = 0;
     g_tx_packets_dropped = 0;
+    g_tx_pps = 0;
+}
+
+
+uint32_t wifi_get_frame_pps(void) 
+{
+    return g_tx_pps;
 }

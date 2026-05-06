@@ -153,6 +153,7 @@ static esp_err_t api_get_status(ws_frame_req_t *req)
     cJSON_AddNumberToObject(root, "hs_state", has_handshake);
     cJSON_AddNumberToObject(root, "tx_sent", wifi_get_sent_frames());
     cJSON_AddNumberToObject(root, "tx_drop", wifi_get_dropped_frames());
+    cJSON_AddNumberToObject(root, "tx_pps", wifi_get_frame_pps());
 
     char *json_response = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);

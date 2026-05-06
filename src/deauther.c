@@ -2,6 +2,7 @@
 #include <freertos/event_groups.h>
 #include <esp_random.h>
 #include <esp_log.h>
+#include <esp_timer.h>
 #include <rom/ets_sys.h>
 #include <esp_timer.h>
 #include "deauther.h"
@@ -17,6 +18,7 @@
 #define ATTACK_WINDOW        85  // RCO duration
 #define SOFTAP_REST_TIME     200   // Home channel time
 #define SINGLE_TARGET_ROOM   80
+#define SCAN_INTERVAL_US     30000000 // 30 seconds
 
 static const char *TAG = "DEAUTHER";
 static TaskHandle_t deauther_task_handle = NULL;
@@ -294,10 +296,6 @@ static void deauther_send_frames(const target_info_t *target)
 
 static void deauther_task(void *pvParameters)
 {
-    /* Tick for AP Scan */
-    const TickType_t period = pdMS_TO_TICKS(5000);
-    TickType_t last = xTaskGetTickCount();
-
     /* Get target information */
     target_info_t *target = target_get(TARGET_INFO_DEAUTHER);
     bool broadcast_target = isMacBroadcast(target->bssid);
@@ -312,19 +310,20 @@ static void deauther_task(void *pvParameters)
     /* First scan to fill APs list */
     wifi_sniffer_scan_fill_aps();
 
+    int64_t last_scan_time = esp_timer_get_time();
+
     while(deauther_running)
     {
         deauther_send_frames(target);
         vTaskDelay(pdMS_TO_TICKS(SOFTAP_REST_TIME));
 
         /* Scan for APs */
-        TickType_t now = xTaskGetTickCount();
-        if ((TickType_t)(now - last) >= period) {
-            last += period;
-            // Scan ap only in broadcast mode.
+        if (esp_timer_get_time() - last_scan_time > SCAN_INTERVAL_US)
+        {
             if(broadcast_target) {
-                wifi_sniffer_scan_fill_aps();
+                wifi_sniffer_scan_fill_aps_fast();
             }
+            last_scan_time = esp_timer_get_time();
         }
     }
     if(deauther_evt != NULL) {
@@ -377,6 +376,7 @@ void deauther_stop(void)
 
     deauther_task_handle = NULL;
     wifi_stop_sniffing();
+    wifi_reset_frame_counters();
 
     ESP_LOGI(TAG, "Deauth Attack Stopped.");
 }

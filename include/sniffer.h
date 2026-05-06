@@ -196,6 +196,10 @@ uint8_t wifi_sniffer_get_clients_count(void);
  * @brief Get pointer to detected aps info
  * 
  * @return const aps_info_t* 
+ * @note The list of APs is filled only when wifi_sniffer_scan_fill_aps() or 
+ * wifi_sniffer_scan_fill_aps_fast() are called, otherwise it will be empty.
+ * This is because the promiscuous mode doesn't guarantee to capture all APs in the area,
+ *  so we need to perform a scan to get a complete list.
  */
 esp_err_t wifi_sniffer_get_aps(aps_info_t *out);
 
@@ -211,5 +215,11 @@ uint8_t wifi_sniffer_get_aps_count(void);
  * @brief Scan for aps and fill static memory
  */
 esp_err_t wifi_sniffer_scan_fill_aps(void);
+
+
+/**
+ * @brief Scan for aps with faster scan time and fill static memory
+ */
+esp_err_t wifi_sniffer_scan_fill_aps_fast(void);
 
 #endif /* _SNIFFER_H */
