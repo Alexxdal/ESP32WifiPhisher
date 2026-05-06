@@ -1,4 +1,5 @@
 #include <freertos/FreeRTOS.h>
+#include <freertos/event_groups.h>
 #include <esp_random.h>
 #include <esp_log.h>
 #include <rom/ets_sys.h>
@@ -19,6 +20,8 @@
 
 static const char *TAG = "DEAUTHER";
 static TaskHandle_t deauther_task_handle = NULL;
+static EventGroupHandle_t deauther_evt = NULL;
+#define DEAUTHER_EXIT_BIT (1 << 0)
 static deauther_attack_type_t current_attack_type = DEAUTHER_ATTACK_DEAUTH_FRAME;
 
 // Global variables
@@ -298,6 +301,10 @@ static void deauther_task(void *pvParameters)
     /* Get target information */
     target_info_t *target = target_get(TARGET_INFO_DEAUTHER);
 
+    if(!isMacBroadcast(target->bssid))
+    {
+        wifi_sniffer_set_bssid_filter(target->bssid);
+    }
     wifi_start_sniffing();
     /* Ensure channel hopping is not running */
     wifi_sniffer_stop_channel_hopping();
@@ -317,6 +324,9 @@ static void deauther_task(void *pvParameters)
             wifi_sniffer_scan_fill_aps();
         }
     }
+    if(deauther_evt != NULL) {
+        xEventGroupSetBits(deauther_evt, DEAUTHER_EXIT_BIT);
+    }
     vTaskDelete(NULL);
 }
 
@@ -332,6 +342,11 @@ void deauther_start(const target_info_t *deauth_target, deauther_attack_type_t a
         ESP_LOGE(TAG, "Deauther task already started.");
         return;
     }
+
+    if (deauther_evt == NULL) {
+        deauther_evt = xEventGroupCreate();
+    }
+    xEventGroupClearBits(deauther_evt, DEAUTHER_EXIT_BIT);
 
     current_attack_type = attack_type;
     deauther_running = true;
@@ -350,7 +365,13 @@ void deauther_stop(void)
     }
 
     deauther_running = false;
-    vTaskDelay(pdMS_TO_TICKS(5000));
+    
+    if (deauther_evt != NULL) {
+        xEventGroupWaitBits(deauther_evt, DEAUTHER_EXIT_BIT, pdTRUE, pdFALSE, portMAX_DELAY);
+        vEventGroupDelete(deauther_evt);
+        deauther_evt = NULL;
+    }
+
     deauther_task_handle = NULL;
     wifi_stop_sniffing();
 

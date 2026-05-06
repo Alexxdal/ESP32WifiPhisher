@@ -275,3 +275,22 @@ uint32_t wifi_get_dropped_frames(void)
 {
     return g_tx_packets_dropped;
 }
+
+
+void wifi_dropped_frame_increment(void)
+{
+    g_tx_packets_dropped++;
+}
+
+
+void wifi_sent_frame_increment(void)
+{
+    g_tx_packets_success++;
+}
+
+
+void wifi_reset_frame_counters(void)
+{
+    g_tx_packets_success = 0;
+    g_tx_packets_dropped = 0;
+}
