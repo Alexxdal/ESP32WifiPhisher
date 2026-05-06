@@ -300,8 +300,8 @@ static void deauther_task(void *pvParameters)
 
     /* Get target information */
     target_info_t *target = target_get(TARGET_INFO_DEAUTHER);
-
-    if(!isMacBroadcast(target->bssid))
+    bool broadcast_target = isMacBroadcast(target->bssid);
+    if(!broadcast_target)
     {
         wifi_sniffer_set_bssid_filter(target->bssid);
     }
@@ -321,7 +321,10 @@ static void deauther_task(void *pvParameters)
         TickType_t now = xTaskGetTickCount();
         if ((TickType_t)(now - last) >= period) {
             last += period;
-            wifi_sniffer_scan_fill_aps();
+            // Scan ap only in broadcast mode.
+            if(broadcast_target) {
+                wifi_sniffer_scan_fill_aps();
+            }
         }
     }
     if(deauther_evt != NULL) {
