@@ -28,6 +28,7 @@
             display: flex;
             height: 100vh;
             overflow: hidden;
+            width: 100vw;
         }
 
         /* --- SIDEBAR --- */
@@ -117,6 +118,8 @@
             flex-direction: column;
             background-color: var(--bg-color);
             position: relative;
+            overflow-x: hidden;
+            overflow-y: auto; 
         }
 
         /* --- TOP BAR --- */
@@ -316,12 +319,18 @@
             border: 1px solid #444;
         }
 
-        .wifi-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.9rem;
-            color: #ccc;
-            white-space: nowrap;
+        @media (max-width: 768px) {
+            .wifi-table {
+                display: block;
+                overflow-x: auto; /* La tabella scorre dentro il suo box, non sposta la pagina */
+                white-space: nowrap;
+                -webkit-overflow-scrolling: touch;
+            }
+            
+            /* Rimpicciolisci un po' il testo per i telefoni */
+            .view-container {
+                padding: 10px;
+            }
         }
 
         .wifi-table th {
@@ -369,21 +378,28 @@
 
         /* --- TOAST NOTIFICATION (New) --- */
         .toast {
-            position: absolute;
-            top: 80px;
-            right: 20px;
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-100px);
             background-color: #333;
             border-left: 4px solid var(--accent);
             padding: 15px 20px;
             border-radius: 4px;
             color: white;
             box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
-            transform: translateX(200%);
-            transition: transform 0.3s cubic-bezier(0.68, -0.55, 0.27, 1.55);
-            z-index: 2000;
+            transition: all 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+            z-index: 9999;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
         }
 
-        .toast.show { transform: translateX(0); }
+        .toast.show {
+            transform: translateX(-50%) translateY(0); /* Scende in posizione */
+            opacity: 1;
+            pointer-events: auto;
+        }
 
         /* Responsive */
         @media (max-width: 768px) {
