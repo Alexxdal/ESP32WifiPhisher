@@ -72,7 +72,7 @@ sniffer_packet_t callback_sniffer_pkt = {0};
 
 /* Private Functions */
 static void wifi_sniffer_channel_hopping_task(void *param);
-static void add_client_to_list(const uint8_t *mac, const uint8_t *bssid);
+static void add_client_to_list(const uint8_t *mac, const uint8_t *bssid, uint16_t length, bool is_tx, int8_t rssi, uint8_t channel);
 
 
 static esp_err_t create_mutex_once(SemaphoreHandle_t *h)
@@ -235,15 +235,87 @@ static void wifi_sniffer_capture_clients(struct libwifi_frame *frame, sniffer_pa
     const uint8_t *addr1 = (uint8_t *)&frame->header.data.addr1;
     const uint8_t *addr2 = (uint8_t *)&frame->header.data.addr2;
 
+    uint16_t len = sniffer_pkt->length;
+    int8_t rssi = sniffer_pkt->rssi;
+    uint8_t ch = sniffer_pkt->channel;
+
     // Caso 1: Client invia all'AP (ToDS=1, FromDS=0)
     // Addr1 = BSSID (Dest), Addr2 = Client (Src)
     if (to_ds == 1 && from_ds == 0) {
-        add_client_to_list(addr2, addr1); // Client, AP
+        add_client_to_list(addr2, addr1, len, true, rssi, ch);
     }
     // Caso 2: AP invia al Client (ToDS=0, FromDS=1)
     // Addr1 = Client (Dest), Addr2 = BSSID (Src)
     else if (to_ds == 0 && from_ds == 1) {
-        add_client_to_list(addr1, addr2); // Client, AP
+        add_client_to_list(addr1, addr2, len, false, rssi, ch);
+    }
+}
+
+
+static void wifi_sniffer_capture_aps(struct libwifi_frame *frame, sniffer_packet_t *sniffer_pkt)
+{
+    if(frame == NULL || sniffer_pkt == NULL) return;
+
+    if(sniffer_pkt->rssi < AP_SCAN_MIN_RSSI) {
+        return;
+    }
+
+    // Filtra solo i pacchetti Management di tipo BEACON o PROBE RESPONSE
+    if (frame->frame_control.type != TYPE_MANAGEMENT) return;
+    struct libwifi_bss bss = {0};
+    int ret = 0;
+    if (frame->frame_control.subtype == SUBTYPE_BEACON ) 
+    {
+        ret =libwifi_parse_beacon(&bss, frame);
+    } else if (frame->frame_control.subtype == SUBTYPE_PROBE_RESP)
+    {
+        ret = libwifi_parse_probe_resp(&bss, frame);
+    } else { return; }
+
+    if (ret == 0) 
+    {
+        const uint8_t *bssid_mac = (uint8_t *)frame->header.mgmt_ordered.addr3;
+        int8_t rssi = sniffer_pkt->rssi;
+        uint16_t length = sniffer_pkt->length;
+        int64_t now = esp_timer_get_time();
+        uint8_t ch = bss.channel > 0 ? bss.channel : sniffer_pkt->channel;
+
+        if (xSemaphoreTake(aps_semaphore, pdMS_TO_TICKS(10)) == pdTRUE) 
+        {
+            bool found = false;
+            /* Check if this AP is already in the list */
+            for (int i = 0; i < detected_aps.count; i++) {
+                if (memcmp(detected_aps.ap[i].record.bssid, bssid_mac, 6) == 0)
+                {
+                    strncpy((char *)detected_aps.ap[i].record.ssid, bss.ssid, 32);
+                    detected_aps.ap[i].record.rssi = rssi;
+                    detected_aps.ap[i].record.primary = ch;
+                    detected_aps.ap[i].last_seen_us = now;
+                    detected_aps.ap[i].packets_tx++;
+                    detected_aps.ap[i].bytes_tx += length;
+                    if (strlen(bss.ssid) > 0 && strlen((char*)detected_aps.ap[i].record.ssid) == 0) {
+                        strncpy((char *)detected_aps.ap[i].record.ssid, bss.ssid, 32);
+                    }
+                    found = true;
+                    break;
+                }
+            }          
+            // Commented because this will block the proper scan from inserting the AP info
+            /* New AP */
+            /* if (!found && detected_aps.count < MAX_AP) {
+                memset(&detected_aps.ap[detected_aps.count], 0, sizeof(ap_ext_t));
+                memcpy(detected_aps.ap[detected_aps.count].record.bssid, bssid_mac, 6);
+                strncpy((char *)detected_aps.ap[detected_aps.count].record.ssid, bss.ssid, 32);
+                detected_aps.ap[detected_aps.count].record.rssi = rssi;
+                detected_aps.ap[detected_aps.count].record.primary = ch;
+                detected_aps.ap[detected_aps.count].last_seen_us = now;
+                detected_aps.ap[detected_aps.count].packets_tx = 1;
+                detected_aps.ap[detected_aps.count].bytes_tx = length;
+                detected_aps.count++;
+            }*/
+            xSemaphoreGive(aps_semaphore);
+        }
+        libwifi_free_bss(&bss); 
     }
 }
 
@@ -623,7 +695,11 @@ static void packet_parsing_task(void *param)
 
             if (frame.frame_control.type == TYPE_MANAGEMENT) {
                 if (frame.frame_control.subtype == SUBTYPE_PROBE_REQ) {
+                    wifi_sniffer_capture_aps(&frame, &parsing_sniffer_pkt);
                     wifi_sniffer_capture_probes(&frame, &parsing_sniffer_pkt);
+                }
+                if (frame.frame_control.subtype == SUBTYPE_BEACON) {
+                    wifi_sniffer_capture_aps(&frame, &parsing_sniffer_pkt);
                 }
             }
             else if (frame.frame_control.type == TYPE_DATA) {
@@ -1060,20 +1136,27 @@ esp_err_t wifi_sniffer_scan_fill_aps(void)
                 {
                     for (int i = 0; i < ap_count; i++) 
                     {
-                        if (ap_records[i].rssi < -95) continue; 
+                        if (ap_records[i].rssi < AP_SCAN_MIN_RSSI) continue; 
                         bool found = false;
                         for (int k = 0; k < detected_aps.count; k++) 
                         {
-                            if (memcmp(detected_aps.ap[k].bssid, ap_records[i].bssid, 6) == 0) 
+                            // 2. Confronta il BSSID (Attenzione al .record.bssid)
+                            if (memcmp(detected_aps.ap[k].record.bssid, ap_records[i].bssid, 6) == 0) 
                             {
-                                memcpy(&detected_aps.ap[k], &ap_records[i], sizeof(wifi_ap_record_t));
+                                // 3. AP Esistente: Aggiorna il record e il timestamp
+                                memcpy(&detected_aps.ap[k].record, &ap_records[i], sizeof(wifi_ap_record_t));
+                                detected_aps.ap[k].last_seen_us = esp_timer_get_time();
                                 found = true;
                                 break;
                             }
                         }
+                        // 4. AP Nuovo: Inseriamo il record nella prima posizione libera
                         if (!found && detected_aps.count < MAX_AP) 
                         {
-                            memcpy(&detected_aps.ap[detected_aps.count], &ap_records[i], sizeof(wifi_ap_record_t));
+                            memset(&detected_aps.ap[detected_aps.count], 0, sizeof(ap_ext_t));
+                            memcpy(&detected_aps.ap[detected_aps.count].record, &ap_records[i], sizeof(wifi_ap_record_t));
+                            detected_aps.ap[detected_aps.count].last_seen_us = esp_timer_get_time();
+                            
                             detected_aps.count++;
                         }
                     }
@@ -1117,20 +1200,27 @@ esp_err_t wifi_sniffer_scan_fill_aps_fast(void)
                 {
                     for (int i = 0; i < ap_count; i++) 
                     {
-                        if (ap_records[i].rssi < -95) continue; 
+                        if (ap_records[i].rssi < AP_SCAN_MIN_RSSI) continue; 
                         bool found = false;
                         for (int k = 0; k < detected_aps.count; k++) 
                         {
-                            if (memcmp(detected_aps.ap[k].bssid, ap_records[i].bssid, 6) == 0) 
+                            // 2. Confronta il BSSID (Attenzione al .record.bssid)
+                            if (memcmp(detected_aps.ap[k].record.bssid, ap_records[i].bssid, 6) == 0) 
                             {
-                                memcpy(&detected_aps.ap[k], &ap_records[i], sizeof(wifi_ap_record_t));
+                                // 3. AP Esistente: Aggiorna il record e il timestamp
+                                memcpy(&detected_aps.ap[k].record, &ap_records[i], sizeof(wifi_ap_record_t));
+                                detected_aps.ap[k].last_seen_us = esp_timer_get_time();
                                 found = true;
                                 break;
                             }
                         }
+                        // 4. AP Nuovo: Inseriamo il record nella prima posizione libera
                         if (!found && detected_aps.count < MAX_AP) 
                         {
-                            memcpy(&detected_aps.ap[detected_aps.count], &ap_records[i], sizeof(wifi_ap_record_t));
+                            memset(&detected_aps.ap[detected_aps.count], 0, sizeof(ap_ext_t));
+                            memcpy(&detected_aps.ap[detected_aps.count].record, &ap_records[i], sizeof(wifi_ap_record_t));
+                            detected_aps.ap[detected_aps.count].last_seen_us = esp_timer_get_time();
+                            
                             detected_aps.count++;
                         }
                     }
@@ -1191,36 +1281,57 @@ static void wifi_sniffer_channel_hopping_task(void *param)
 }
 
 
-static void add_client_to_list(const uint8_t *mac, const uint8_t *bssid)
+static void add_client_to_list(const uint8_t *mac, const uint8_t *bssid, uint16_t length, bool is_tx, int8_t rssi, uint8_t channel)
 {
     // Filter null MAC or Broadcast/Multicast
-    if (mac == NULL || (mac[0] & 0x01) == 1) {
+    if (mac == NULL || (mac[0] & 0x01) == 1 || bssid == NULL || isMacBroadcast(bssid)) {
         return;
     }
-
-    if (bssid == NULL || isMacBroadcast(bssid)) {
-        return;
-    }
-
     if (clients_semaphore == NULL) return;
 
     if (xSemaphoreTake(clients_semaphore, pdMS_TO_TICKS(CLIENT_SEM_WAIT)) == pdTRUE)
     {
-        /* Dont add duplicates */
+        bool found = false;
+        int64_t now = esp_timer_get_time();
+
+        /* Update existing client info */
         for (uint8_t i = 0; i < clients.count; i++) {
-            if (memcmp(clients.client[i].mac, mac, 6) == 0) {
+            if (memcmp(clients.client[i].mac, mac, 6) == 0) 
+            {
                 memcpy(clients.client[i].bssid, bssid, 6);
-                xSemaphoreGive(clients_semaphore);
-                return;
+                clients.client[i].rssi = rssi;
+                clients.client[i].channel = channel;
+                clients.client[i].last_seen_us = now;
+                if (is_tx) {
+                    clients.client[i].packets_tx++;
+                    clients.client[i].bytes_tx += length;
+                } else {
+                    clients.client[i].packets_rx++;
+                    clients.client[i].bytes_rx += length;
+                }
+                found = true;
+                break;
             }
         }
-        if (clients.count < MAX_CLIENTS) {
-            memcpy(clients.client[clients.count].mac, mac, 6);
-            memcpy(clients.client[clients.count].bssid, bssid, 6);
+
+        /* Add new client if not found and space available */
+        if (!found && clients.count < MAX_CLIENTS) 
+        {
+            client_t *c = &clients.client[clients.count];
+            memset(c, 0, sizeof(client_t));
+            memcpy(c->mac, mac, 6);
+            memcpy(c->bssid, bssid, 6);
+            c->rssi = rssi;
+            c->channel = channel;
+            c->last_seen_us = now;
+            if (is_tx) { c->packets_tx = 1; c->bytes_tx = length; }
+            else       { c->packets_rx = 1; c->bytes_rx = length; }
             clients.count++;
-            ws_log(TAG, "New Client: "MACSTR"(%s) Linked to AP: "MACSTR"(%s)", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], resolve_mac_oui(mac), bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5], resolve_mac_oui(bssid));
-            ESP_LOGI(TAG, "New Client: "MACSTR"(%s) Linked to AP: "MACSTR"(%s)", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], resolve_mac_oui(mac), bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5], resolve_mac_oui(bssid));
+            
+            ws_log(TAG, "New Client: "MACSTR"(%s) linked to "MACSTR"(%s)", MAC2STR(mac), resolve_mac_oui(mac), MAC2STR(bssid), resolve_mac_oui(bssid));
+            ESP_LOGI(TAG, "New Client: "MACSTR"(%s) linked to "MACSTR"(%s)", MAC2STR(mac), resolve_mac_oui(mac), MAC2STR(bssid), resolve_mac_oui(bssid));
         }
+
         xSemaphoreGive(clients_semaphore);
     }
 }

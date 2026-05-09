@@ -229,7 +229,7 @@ static void deauther_send_frames(const target_info_t *target)
         uint8_t num_channels = 0;
         for (int i = 0; i < aps.count; i++) 
         {
-            uint8_t ch = aps.ap[i].primary;
+            uint8_t ch = aps.ap[i].record.primary;
             bool exists = false;
             for (int k = 0; k < num_channels; k++) {
                 if (target_channels[k] == ch) {
@@ -250,11 +250,11 @@ static void deauther_send_frames(const target_info_t *target)
             int64_t start_time = esp_timer_get_time();
             for (int i = 0; i < aps.count; i++) 
             {
-                if (aps.ap[i].primary == current_ch) 
+                if (aps.ap[i].record.primary == current_ch) 
                 {
                     // Burst di pacchetti
                     for(int k=0; k<15; k++) {
-                        execute_attack_on_target(aps.ap[i].bssid, (const char*)aps.ap[i].ssid, current_ch);
+                        execute_attack_on_target(aps.ap[i].record.bssid, (const char*)aps.ap[i].record.ssid, current_ch);
                     }
                 }
                 if ((esp_timer_get_time() - start_time) / 1000 > (ATTACK_WINDOW - 20)) {

@@ -442,6 +442,10 @@
                 <svg viewBox="0 0 24 24"><path d="M12.01 21.49L23.64 7c-.45-.34-4.93-4-11.64-4C5.28 3 .81 6.66.36 7l11.63 14.49.01.01.01-.01z" /></svg> 
                 <span data-i18n="scanner_sniff">Scanner & Sniff</span>
             </div>
+            <div class="menu-item" onclick="showView('view-recon', this)">
+                <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zM4 12c0-4.42 3.58-8 8-8 1.85 0 3.55.63 4.9 1.69L5.69 16.9C4.63 15.55 4 13.85 4 12zm8 8c-1.85 0-3.55-.63-4.9-1.69L18.31 7.1C19.37 8.45 20 10.15 20 12c0 4.42-3.58 8-8 8z"/></svg> 
+                <span data-i18n="recon_airodump">Recon (Airodump)</span>
+            </div>
             <div class="menu-item" onclick="showView('view-eviltwin', this)">
                 <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z" /></svg> 
                 <span data-i18n="eviltwin_attack">Evil Twin Attack</span>
@@ -737,6 +741,57 @@
             </div>
         </div>
 
+        
+        <div id="view-recon" class="view-container">
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #333; padding-bottom:15px; margin-bottom:20px;">
+                <h2 style="border:none; margin:0;" data-i18n="recon_title">Network Reconnaissance</h2>
+            </div>
+
+            <div class="card" style="padding:0; overflow-x:auto; margin-bottom: 20px;">
+                <div style="padding:10px 15px; background:#181818; border-bottom:1px solid #333; font-weight:bold; color:var(--accent); font-size: 0.85rem;">
+                    ACCESS POINTS
+                </div>
+                <table class="wifi-table" style="font-family: 'Courier New', monospace; font-size: 0.8rem;">
+                    <thead style="background: #1e1e1e;">
+                        <tr>
+                            <th data-i18n="th_essid">ESSID</th>
+                            <th data-i18n="th_bssid">BSSID</th>
+                            <th data-i18n="th_pwr">PWR</th>
+                            <th data-i18n="th_ch">CH</th>
+                            <th data-i18n="th_pkts">FRAMES</th>
+                            <th data-i18n="th_clients">CLIENTS</th> 
+                            <th data-i18n="th_bytes">BYTES</th>
+                            <th data-i18n="th_sec">ENC</th>
+                            <th data-i18n="th_hs">HS</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recon-ap-body">
+                        <tr><td colspan="9" style="text-align:center; padding:15px; color:#666;">Press START RECON to listen...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="card" style="padding:0; overflow-x:auto;">
+                <div style="padding:10px 15px; background:#181818; border-bottom:1px solid #333; font-weight:bold; color:#00bcd4; font-size: 0.85rem;">
+                    ASSOCIATED CLIENTS
+                </div>
+                <table class="wifi-table" style="font-family: 'Courier New', monospace; font-size: 0.8rem;">
+                    <thead style="background: #1e1e1e;">
+                        <tr>
+                            <th data-i18n="th_station">STATION (MAC)</th>
+                            <th data-i18n="th_assoc_ap">AP (SSID)</th>
+                            <th data-i18n="th_pwr">PWR</th>
+                            <th data-i18n="th_pkts">FRAMES</th>
+                            <th data-i18n="th_bytes">BYTES</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recon-cli-body">
+                        <tr><td colspan="5" style="text-align:center; padding:15px; color:#666;">Waiting for clients...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
         <div id="view-eviltwin" class="view-container">
             <h2 data-i18n="evil_twin_title">Evil Twin Attack</h2>
             <div class="card">
@@ -940,7 +995,9 @@
             START_DEAUTHER: 12,
             STOP_DEAUTHER: 13,
             START_RAW_SNIFFER: 14,
-            STOP_RAW_SNIFFER: 15
+            STOP_RAW_SNIFFER: 15,
+            GET_RECON_DATA_AP: 16,
+            GET_RECON_DATA_CLI: 17
         };
 
         // Stato globale
@@ -949,8 +1006,14 @@
         let pendingRequests = new Map();
         let isConnected = false;
         let statusInterval = null;
+        let reconPollingInterval = null;
+        let isReconRunning = false;
         let currentTarget = null;
         let karmaInterval = null;
+        // Cache locale per i dati Recon
+        let lastApsData = [];
+        let lastClientsData = [];
+        let apMap = {}; // BSSID -> SSID
 
         // Packet sniffer
         let snifferActive = false;
@@ -1250,8 +1313,14 @@
                 log("WebSocket Connected!", "info");
                 showToast("System Online");
                 if (statusInterval) clearInterval(statusInterval);
+                if (reconPollingInterval) clearInterval(reconPollingInterval);
                 document.querySelector('.top-bar').style.borderBottom = "1px solid var(--border)";
                 statusInterval = setInterval(requestSystemStatus, 2000);
+                // Alternate polling
+                reconPollingInterval = setInterval(() => {
+                    fetchReconDataAp();
+                    setTimeout(fetchReconDataCli, 2000);
+                }, 5000);
             };
 
             ws.onclose = () => {
@@ -1815,6 +1884,113 @@
                 updateSubtypes();
             });
         }
+        
+        // ==========================================
+        // RECON: FETCH ACCESS POINTS
+        // ==========================================
+        async function fetchReconDataAp() {
+            try {
+                const res = await sendCommand(CMD.GET_RECON_DATA_AP);
+                if (!res.aps) return;
+                lastApsData = res.aps;
+
+                // Aggiorniamo la mappa BSSID -> SSID e la mappa dei conteggi
+                const clientCountMap = {};
+                lastClientsData.forEach(cli => {
+                    const bssidUpper = cli.bssid.toUpperCase();
+                    clientCountMap[bssidUpper] = (clientCountMap[bssidUpper] || 0) + 1;
+                });
+
+                const apBody = document.getElementById('recon-ap-body');
+                apBody.innerHTML = '';
+                
+                lastApsData.sort((a, b) => b.rssi - a.rssi).forEach(ap => {
+                    const bssidUpper = ap.bssid.toUpperCase();
+                    apMap[bssidUpper] = (ap.ssid && ap.ssid.trim() !== "") ? ap.ssid : `<span style="color:#666">&lt;hidden&gt;</span>`;
+                    const cliCount = clientCountMap[bssidUpper] || 0;
+
+                    let hsText = "-", hsColor = "#444";
+                    if (ap.hs === 2) { hsText = "WPA"; hsColor = "#00e676"; }
+                    else if (ap.hs === 1) { hsText = "PMKID"; hsColor = "#ffab40"; }
+
+                    apBody.innerHTML += `
+                        <tr>
+                            <td style="font-weight:bold; color:#fff;">${ap.ssid || '<span style="color:#666">&lt;hidden&gt;</span>'}</td>
+                            <td style="color:#aaa; font-family:monospace;">${bssidUpper}</td>
+                            <td style="color:${ap.rssi > -70 ? '#00e676' : (ap.rssi > -85 ? '#ffab40' : '#ff5252')}">${ap.rssi}</td>
+                            <td style="color:#fff;">${ap.ch}</td>
+                            <td>${ap.pkts}</td>
+                            <td style="color:#00bcd4; font-weight:bold;">${cliCount}</td>
+                            <td style="color:#aaa;">${formatBigNumber(ap.bytes)}</td>
+                            <td>${ap.sec}</td>
+                            <td style="color:${hsColor}; font-weight:bold; font-size:0.75rem;">${hsText}</td>
+                        </tr>
+                    `;
+                });
+
+                updateTargetMonitors();
+            } catch(e) { console.warn("AP Fetch Error:", e); }
+        }
+
+        // ==========================================
+        // RECON: FETCH CLIENTS
+        // ==========================================
+        async function fetchReconDataCli() {
+            try {
+                const res = await sendCommand(CMD.GET_RECON_DATA_CLI);
+                if (!res.clients) return;
+                lastClientsData = res.clients;
+
+                const cliBody = document.getElementById('recon-cli-body');
+                cliBody.innerHTML = '';
+                
+                lastClientsData.sort((a, b) => {
+                    const bssidCompare = a.bssid.localeCompare(b.bssid);
+                    if (bssidCompare !== 0) return bssidCompare;
+                    return b.rssi - a.rssi;
+                }).forEach(cli => {
+                    const bssidUpper = cli.bssid.toUpperCase();
+                    const macUpper = cli.mac.toUpperCase();
+                    let associatedApName = (bssidUpper === "FF:FF:FF:FF:FF:FF") ? 
+                        '<span style="color:#666">(Not Associated)</span>' : 
+                        (apMap[bssidUpper] || `<span style="color:#888; font-family:monospace;">${bssidUpper}</span>`);
+
+                    cliBody.innerHTML += `
+                        <tr>
+                            <td style="color:#fff; font-weight:bold; font-family:monospace;">${macUpper}</td>
+                            <td style="color:#00e676; font-weight:bold;">${associatedApName}</td>
+                            <td style="color:${cli.rssi > -70 ? '#00e676' : (cli.rssi > -85 ? '#ffab40' : '#ff5252')}">${cli.rssi}</td>
+                            <td>${cli.pkts}</td>
+                            <td style="color:#aaa;">${formatBigNumber(cli.bytes)}</td>
+                        </tr>
+                    `;
+                });
+                
+                updateTargetMonitors();
+            } catch(e) { console.warn("CLI Fetch Error:", e); }
+        }
+
+        function updateTargetMonitors() {
+            if (!currentTarget) return;
+            const targetBssidUpper = currentTarget.bssid.toUpperCase();
+            
+            const targetAp = lastApsData.find(ap => ap.bssid.toUpperCase() === targetBssidUpper);
+            const cliCount = lastClientsData.filter(c => c.bssid.toUpperCase() === targetBssidUpper).length;
+
+            const updateUI = (prefix) => {
+                const monitor = document.getElementById(`${prefix}-live-monitor`);
+                if (monitor && targetAp) {
+                    monitor.style.display = 'block';
+                    document.getElementById(`${prefix}-live-pkts`).innerText = targetAp.pkts;
+                    document.getElementById(`${prefix}-live-bytes`).innerText = formatBigNumber(targetAp.bytes);
+                    document.getElementById(`${prefix}-live-clients`).innerText = cliCount;
+                }
+            };
+
+            if (document.getElementById('view-eviltwin').classList.contains('active')) updateUI('et');
+            if (document.getElementById('view-deauth').classList.contains('active')) updateUI('deauth');
+        }
+
         // ==========================================
         // INIT
         // ==========================================
