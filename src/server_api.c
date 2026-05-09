@@ -284,6 +284,7 @@ static esp_err_t api_get_recon_data_clients(ws_frame_req_t *req)
         snprintf(bssid_str, sizeof(bssid_str), MACSTRCAPS, MAC2STR(recon_clients->client[i].bssid));
         cJSON_AddStringToObject(cli_obj, "mac", mac_str);
         cJSON_AddStringToObject(cli_obj, "bssid", bssid_str);
+        cJSON_AddNumberToObject(cli_obj, "ch", recon_clients->client[i].channel);
         cJSON_AddNumberToObject(cli_obj, "rssi", recon_clients->client[i].rssi);
         cJSON_AddNumberToObject(cli_obj, "pkts", recon_clients->client[i].packets_tx + recon_clients->client[i].packets_rx);
         cJSON_AddNumberToObject(cli_obj, "bytes", recon_clients->client[i].bytes_tx + recon_clients->client[i].bytes_rx);

@@ -41,6 +41,18 @@
             transition: transform 0.3s ease;
         }
 
+        /* Overlay per chiudere la sidebar cliccando fuori */
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 999;
+        }
+        .sidebar.open + .sidebar-overlay {
+            display: block;
+        }
+
         .brand {
             padding: 25px 20px;
             font-size: 1.4rem;
@@ -471,6 +483,8 @@
         </div>
     </div>
 
+    </div> <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+
     <div class="main-content">
         <div class="top-bar">
             <div class="mobile-toggle" onclick="toggleSidebar()">
@@ -773,13 +787,14 @@
 
             <div class="card" style="padding:0; overflow-x:auto;">
                 <div style="padding:10px 15px; background:#181818; border-bottom:1px solid #333; font-weight:bold; color:#00bcd4; font-size: 0.85rem;">
-                    ASSOCIATED CLIENTS
+                    CLIENTS
                 </div>
                 <table class="wifi-table" style="font-family: 'Courier New', monospace; font-size: 0.8rem;">
                     <thead style="background: #1e1e1e;">
                         <tr>
                             <th data-i18n="th_station">STATION (MAC)</th>
                             <th data-i18n="th_assoc_ap">AP (SSID)</th>
+                            <th data-i18n="th_ch">CH</th>
                             <th data-i18n="th_pwr">PWR</th>
                             <th data-i18n="th_pkts">FRAMES</th>
                             <th data-i18n="th_bytes">BYTES</th>
@@ -1099,21 +1114,45 @@
         }
 
         function showView(viewId, menuItem) {
+        try {
+            // 1. Forza la chiusura sidebar PRIMA di fare qualsiasi altra cosa
+            const sidebar = document.getElementById('sidebar');
+            if (sidebar) sidebar.classList.remove('open');
+
+            // 2. Cambio classe Active sui container
             document.querySelectorAll('.view-container').forEach(el => el.classList.remove('active'));
-            document.getElementById(viewId).classList.add('active');
+            const targetView = document.getElementById(viewId);
+            if (targetView) targetView.classList.add('active');
+
+            // 3. Cambio classe Active sul menu
             document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active'));
-            menuItem.classList.add('active');
-            document.getElementById('page-title').innerText = menuItem.innerText.trim();
-            
-            if (window.innerWidth <= 768) document.getElementById('sidebar').classList.remove('open');
+            if (menuItem) {
+                menuItem.classList.add('active');
+                const span = menuItem.querySelector('span');
+                if (span) document.getElementById('page-title').innerText = span.innerText;
+            }
+
+            // 4. Esecuzione logiche specifiche (protette da try interno)
             if (viewId === 'view-settings') loadApSettings();
             if (viewId === 'view-passwords') fetchPasswords();
             if (viewId === 'view-deauth') updateDeauthUI();
-            if (viewId !== 'view-karma' && karmaInterval) {
-                clearInterval(karmaInterval);
-                karmaInterval = null;
+            
+            // Se è Recon, aggiorna i dati ma non bloccare l'interfaccia
+            if (viewId === 'view-recon') {
+                if (typeof fetchReconDataAp === "function") fetchReconDataAp();
+                if (typeof fetchReconDataCli === "function") fetchReconDataCli();
             }
+
+        } catch (err) {
+            console.error("Errore nel cambio vista:", err);
+            // Anche se c'è un errore, chiudiamo la sidebar per non bloccare l'utente
+            document.getElementById('sidebar').classList.remove('open');
         }
+
+        // Reset scroll
+        const mainContent = document.querySelector('.main-content');
+        if (mainContent) mainContent.scrollTop = 0;
+    }
 
         function updateAttackTypeDesc() {
             const type = document.getElementById('deauth-frame-type').value;
@@ -1959,6 +1998,7 @@
                         <tr>
                             <td style="color:#fff; font-weight:bold; font-family:monospace;">${macUpper}</td>
                             <td style="color:#00e676; font-weight:bold;">${associatedApName}</td>
+                            <td style="color:#fff;">${cli.ch}</td>
                             <td style="color:${cli.rssi > -70 ? '#00e676' : (cli.rssi > -85 ? '#ffab40' : '#ff5252')}">${cli.rssi}</td>
                             <td>${cli.pkts}</td>
                             <td style="color:#aaa;">${formatBigNumber(cli.bytes)}</td>
