@@ -392,7 +392,7 @@ void http_server_start(void)
 		ESP_LOGE(TAG, "Failed to create websocket frame queue!");
 		return;
 	}
-	xTaskCreate(ws_frame_process_task, "ws_frame_process_task", 4096, NULL, 5, &ws_frame_process_task_handle);
+	xTaskCreate(ws_frame_process_task, "ws_frame_process_task", 8096, NULL, 5, &ws_frame_process_task_handle);
 
 	/* Handler for CORS preflight requests */
 	httpd_uri_t cors_preflight_uri = {

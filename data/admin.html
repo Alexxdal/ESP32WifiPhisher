@@ -28,6 +28,7 @@
             display: flex;
             height: 100vh;
             overflow: hidden;
+            width: 100vw;
         }
 
         /* --- SIDEBAR --- */
@@ -39,6 +40,18 @@
             border-right: 1px solid var(--border);
             z-index: 1000;
             transition: transform 0.3s ease;
+        }
+
+        /* Overlay per chiudere la sidebar cliccando fuori */
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 999;
+        }
+        .sidebar.open + .sidebar-overlay {
+            display: block;
         }
 
         .brand {
@@ -105,6 +118,8 @@
             flex-direction: column;
             background-color: var(--bg-color);
             position: relative;
+            overflow-x: hidden;
+            overflow-y: auto; 
         }
 
         /* --- TOP BAR --- */
@@ -304,12 +319,18 @@
             border: 1px solid #444;
         }
 
-        .wifi-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.9rem;
-            color: #ccc;
-            white-space: nowrap;
+        @media (max-width: 768px) {
+            .wifi-table {
+                display: block;
+                overflow-x: auto; /* La tabella scorre dentro il suo box, non sposta la pagina */
+                white-space: nowrap;
+                -webkit-overflow-scrolling: touch;
+            }
+            
+            /* Rimpicciolisci un po' il testo per i telefoni */
+            .view-container {
+                padding: 10px;
+            }
         }
 
         .wifi-table th {
@@ -357,21 +378,28 @@
 
         /* --- TOAST NOTIFICATION (New) --- */
         .toast {
-            position: absolute;
-            top: 80px;
-            right: 20px;
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-100px);
             background-color: #333;
             border-left: 4px solid var(--accent);
             padding: 15px 20px;
             border-radius: 4px;
             color: white;
             box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
-            transform: translateX(200%);
-            transition: transform 0.3s cubic-bezier(0.68, -0.55, 0.27, 1.55);
-            z-index: 2000;
+            transition: all 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+            z-index: 9999;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
         }
 
-        .toast.show { transform: translateX(0); }
+        .toast.show {
+            transform: translateX(-50%) translateY(0); /* Scende in posizione */
+            opacity: 1;
+            pointer-events: auto;
+        }
 
         /* Responsive */
         @media (max-width: 768px) {
@@ -442,6 +470,10 @@
                 <svg viewBox="0 0 24 24"><path d="M12.01 21.49L23.64 7c-.45-.34-4.93-4-11.64-4C5.28 3 .81 6.66.36 7l11.63 14.49.01.01.01-.01z" /></svg> 
                 <span data-i18n="scanner_sniff">Scanner & Sniff</span>
             </div>
+            <div class="menu-item" onclick="showView('view-recon', this)">
+                <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zM4 12c0-4.42 3.58-8 8-8 1.85 0 3.55.63 4.9 1.69L5.69 16.9C4.63 15.55 4 13.85 4 12zm8 8c-1.85 0-3.55-.63-4.9-1.69L18.31 7.1C19.37 8.45 20 10.15 20 12c0 4.42-3.58 8-8 8z"/></svg> 
+                <span data-i18n="recon_airodump">Recon (Airodump)</span>
+            </div>
             <div class="menu-item" onclick="showView('view-eviltwin', this)">
                 <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z" /></svg> 
                 <span data-i18n="eviltwin_attack">Evil Twin Attack</span>
@@ -466,6 +498,8 @@
             </div>
         </div>
     </div>
+
+    </div> <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
 
     <div class="main-content">
         <div class="top-bar">
@@ -605,6 +639,10 @@
                                 <div id="stat-tx-drop" style="font-size: 1.8rem; font-weight: bold; color: #ff5252;">0</div>
                                 <div style="font-size: 0.7rem; color: #aaa; letter-spacing: 1px;" data-i18n="dropped">DROPPED</div>
                             </div>
+                            <div style="text-align: center; background: #151515; padding: 10px; border-radius: 4px;">
+                                <div id="stat-tx-pps" style="font-size: 1.8rem; font-weight: bold; color: #00bcd4;">0</div>
+                                <div style="font-size: 0.7rem; color: #aaa; letter-spacing: 1px;" data-i18n="pps">PPS</div>
+                            </div>
                         </div>
 
                         <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: #aaa; margin-bottom: 5px;">
@@ -728,6 +766,58 @@
                         <tr>
                             <td colspan="6" style="text-align:center; padding: 20px;" data-i18n="no_scan_data">No scan data</td>
                         </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        
+        <div id="view-recon" class="view-container">
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #333; padding-bottom:15px; margin-bottom:20px;">
+                <h2 style="border:none; margin:0;" data-i18n="recon_title">Network Reconnaissance</h2>
+            </div>
+
+            <div class="card" style="padding:0; overflow-x:auto; margin-bottom: 20px;">
+                <div style="padding:10px 15px; background:#181818; border-bottom:1px solid #333; font-weight:bold; color:var(--accent); font-size: 0.85rem;">
+                    ACCESS POINTS
+                </div>
+                <table class="wifi-table" style="font-family: 'Courier New', monospace; font-size: 0.8rem;">
+                    <thead style="background: #1e1e1e;">
+                        <tr>
+                            <th data-i18n="th_essid">ESSID</th>
+                            <th data-i18n="th_bssid">BSSID</th>
+                            <th data-i18n="th_pwr">PWR</th>
+                            <th data-i18n="th_ch">CH</th>
+                            <th data-i18n="th_pkts">FRAMES</th>
+                            <th data-i18n="th_clients">CLIENTS</th> 
+                            <th data-i18n="th_bytes">BYTES</th>
+                            <th data-i18n="th_sec">ENC</th>
+                            <th data-i18n="th_hs">HS</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recon-ap-body">
+                        <tr><td colspan="9" style="text-align:center; padding:15px; color:#666;">Press START RECON to listen...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="card" style="padding:0; overflow-x:auto;">
+                <div style="padding:10px 15px; background:#181818; border-bottom:1px solid #333; font-weight:bold; color:#00bcd4; font-size: 0.85rem;">
+                    CLIENTS
+                </div>
+                <table class="wifi-table" style="font-family: 'Courier New', monospace; font-size: 0.8rem;">
+                    <thead style="background: #1e1e1e;">
+                        <tr>
+                            <th data-i18n="th_station">STATION (MAC)</th>
+                            <th data-i18n="th_assoc_ap">AP (SSID)</th>
+                            <th data-i18n="th_ch">CH</th>
+                            <th data-i18n="th_pwr">PWR</th>
+                            <th data-i18n="th_pkts">FRAMES</th>
+                            <th data-i18n="th_bytes">BYTES</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recon-cli-body">
+                        <tr><td colspan="5" style="text-align:center; padding:15px; color:#666;">Waiting for clients...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -936,7 +1026,9 @@
             START_DEAUTHER: 12,
             STOP_DEAUTHER: 13,
             START_RAW_SNIFFER: 14,
-            STOP_RAW_SNIFFER: 15
+            STOP_RAW_SNIFFER: 15,
+            GET_RECON_DATA_AP: 16,
+            GET_RECON_DATA_CLI: 17
         };
 
         // Stato globale
@@ -945,8 +1037,14 @@
         let pendingRequests = new Map();
         let isConnected = false;
         let statusInterval = null;
+        let reconPollingInterval = null;
+        let isReconRunning = false;
         let currentTarget = null;
         let karmaInterval = null;
+        // Cache locale per i dati Recon
+        let lastApsData = [];
+        let lastClientsData = [];
+        let apMap = {}; // BSSID -> SSID
 
         // Packet sniffer
         let snifferActive = false;
@@ -1032,21 +1130,45 @@
         }
 
         function showView(viewId, menuItem) {
+        try {
+            // 1. Forza la chiusura sidebar PRIMA di fare qualsiasi altra cosa
+            const sidebar = document.getElementById('sidebar');
+            if (sidebar) sidebar.classList.remove('open');
+
+            // 2. Cambio classe Active sui container
             document.querySelectorAll('.view-container').forEach(el => el.classList.remove('active'));
-            document.getElementById(viewId).classList.add('active');
+            const targetView = document.getElementById(viewId);
+            if (targetView) targetView.classList.add('active');
+
+            // 3. Cambio classe Active sul menu
             document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active'));
-            menuItem.classList.add('active');
-            document.getElementById('page-title').innerText = menuItem.innerText.trim();
-            
-            if (window.innerWidth <= 768) document.getElementById('sidebar').classList.remove('open');
+            if (menuItem) {
+                menuItem.classList.add('active');
+                const span = menuItem.querySelector('span');
+                if (span) document.getElementById('page-title').innerText = span.innerText;
+            }
+
+            // 4. Esecuzione logiche specifiche (protette da try interno)
             if (viewId === 'view-settings') loadApSettings();
             if (viewId === 'view-passwords') fetchPasswords();
             if (viewId === 'view-deauth') updateDeauthUI();
-            if (viewId !== 'view-karma' && karmaInterval) {
-                clearInterval(karmaInterval);
-                karmaInterval = null;
+            
+            // Se è Recon, aggiorna i dati ma non bloccare l'interfaccia
+            if (viewId === 'view-recon') {
+                if (typeof fetchReconDataAp === "function") fetchReconDataAp();
+                if (typeof fetchReconDataCli === "function") fetchReconDataCli();
             }
+
+        } catch (err) {
+            console.error("Errore nel cambio vista:", err);
+            // Anche se c'è un errore, chiudiamo la sidebar per non bloccare l'utente
+            document.getElementById('sidebar').classList.remove('open');
         }
+
+        // Reset scroll
+        const mainContent = document.querySelector('.main-content');
+        if (mainContent) mainContent.scrollTop = 0;
+    }
 
         function updateAttackTypeDesc() {
             const type = document.getElementById('deauth-frame-type').value;
@@ -1246,8 +1368,14 @@
                 log("WebSocket Connected!", "info");
                 showToast("System Online");
                 if (statusInterval) clearInterval(statusInterval);
+                if (reconPollingInterval) clearInterval(reconPollingInterval);
                 document.querySelector('.top-bar').style.borderBottom = "1px solid var(--border)";
                 statusInterval = setInterval(requestSystemStatus, 2000);
+                // Alternate polling
+                reconPollingInterval = setInterval(() => {
+                    fetchReconDataAp();
+                    setTimeout(fetchReconDataCli, 2000);
+                }, 5000);
             };
 
             ws.onclose = () => {
@@ -1451,32 +1579,54 @@
 
                 const txSent = data.tx_sent || 0;
                 const txDrop = data.tx_drop || 0;
+                const txPps = data.tx_pps || 0;
                 const totalTx = txSent + txDrop;
 
                 document.getElementById('stat-tx-sent').innerText = formatBigNumber(txSent);
                 document.getElementById('stat-tx-drop').innerText = formatBigNumber(txDrop);
+                document.getElementById('stat-tx-pps').innerText = formatBigNumber(txPps);
 
-                let quality = 100;
-                let msg = "Optimal performance.";
-                let color = "#00e676"; 
-
-                if (totalTx > 0) quality = Math.round((txSent / totalTx) * 100);
-
-                if (quality < 50) {
-                    color = "#ff1744"; msg = "CRITICAL: Radio congested or driver stuck.";
-                } else if (quality < 80) {
-                    color = "#ff9100"; msg = "WARNING: High packet loss detected.";
-                } else if (totalTx > 1000) {
-                    msg = "Injecting packets...";
-                } else {
-                    msg = currentTranslations["sys_idle_msg"] || "System idle.";
+                let queueHealth = 100; 
+                if (totalTx > 0) {
+                    queueHealth = Math.round((txSent / totalTx) * 100);
                 }
 
-                document.getElementById('stat-quality-perc').innerText = quality + "%";
-                document.getElementById('stat-quality-bar').style.width = quality + "%";
+                let msg = currentTranslations["sys_idle_msg"] || "System idle.";
+                let color = "#666";
+                // La barra ora segue ESATTAMENTE la percentuale di Health calcolata
+                let barWidth = queueHealth; 
+
+                if (txPps === 0) {
+                    barWidth = 0; // A riposo azzeriamo la barra
+                }
+                else if (txPps >= 40) {
+                    // PPS Alti: L'attacco è letale. La barra è VERDE, anche se scende al 58%
+                    color = "#00e676"; 
+                    msg = `LETHAL: High injection rate. AP+STA balancing perfectly.`;
+                } 
+                else if (txPps >= 15) {
+                    // PPS Medi: L'attacco è discreto. La barra è ARANCIONE
+                    color = "#ffab40"; 
+                    msg = `MODERATE: Injection active. Radio is heavily slicing time.`;
+                } 
+                else {
+                    // PPS Bassi: L'attacco è scarso.
+                    if (queueHealth < 50) {
+                        // Se stiamo anche droppando tanto, la situazione è critica (ROSSO)
+                        color = "#ff1744"; 
+                        msg = `POOR: Severe packet loss and low rate. Radio struggling.`;
+                    } else {
+                        // Inviamo piano ma non droppiamo (ARANCIONE)
+                        color = "#ffab40"; 
+                        msg = `WEAK: Low injection rate.`;
+                    }
+                }
+
+                document.getElementById('stat-quality-perc').innerText = txPps > 0 ? (queueHealth + "% Health") : "IDLE";
+                document.getElementById('stat-quality-bar').style.width = barWidth + "%";
                 document.getElementById('stat-quality-bar').style.backgroundColor = color;
                 document.getElementById('stat-message').innerText = msg;
-                document.getElementById('stat-message').style.color = (quality < 80) ? color : "#666";
+                document.getElementById('stat-message').style.color = color;
 
                 const sdEl = document.getElementById('status-sd');
                 if (data.sd !== undefined) {
@@ -1789,6 +1939,114 @@
                 updateSubtypes();
             });
         }
+        
+        // ==========================================
+        // RECON: FETCH ACCESS POINTS
+        // ==========================================
+        async function fetchReconDataAp() {
+            try {
+                const res = await sendCommand(CMD.GET_RECON_DATA_AP);
+                if (!res.aps) return;
+                lastApsData = res.aps;
+
+                // Aggiorniamo la mappa BSSID -> SSID e la mappa dei conteggi
+                const clientCountMap = {};
+                lastClientsData.forEach(cli => {
+                    const bssidUpper = cli.bssid.toUpperCase();
+                    clientCountMap[bssidUpper] = (clientCountMap[bssidUpper] || 0) + 1;
+                });
+
+                const apBody = document.getElementById('recon-ap-body');
+                apBody.innerHTML = '';
+                
+                lastApsData.sort((a, b) => b.rssi - a.rssi).forEach(ap => {
+                    const bssidUpper = ap.bssid.toUpperCase();
+                    apMap[bssidUpper] = (ap.ssid && ap.ssid.trim() !== "") ? ap.ssid : `<span style="color:#666">&lt;hidden&gt;</span>`;
+                    const cliCount = clientCountMap[bssidUpper] || 0;
+
+                    let hsText = "-", hsColor = "#444";
+                    if (ap.hs === 2) { hsText = "WPA"; hsColor = "#00e676"; }
+                    else if (ap.hs === 1) { hsText = "PMKID"; hsColor = "#ffab40"; }
+
+                    apBody.innerHTML += `
+                        <tr>
+                            <td style="font-weight:bold; color:#fff;">${ap.ssid || '<span style="color:#666">&lt;hidden&gt;</span>'}</td>
+                            <td style="color:#aaa; font-family:monospace;">${bssidUpper}</td>
+                            <td style="color:${ap.rssi > -70 ? '#00e676' : (ap.rssi > -85 ? '#ffab40' : '#ff5252')}">${ap.rssi}</td>
+                            <td style="color:#fff;">${ap.ch}</td>
+                            <td>${ap.pkts}</td>
+                            <td style="color:#00bcd4; font-weight:bold;">${cliCount}</td>
+                            <td style="color:#aaa;">${formatBigNumber(ap.bytes)}</td>
+                            <td>${ap.sec}</td>
+                            <td style="color:${hsColor}; font-weight:bold; font-size:0.75rem;">${hsText}</td>
+                        </tr>
+                    `;
+                });
+
+                updateTargetMonitors();
+            } catch(e) { console.warn("AP Fetch Error:", e); }
+        }
+
+        // ==========================================
+        // RECON: FETCH CLIENTS
+        // ==========================================
+        async function fetchReconDataCli() {
+            try {
+                const res = await sendCommand(CMD.GET_RECON_DATA_CLI);
+                if (!res.clients) return;
+                lastClientsData = res.clients;
+
+                const cliBody = document.getElementById('recon-cli-body');
+                cliBody.innerHTML = '';
+                
+                lastClientsData.sort((a, b) => {
+                    const bssidCompare = a.bssid.localeCompare(b.bssid);
+                    if (bssidCompare !== 0) return bssidCompare;
+                    return b.rssi - a.rssi;
+                }).forEach(cli => {
+                    const bssidUpper = cli.bssid.toUpperCase();
+                    const macUpper = cli.mac.toUpperCase();
+                    let associatedApName = (bssidUpper === "FF:FF:FF:FF:FF:FF") ? 
+                        '<span style="color:#666">(Not Associated)</span>' : 
+                        (apMap[bssidUpper] || `<span style="color:#888; font-family:monospace;">${bssidUpper}</span>`);
+
+                    cliBody.innerHTML += `
+                        <tr>
+                            <td style="color:#fff; font-weight:bold; font-family:monospace;">${macUpper}</td>
+                            <td style="color:#00e676; font-weight:bold;">${associatedApName}</td>
+                            <td style="color:#fff;">${cli.ch}</td>
+                            <td style="color:${cli.rssi > -70 ? '#00e676' : (cli.rssi > -85 ? '#ffab40' : '#ff5252')}">${cli.rssi}</td>
+                            <td>${cli.pkts}</td>
+                            <td style="color:#aaa;">${formatBigNumber(cli.bytes)}</td>
+                        </tr>
+                    `;
+                });
+                
+                updateTargetMonitors();
+            } catch(e) { console.warn("CLI Fetch Error:", e); }
+        }
+
+        function updateTargetMonitors() {
+            if (!currentTarget) return;
+            const targetBssidUpper = currentTarget.bssid.toUpperCase();
+            
+            const targetAp = lastApsData.find(ap => ap.bssid.toUpperCase() === targetBssidUpper);
+            const cliCount = lastClientsData.filter(c => c.bssid.toUpperCase() === targetBssidUpper).length;
+
+            const updateUI = (prefix) => {
+                const monitor = document.getElementById(`${prefix}-live-monitor`);
+                if (monitor && targetAp) {
+                    monitor.style.display = 'block';
+                    document.getElementById(`${prefix}-live-pkts`).innerText = targetAp.pkts;
+                    document.getElementById(`${prefix}-live-bytes`).innerText = formatBigNumber(targetAp.bytes);
+                    document.getElementById(`${prefix}-live-clients`).innerText = cliCount;
+                }
+            };
+
+            if (document.getElementById('view-eviltwin').classList.contains('active')) updateUI('et');
+            if (document.getElementById('view-deauth').classList.contains('active')) updateUI('deauth');
+        }
+
         // ==========================================
         // INIT
         // ==========================================

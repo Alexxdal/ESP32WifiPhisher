@@ -5,6 +5,7 @@
 
 #define CLIENT_SEM_WAIT 10
 #define TARGET_SEM_WAIT 10
+#define AP_SCAN_MIN_RSSI -95
 
 
 
@@ -14,8 +15,17 @@
  */
 #define MAX_AP      35
 typedef struct {
+    wifi_ap_record_t record; // La struct nativa di ESP-IDF
+    uint32_t packets_rx;     // Pacchetti ricevuti dall'AP
+    uint32_t packets_tx;     // Pacchetti inviati dall'AP
+    uint32_t bytes_rx;
+    uint32_t bytes_tx;
+    int64_t  last_seen_us;   // Timestamp ultima attività
+} ap_ext_t;
+
+typedef struct {
     uint8_t count;
-    wifi_ap_record_t ap[MAX_AP];
+    ap_ext_t ap[MAX_AP];
 } aps_info_t;
 
 
@@ -26,6 +36,13 @@ typedef struct {
  */
 #define MAX_CLIENTS 50
 typedef struct {
+    int8_t rssi;
+    uint8_t channel;
+    uint32_t packets_tx; // Sent Packets (To DS)
+    uint32_t packets_rx; // Received Packets (From DS)
+    uint32_t bytes_tx;
+    uint32_t bytes_rx;
+    int64_t  last_seen_us;
     uint8_t mac[6];     //Client MAC
     uint8_t bssid[6];   //Associated AP
 } client_t;
@@ -196,6 +213,10 @@ uint8_t wifi_sniffer_get_clients_count(void);
  * @brief Get pointer to detected aps info
  * 
  * @return const aps_info_t* 
+ * @note The list of APs is filled only when wifi_sniffer_scan_fill_aps() or 
+ * wifi_sniffer_scan_fill_aps_fast() are called, otherwise it will be empty.
+ * This is because the promiscuous mode doesn't guarantee to capture all APs in the area,
+ *  so we need to perform a scan to get a complete list.
  */
 esp_err_t wifi_sniffer_get_aps(aps_info_t *out);
 
@@ -211,5 +232,11 @@ uint8_t wifi_sniffer_get_aps_count(void);
  * @brief Scan for aps and fill static memory
  */
 esp_err_t wifi_sniffer_scan_fill_aps(void);
+
+
+/**
+ * @brief Scan for aps with faster scan time and fill static memory
+ */
+esp_err_t wifi_sniffer_scan_fill_aps_fast(void);
 
 #endif /* _SNIFFER_H */

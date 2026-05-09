@@ -14,6 +14,8 @@
 #include "target.h"
 #include "nvs_keys.h"
 #include "deauther.h"
+#include "sniffer.h"
+#include <libwifi.h>
 
 static const char *TAG = "SERVER_API";
 
@@ -153,11 +155,149 @@ static esp_err_t api_get_status(ws_frame_req_t *req)
     cJSON_AddNumberToObject(root, "hs_state", has_handshake);
     cJSON_AddNumberToObject(root, "tx_sent", wifi_get_sent_frames());
     cJSON_AddNumberToObject(root, "tx_drop", wifi_get_dropped_frames());
+    cJSON_AddNumberToObject(root, "tx_pps", wifi_get_frame_pps());
 
     char *json_response = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
 
     if (json_response == NULL) {
+        return ESP_FAIL;
+    }
+
+    ws_frame_req_t cmd;
+    cmd.hd = req->hd;
+    cmd.fd = req->fd;
+    cmd.payload = json_response;
+    cmd.len = strlen(json_response);
+    cmd.need_free = true;
+
+    if (ws_send_command_to_queue(&cmd) != ESP_OK) {
+        free(json_response);
+        return ESP_FAIL;
+    }
+    
+    return ESP_OK;
+}
+
+
+static esp_err_t api_get_recon_data_aps(ws_frame_req_t *req)
+{
+    // 1. Alloca le strutture grandi sull'HEAP per salvare lo Stack del task!
+    aps_info_t *recon_aps = (aps_info_t *)malloc(sizeof(aps_info_t));
+
+    if (!recon_aps) {
+        if (recon_aps) free(recon_aps);
+        ESP_LOGE(TAG, "No Heap memory for recon structs!");
+        return ESP_ERR_NO_MEM;
+    }
+
+    // Riempi le strutture
+    wifi_sniffer_get_aps(recon_aps);
+
+    // 2. Crea il JSON
+    cJSON *root = cJSON_CreateObject();
+    if (root == NULL) {
+        free(recon_aps);
+        return ESP_FAIL;
+    }
+
+    cJSON_AddNumberToObject(root, "req_id", req->req_id);
+    cJSON_AddStringToObject(root, "type", "recon_data");
+    cJSON_AddStringToObject(root, "status", "ok");
+
+    // 3. Array APs (Nota l'uso di -> invece del punto .)
+    cJSON *aps_array = cJSON_AddArrayToObject(root, "aps");
+    for (int i = 0; i < recon_aps->count; i++) 
+    {
+        cJSON *ap_obj = cJSON_CreateObject();
+        char bssid_str[18];
+        snprintf(bssid_str, sizeof(bssid_str), MACSTRCAPS, MAC2STR(recon_aps->ap[i].record.bssid));
+        int hs_status = wifi_sniffer_get_handshake_status_for_target(recon_aps->ap[i].record.bssid);
+        cJSON_AddStringToObject(ap_obj, "bssid", bssid_str);
+        cJSON_AddNumberToObject(ap_obj, "rssi", recon_aps->ap[i].record.rssi);
+        cJSON_AddNumberToObject(ap_obj, "ch", recon_aps->ap[i].record.primary);
+        cJSON_AddNumberToObject(ap_obj, "pkts", recon_aps->ap[i].packets_tx + recon_aps->ap[i].packets_rx);
+        cJSON_AddNumberToObject(ap_obj, "bytes", recon_aps->ap[i].bytes_tx + recon_aps->ap[i].bytes_rx);
+        cJSON_AddStringToObject(ap_obj, "sec", authmode_to_str(recon_aps->ap[i].record.authmode));
+        cJSON_AddStringToObject(ap_obj, "ssid", (char*)recon_aps->ap[i].record.ssid);
+        cJSON_AddNumberToObject(ap_obj, "hs", hs_status);
+        cJSON_AddItemToArray(aps_array, ap_obj);
+    }
+
+    // 5. Stampa il JSON e libera IMMEDIATAMENTE le strutture per ridare ossigeno alla RAM
+    char *json_response = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    free(recon_aps);
+
+    if (json_response == NULL) {
+        ESP_LOGE(TAG, "cJSON Print Failed! JSON too large for available Heap.");
+        return ESP_FAIL;
+    }
+
+    ws_frame_req_t cmd;
+    cmd.hd = req->hd;
+    cmd.fd = req->fd;
+    cmd.payload = json_response;
+    cmd.len = strlen(json_response);
+    cmd.need_free = true;
+
+    if (ws_send_command_to_queue(&cmd) != ESP_OK) {
+        free(json_response);
+        return ESP_FAIL;
+    }
+    
+    return ESP_OK;
+}
+
+
+static esp_err_t api_get_recon_data_clients(ws_frame_req_t *req)
+{
+    client_list_t *recon_clients = (client_list_t *)malloc(sizeof(client_list_t));
+
+    if (!recon_clients) {
+        if (recon_clients) free(recon_clients);
+        ESP_LOGE(TAG, "No Heap memory for recon structs!");
+        return ESP_ERR_NO_MEM;
+    }
+
+    wifi_sniffer_get_clients(recon_clients);
+
+    // 2. Crea il JSON
+    cJSON *root = cJSON_CreateObject();
+    if (root == NULL) {
+        free(recon_clients);
+        return ESP_FAIL;
+    }
+
+    cJSON_AddNumberToObject(root, "req_id", req->req_id);
+    cJSON_AddStringToObject(root, "type", "recon_data");
+    cJSON_AddStringToObject(root, "status", "ok");
+
+    // 4. Array Client
+    cJSON *clients_array = cJSON_AddArrayToObject(root, "clients");
+    for (int i = 0; i < recon_clients->count; i++) 
+    {
+        cJSON *cli_obj = cJSON_CreateObject();
+        char mac_str[18];
+        char bssid_str[18];
+        snprintf(mac_str, sizeof(mac_str), MACSTRCAPS, MAC2STR(recon_clients->client[i].mac));
+        snprintf(bssid_str, sizeof(bssid_str), MACSTRCAPS, MAC2STR(recon_clients->client[i].bssid));
+        cJSON_AddStringToObject(cli_obj, "mac", mac_str);
+        cJSON_AddStringToObject(cli_obj, "bssid", bssid_str);
+        cJSON_AddNumberToObject(cli_obj, "ch", recon_clients->client[i].channel);
+        cJSON_AddNumberToObject(cli_obj, "rssi", recon_clients->client[i].rssi);
+        cJSON_AddNumberToObject(cli_obj, "pkts", recon_clients->client[i].packets_tx + recon_clients->client[i].packets_rx);
+        cJSON_AddNumberToObject(cli_obj, "bytes", recon_clients->client[i].bytes_tx + recon_clients->client[i].bytes_rx);
+        cJSON_AddItemToArray(clients_array, cli_obj);
+    }
+
+    // 5. Stampa il JSON e libera IMMEDIATAMENTE le strutture per ridare ossigeno alla RAM
+    char *json_response = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    free(recon_clients);
+
+    if (json_response == NULL) {
+        ESP_LOGE(TAG, "cJSON Print Failed! JSON too large for available Heap.");
         return ESP_FAIL;
     }
 
@@ -771,7 +911,9 @@ static const api_cmd_t api_cmd_list[] = {
     { API_DEAUTHER_START, api_deauther_start },
     { API_DEAUTHER_STOP, api_deauther_stop },
     { API_START_RAW_SNIFFER, api_start_raw_sniffer },
-    { API_STOP_RAW_SNIFFER, api_stop_raw_sniffer }
+    { API_STOP_RAW_SNIFFER, api_stop_raw_sniffer },
+    { API_GET_RECON_AP_LIST, api_get_recon_data_aps },
+    { API_GET_RECON_CLIENT_LIST, api_get_recon_data_clients },
 };
 
 

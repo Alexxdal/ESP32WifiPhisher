@@ -56,4 +56,27 @@ uint32_t wifi_get_sent_frames(void);
 uint32_t wifi_get_dropped_frames(void);
 
 
+/**
+ * @brief Increment sent frames counter (for use in raw frame sending functions)
+ */
+void wifi_sent_frame_increment(void);
+
+
+/**
+ * @brief Increment dropped frames counter (for use in raw frame sending functions)
+ */
+void wifi_dropped_frame_increment(void);
+
+
+/**
+ * @brief Reset frame counters
+ */
+void wifi_reset_frame_counters(void);
+
+
+/**
+ * @brief Get current frames per second (PPS)
+ */
+uint32_t wifi_get_frame_pps(void);
+
 #endif

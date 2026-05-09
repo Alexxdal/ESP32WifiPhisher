@@ -76,16 +76,16 @@ static void evil_twin_task(void *pvParameters)
             /* Search in scanned aps */
             for(uint8_t i = 0; i < aps.count; i++) {
                 /* Found same AP on 5ghz */
-                if( (aps.ap[i].primary > 14) && (strcmp((char *)aps.ap[i].ssid, (char *)target->ssid) == 0) ) {
+                if( (aps.ap[i].record.primary > 14) && (strcmp((char *)aps.ap[i].record.ssid, (char *)target->ssid) == 0) ) {
                     twin_on_5ghz.attack_scheme = target->attack_scheme;
-                    twin_on_5ghz.authmode = aps.ap[i].authmode;
-                    twin_on_5ghz.channel = aps.ap[i].primary;
-                    twin_on_5ghz.group_cipher = aps.ap[i].group_cipher;
-                    twin_on_5ghz.pairwise_cipher = aps.ap[i].pairwise_cipher;
-                    twin_on_5ghz.rssi = aps.ap[i].rssi;
+                    twin_on_5ghz.authmode = aps.ap[i].record.authmode;
+                    twin_on_5ghz.channel = aps.ap[i].record.primary;
+                    twin_on_5ghz.group_cipher = aps.ap[i].record.group_cipher;
+                    twin_on_5ghz.pairwise_cipher = aps.ap[i].record.pairwise_cipher;
+                    twin_on_5ghz.rssi = aps.ap[i].record.rssi;
                     twin_on_5ghz.vendor = target->vendor;
-                    memcpy(twin_on_5ghz.ssid, aps.ap[i].ssid, sizeof(aps.ap[i].ssid));
-                    memcpy(twin_on_5ghz.bssid, aps.ap[i].bssid, sizeof(aps.ap[i].bssid));
+                    memcpy(twin_on_5ghz.ssid, aps.ap[i].record.ssid, sizeof(aps.ap[i].record.ssid));
+                    memcpy(twin_on_5ghz.bssid, aps.ap[i].record.bssid, sizeof(aps.ap[i].record.bssid));
                     target_set(&twin_on_5ghz, TARGET_INFO_EVIL_TWIN_5G);
                     evil_twin_status.has_5ghz_target = true;
                     ESP_LOGI(TAG, "Found twin target on 5GHz (Ch: %d).", twin_on_5ghz.channel);
@@ -149,15 +149,15 @@ static void evil_twin_task(void *pvParameters)
                 if(wifi_sniffer_get_aps(&aps) == ESP_OK) {
                     bool found_2g_now = false;
                     for(uint8_t i = 0; i < aps.count; i++) {
-                        if (strcmp((char *)aps.ap[i].ssid, (char *)target->ssid) == 0) 
+                        if (strcmp((char *)aps.ap[i].record.ssid, (char *)target->ssid) == 0) 
                         {
-                            if (aps.ap[i].primary <= 14) {
+                            if (aps.ap[i].record.primary <= 14) {
                                 found_2g_now = true;
-                                if (target->channel != aps.ap[i].primary) {
-                                    ESP_LOGW(TAG, "TARGET 2.4GHz SWITCHED CHANNEL: %d -> %d", target->channel, aps.ap[i].primary);
-                                    ws_log(TAG, "Target 2.4GHz moved to Ch %d", aps.ap[i].primary);
-                                    target->channel = aps.ap[i].primary;
-                                    memcpy(target->bssid, aps.ap[i].bssid, 6);
+                                if (target->channel != aps.ap[i].record.primary) {
+                                    ESP_LOGW(TAG, "TARGET 2.4GHz SWITCHED CHANNEL: %d -> %d", target->channel, aps.ap[i].record.primary);
+                                    ws_log(TAG, "Target 2.4GHz moved to Ch %d", aps.ap[i].record.primary);
+                                    target->channel = aps.ap[i].record.primary;
+                                    memcpy(target->bssid, aps.ap[i].record.bssid, 6);
                                     /* This will cause current STA to disconnect */
                                     wifi_set_channel_safe(target->channel);
                                 }
@@ -165,13 +165,13 @@ static void evil_twin_task(void *pvParameters)
                             else {
                                 if (!evil_twin_status.has_5ghz_target) {
                                     evil_twin_status.has_5ghz_target = true;
-                                    ESP_LOGI(TAG, "New 5GHz target found on Ch %d", aps.ap[i].primary);
+                                    ESP_LOGI(TAG, "New 5GHz target found on Ch %d", aps.ap[i].record.primary);
                                 }
-                                if (twin_on_5ghz.channel != aps.ap[i].primary) {
-                                    ESP_LOGW(TAG, "TARGET 5GHz SWITCHED CHANNEL: %d -> %d", twin_on_5ghz.channel, aps.ap[i].primary);
-                                    ws_log(TAG, "Target 5GHz moved to Ch %d", aps.ap[i].primary);
-                                    twin_on_5ghz.channel = aps.ap[i].primary;
-                                    memcpy(twin_on_5ghz.bssid, aps.ap[i].bssid, 6);
+                                if (twin_on_5ghz.channel != aps.ap[i].record.primary) {
+                                    ESP_LOGW(TAG, "TARGET 5GHz SWITCHED CHANNEL: %d -> %d", twin_on_5ghz.channel, aps.ap[i].record.primary);
+                                    ws_log(TAG, "Target 5GHz moved to Ch %d", aps.ap[i].record.primary);
+                                    twin_on_5ghz.channel = aps.ap[i].record.primary;
+                                    memcpy(twin_on_5ghz.bssid, aps.ap[i].record.bssid, 6);
                                 }
                             }
                         }
