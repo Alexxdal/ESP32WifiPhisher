@@ -425,49 +425,29 @@ static esp_err_t api_admin_set_ap_settings(ws_frame_req_t *req)
 
 static esp_err_t api_wifi_scan(ws_frame_req_t *req)
 {
-    wifi_scan_config_t scan_config = {
-        .ssid = NULL,
-        .bssid = NULL,
-        .channel = 0,
-        .show_hidden = false,
-        .scan_type = WIFI_SCAN_TYPE_ACTIVE,
-        .scan_time.active.min = 50,
-        .scan_time.active.max = 150,
-        .home_chan_dwell_time = 100,
-    };
-
-    ws_frame_req_t cmd;
-    cmd.hd = req->hd;
-    cmd.fd = req->fd;
-    cmd.frame_type = WS_TX_FRAME;
-
-    esp_err_t err = esp_wifi_scan_start(&scan_config, true);
-    if (err != ESP_OK) {
-        api_send_status_frame(req, "error", "Failed to start scan");
-        return err;
+    esp_err_t ret = wifi_sniffer_scan_fill_aps();
+    
+    if (ret != ESP_OK) {
+        api_send_status_frame(req, "error", "Failed to perform WiFi scan");
+        return ret;
     }
 
-    uint16_t ap_count = 0;
-    err = esp_wifi_scan_get_ap_num(&ap_count);
-    if (err != ESP_OK) {
-        api_send_status_frame(req, "error", "Failed to get AP count");
-        return err;
+    aps_info_t *scan_results = (aps_info_t *)malloc(sizeof(aps_info_t));
+    if (!scan_results) {
+        ESP_LOGE(TAG, "No Heap memory for scan results!");
+        return ESP_ERR_NO_MEM;
     }
 
-    wifi_ap_record_t *ap_records = NULL;
-    if (ap_count > 0) {
-        ap_records = (wifi_ap_record_t *)calloc(ap_count, sizeof(wifi_ap_record_t));
-        if (!ap_records) {
-            api_send_status_frame(req, "error", "Out of memory");
-            return ESP_ERR_NO_MEM;
-        }
+    if(wifi_sniffer_get_aps(scan_results) != ESP_OK) {
+        api_send_status_frame(req, "error", "Failed to get scan results");
+        free(scan_results);
+        return ESP_FAIL;
+    }
 
-        err = esp_wifi_scan_get_ap_records(&ap_count, ap_records);
-        if (err != ESP_OK) {
-            free(ap_records);
-            api_send_status_frame(req, "error", "Failed to get AP records");
-            return err;
-        }
+    if(scan_results->count == 0) {
+        api_send_status_frame(req, "ok", "No APs found");
+        free(scan_results);
+        return ESP_OK;
     }
 
     cJSON *response_obj = cJSON_CreateObject();
@@ -476,59 +456,58 @@ static esp_err_t api_wifi_scan(ws_frame_req_t *req)
 
     cJSON *root = cJSON_CreateArray();
     if (!root) {
-        free(ap_records);
+        free(scan_results);
         api_send_status_frame(req, "error", "cJSON_CreateArray failed");
         return ESP_ERR_NO_MEM;
     }
 
-    for (int i = 0; i < ap_count; i++) {
+    for (int i = 0; i < scan_results->count; i++) 
+    {
         char ssid[33];
-        memcpy(ssid, ap_records[i].ssid, sizeof(ap_records[i].ssid));
+        memcpy(ssid, scan_results->ap[i].record.ssid, sizeof(scan_results->ap[i].record.ssid));
         ssid[32] = '\0';
-
         char bssid[18];
-        snprintf(bssid, sizeof(bssid),
-                 "%02X:%02X:%02X:%02X:%02X:%02X",
-                 ap_records[i].bssid[0], ap_records[i].bssid[1], ap_records[i].bssid[2],
-                 ap_records[i].bssid[3], ap_records[i].bssid[4], ap_records[i].bssid[5]);
-
+        snprintf(bssid, sizeof(bssid), MACSTRCAPS, MAC2STR(scan_results->ap[i].record.bssid));
+        
         cJSON *obj = cJSON_CreateObject();
         if (!obj) {
             cJSON_Delete(root);
-            free(ap_records);
+            free(scan_results);
             cJSON_Delete(response_obj);
             api_send_status_frame(req, "error", "cJSON_CreateObject failed");
             return ESP_ERR_NO_MEM;
         }
 
         cJSON_AddStringToObject(obj, "ssid", ssid);
-        cJSON_AddNumberToObject(obj, "signal", ap_records[i].rssi);
-        cJSON_AddNumberToObject(obj, "channel", ap_records[i].primary);
+        cJSON_AddNumberToObject(obj, "signal", scan_results->ap[i].record.rssi);
+        cJSON_AddNumberToObject(obj, "channel", scan_results->ap[i].record.primary);
         cJSON_AddStringToObject(obj, "bssid", bssid);
-        cJSON_AddStringToObject(obj, "authmode", authmode_to_str(ap_records[i].authmode));
-        cJSON_AddNumberToObject(obj, "authmode_code", ap_records[i].authmode);
-        cJSON_AddNumberToObject(obj, "pairwise_cipher", ap_records[i].pairwise_cipher);
-        cJSON_AddNumberToObject(obj, "group_cipher", ap_records[i].group_cipher);
-        cJSON_AddBoolToObject(obj, "wps", ap_records[i].wps ? 1 : 0);
+        cJSON_AddStringToObject(obj, "authmode", authmode_to_str(scan_results->ap[i].record.authmode));
+        cJSON_AddNumberToObject(obj, "authmode_code", scan_results->ap[i].record.authmode);
+        cJSON_AddNumberToObject(obj, "pairwise_cipher", scan_results->ap[i].record.pairwise_cipher);
+        cJSON_AddNumberToObject(obj, "group_cipher", scan_results->ap[i].record.group_cipher);
+        cJSON_AddBoolToObject(obj, "wps", scan_results->ap[i].record.wps ? 1 : 0);
         cJSON_AddItemToArray(root, obj);
     }
     cJSON_AddItemToObject(response_obj, "data", root);
 
     char *json = cJSON_PrintUnformatted(response_obj);
-    if (ap_records) free(ap_records);
+    if (scan_results) free(scan_results);
     cJSON_Delete(response_obj);
 
     if (!json) {
         return ESP_ERR_NO_MEM;
     }
 
+    ws_frame_req_t cmd;
+    cmd.hd = req->hd;
+    cmd.fd = req->fd;
     cmd.payload = json; 
     cmd.len = strlen(json);
     cmd.need_free = true;
 
-    if(ws_send_command_to_queue(&cmd) != ESP_OK) {
+    if (ws_send_command_to_queue(&cmd) != ESP_OK) {
         free(json);
-        ESP_LOGE(TAG, "Queue full");
         return ESP_FAIL;
     }
 

@@ -660,6 +660,7 @@
             </div>
         </div>
 
+        <!-- LIVE PACKET ANALYZER -->
         <div id="view-sniffer" class="view-container">
             <h2 data-i18n="live_packet_analyzer">Live Packet Analyzer</h2>
             
@@ -742,6 +743,7 @@
             </div>
         </div>
 
+        <!-- WIFI SCANNER -->
         <div id="view-scan" class="view-container">
             <h2 data-i18n="wifi_scanner_title">WiFi Scanner</h2>
             <div class="card">
@@ -759,19 +761,20 @@
                             <th data-i18n="th_ch">CH</th>
                             <th data-i18n="th_bssid">BSSID</th>
                             <th data-i18n="th_sec">Sec</th>
+                            <th data-i18n="th_wps">WPS</th>
                             <th data-i18n="th_action">Action</th>
                         </tr>
                     </thead>
                     <tbody id="wifi-networks-body">
                         <tr>
-                            <td colspan="6" style="text-align:center; padding: 20px;" data-i18n="no_scan_data">No scan data</td>
+                            <td colspan="7" style="text-align:center; padding: 20px;" data-i18n="no_scan_data">No scan data</td>
                         </tr>
                     </tbody>
                 </table>
             </div>
         </div>
 
-        
+        <!-- RECONNAISSANCE -->
         <div id="view-recon" class="view-container">
             <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #333; padding-bottom:15px; margin-bottom:20px;">
                 <h2 style="border:none; margin:0;" data-i18n="recon_title">Network Reconnaissance</h2>
@@ -796,7 +799,7 @@
                         </tr>
                     </thead>
                     <tbody id="recon-ap-body">
-                        <tr><td colspan="9" style="text-align:center; padding:15px; color:#666;">Press START RECON to listen...</td></tr>
+                        <tr><td colspan="9" style="text-align:center; padding:15px; color:#666;">Start an attack or scan to listen...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -817,7 +820,7 @@
                         </tr>
                     </thead>
                     <tbody id="recon-cli-body">
-                        <tr><td colspan="5" style="text-align:center; padding:15px; color:#666;">Waiting for clients...</td></tr>
+                        <tr><td colspan="6" style="text-align:center; padding:15px; color:#666;">Waiting for clients...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -1657,11 +1660,13 @@
                     const safeSsid = net.ssid.replace(/'/g, "\\'");
                     
                     tr.innerHTML = `
-                        <td style="font-weight:bold; color:white;">${net.ssid}</td>
+                        <td style="font-weight:bold; color:white;"> ${ (net.ssid && net.ssid.trim()) !== "" ? net.ssid : `<span style="color:#666">&lt;hidden&gt;</span>`}</td>
                         <td>${net.signal}</td>
                         <td>${net.channel}</td>
                         <td style="font-family:monospace; font-size:0.85rem;">${net.bssid}</td>
-                        <td>${net.authmode}</td> <td>
+                        <td>${net.authmode}</td> 
+                        <td>${net.wps ? 'Yes' : 'No'}</td>
+                        <td>
                             <button style="margin:0; padding:6px 10px; font-size:0.7rem;" 
                                 onclick="selectTarget('${safeSsid}', '${net.bssid}', ${net.channel}, ${net.signal}, ${net.authmode_code})">
                                 TARGET
