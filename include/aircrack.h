@@ -4,6 +4,8 @@
 #include <esp_system.h>
 
 
+int calculate_pmk(const char *passphrase, const char *ssid, size_t ssid_len, uint8_t *pmk);
+
 bool verify_password(const char *passphrase, const char *ssid, size_t ssid_len,
                      const uint8_t *mac_ap, const uint8_t *mac_sta,
                      const uint8_t *anonce, const uint8_t *snonce,

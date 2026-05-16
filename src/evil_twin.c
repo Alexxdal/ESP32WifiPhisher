@@ -20,6 +20,8 @@
 static const char *TAG = "EVIL_TWIN";
 static TaskHandle_t evil_twin_task_handle = NULL;
 static volatile bool evil_twin_running = false;
+static EventGroupHandle_t evil_twin_evt = NULL;
+#define EVILTWIN_EXIT_BIT (1 << 0)
 
 /* Evil Twin Attack Status Strings */
 static const char* evil_twin_attack_status_string[EVIL_TWIN_ATTACK_STATUS_MAX] = {
@@ -57,7 +59,7 @@ static void evil_twin_task(void *pvParameters)
             .pmf_cfg = {
                     /* Cannot set pmf to required when in wpa-wpa2 mixed mode! Setting pmf to optional mode. */
                     .required = false, 
-                    .capable = true
+                    .capable = false
             }
         },
     };
@@ -145,7 +147,7 @@ static void evil_twin_task(void *pvParameters)
         /* Periodic scan for target tracking */
         if (esp_timer_get_time() - last_scan_time > SCAN_INTERVAL_US) 
         {
-            if(wifi_sniffer_scan_fill_aps() == ESP_OK) {
+            if(wifi_sniffer_scan_fill_aps_fast() == ESP_OK) {
                 if(wifi_sniffer_get_aps(&aps) == ESP_OK) {
                     bool found_2g_now = false;
                     for(uint8_t i = 0; i < aps.count; i++) {
@@ -165,13 +167,22 @@ static void evil_twin_task(void *pvParameters)
                             else {
                                 if (!evil_twin_status.has_5ghz_target) {
                                     evil_twin_status.has_5ghz_target = true;
+                                    twin_on_5ghz.attack_scheme = target->attack_scheme;
+                                    twin_on_5ghz.authmode = aps.ap[i].record.authmode;
+                                    twin_on_5ghz.channel = aps.ap[i].record.primary;
+                                    twin_on_5ghz.group_cipher = aps.ap[i].record.group_cipher;
+                                    twin_on_5ghz.pairwise_cipher = aps.ap[i].record.pairwise_cipher;
+                                    twin_on_5ghz.rssi = aps.ap[i].record.rssi;
+                                    twin_on_5ghz.vendor = target->vendor;
+                                    memcpy(twin_on_5ghz.bssid, aps.ap[i].record.bssid, 6);
+                                    memcpy(twin_on_5ghz.ssid, aps.ap[i].record.ssid, sizeof(aps.ap[i].record.ssid));
+                                    target_set(&twin_on_5ghz, TARGET_INFO_EVIL_TWIN_5G);
                                     ESP_LOGI(TAG, "New 5GHz target found on Ch %d", aps.ap[i].record.primary);
                                 }
                                 if (twin_on_5ghz.channel != aps.ap[i].record.primary) {
                                     ESP_LOGW(TAG, "TARGET 5GHz SWITCHED CHANNEL: %d -> %d", twin_on_5ghz.channel, aps.ap[i].record.primary);
                                     ws_log(TAG, "Target 5GHz moved to Ch %d", aps.ap[i].record.primary);
                                     twin_on_5ghz.channel = aps.ap[i].record.primary;
-                                    memcpy(twin_on_5ghz.bssid, aps.ap[i].record.bssid, 6);
                                 }
                             }
                         }
@@ -182,6 +193,9 @@ static void evil_twin_task(void *pvParameters)
             last_scan_time = esp_timer_get_time();
         }
         vTaskDelay(pdMS_TO_TICKS(SOFTAP_REST_TIME)); 
+    }
+    if(evil_twin_evt != NULL) {
+        xEventGroupSetBits(evil_twin_evt, EVILTWIN_EXIT_BIT);
     }
     vTaskDelete(NULL);
 }
@@ -194,6 +208,11 @@ void evil_twin_start_attack(const target_info_t *targe_info)
         ESP_LOGE(TAG, "EvilTwin task already started.");
         return;
     }
+
+    if (evil_twin_evt == NULL) {
+        evil_twin_evt = xEventGroupCreate();
+    }
+    xEventGroupClearBits(evil_twin_evt, EVILTWIN_EXIT_BIT);
 
     /* Reset status information */
     memset(&evil_twin_status, 0, sizeof(evil_twin_attack_status_info_t));
@@ -221,7 +240,13 @@ void evil_twin_stop_attack(void)
 
     /* Signal task to stop and wait */
     evil_twin_running = false;
-    vTaskDelay(pdMS_TO_TICKS(2000));
+
+    if (evil_twin_evt != NULL) {
+        xEventGroupWaitBits(evil_twin_evt, EVILTWIN_EXIT_BIT, pdTRUE, pdFALSE, portMAX_DELAY);
+        vEventGroupDelete(evil_twin_evt);
+        evil_twin_evt = NULL;
+    }
+
     evil_twin_task_handle = NULL;
 
     /* Stop DNS Server */

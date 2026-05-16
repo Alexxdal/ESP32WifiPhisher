@@ -1,13 +1,9 @@
 #include <mbedtls/md.h>
-#include <mbedtls/aes.h>
-#include <mbedtls/sha1.h>
-#include <mbedtls/cmac.h>
 #include <mbedtls/pkcs5.h>
 #include <string.h>
 #include <stdio.h>
 #include "esp_log.h"
 #include "aircrack.h"
-
 
 #define PMKID_LEN 16
 #define WPA_PASSPHRASE_MAX_LEN 64
@@ -19,28 +15,36 @@
 static const char *TAG = "AIRCRACK";
 
 
-/* Static declarations */
-static void calculate_pmk(const char *passphrase, const char *ssid, size_t ssid_len, uint8_t *pmk);
-static void calculate_ptk(const uint8_t *pmk, const uint8_t *mac_ap, const uint8_t *mac_sta,
-                          const uint8_t *anonce, const uint8_t *snonce, 
-                          uint8_t *ptk, int algorithm) ;
-static void calculate_mic(const uint8_t *ptk, const uint8_t *eapol, size_t eapol_len, uint8_t *mic, uint8_t key_descriptor);
-static void calculate_pmkid(const uint8_t *pmk, const uint8_t *mac_ap, const uint8_t *mac_sta, uint8_t *pmkid);
+/* * OTTIMIZZAZIONE FLASH:
+ * Importiamo le funzioni primitive già compilate in libwpa_supplicant.a per il Wi-Fi.
+ * Evitiamo di includere il layer di astrazione generico di MbedTLS, risparmiando KB di flash.
+ */
+extern void hmac_md5(const uint8_t *key, size_t key_len, const uint8_t *data, size_t data_len, uint8_t *mac);
+extern void hmac_sha1(const uint8_t *key, size_t key_len, const uint8_t *data, size_t data_len, uint8_t *mac);
+extern void sha1_prf(const uint8_t *key, size_t key_len, const char *label, const uint8_t *data, size_t data_len, uint8_t *buf, size_t buf_len);
+extern void sha256_prf(const uint8_t *key, size_t key_len, const char *label, const uint8_t *data, size_t data_len, uint8_t *buf, size_t buf_len);
+extern int omac1_aes_128(const uint8_t *key, const uint8_t *data, size_t data_len, uint8_t *mac);
 
 
-static void calculate_pmk(const char *passphrase, const char *ssid, size_t ssid_len, uint8_t *pmk) 
+int calculate_pmk(const char *passphrase, const char *ssid, size_t ssid_len, uint8_t *pmk) 
 {
-    mbedtls_pkcs5_pbkdf2_hmac_ext(MBEDTLS_MD_SHA1, (const unsigned char *)passphrase, strlen(passphrase), (const unsigned char *)ssid, ssid_len, 4096, 32, pmk);
+    int ret = 0;
+    ret = mbedtls_pkcs5_pbkdf2_hmac_ext(MBEDTLS_MD_SHA1, (const unsigned char *)passphrase, strlen(passphrase), (const unsigned char *)ssid, ssid_len, 4096, 32, pmk);
+    if (ret != 0) {
+        ESP_LOGE("CRYPTO", "PBKDF2 failed: -0x%04X", -ret);
+        return ret;
+    }
+    return 0;
 }
 
 static void calculate_ptk(const uint8_t *pmk, const uint8_t *mac_ap, const uint8_t *mac_sta,
                           const uint8_t *anonce, const uint8_t *snonce, 
                           uint8_t *ptk, int algorithm) 
 {
-    const char *label = "Pairwise key expansion";
-    uint8_t data[76] = { 0 };
-    uint8_t input[128] = { 0 };
-    size_t label_len = strlen(label);
+    /* * OTTIMIZZAZIONE RAM: Abbiamo rimosso input[128].
+     * Il PRF del supplicant fa l'assemblaggio internamente. Risparmiamo ~130 byte di Stack RAM.
+     */
+    uint8_t data[76];
 
     // Min(MAC_AP, MAC_STA) || Max(MAC_AP, MAC_STA)
     if (memcmp(mac_ap, mac_sta, 6) < 0) {
@@ -55,100 +59,41 @@ static void calculate_ptk(const uint8_t *pmk, const uint8_t *mac_ap, const uint8
     } else {
         memcpy(data + 12, snonce, 32); memcpy(data + 44, anonce, 32);
     }
-
-    uint8_t counter = 0;
-    size_t bytes_generated = 0;
     
-    // Setup mbedTLS in base all'algoritmo
-    mbedtls_md_type_t md_type = (algorithm == PTK_ALG_SHA256) ? MBEDTLS_MD_SHA256 : MBEDTLS_MD_SHA1;
-    const mbedtls_md_info_t *info = mbedtls_md_info_from_type(md_type);
-    size_t hash_len = mbedtls_md_get_size(info); // 20 per SHA1, 32 per SHA256
-    uint8_t temp[32]; // Max size (SHA256)
-
-    while (bytes_generated < WPA_PTK_LEN) {
-        // Label + 0x00 + Data + Counter
-        memcpy(input, label, label_len);
-        input[label_len] = 0x00;
-        memcpy(input + label_len + 1, data, sizeof(data));
-        input[label_len + 1 + sizeof(data)] = counter;
-
-        size_t input_len = label_len + 1 + sizeof(data) + 1;
-
-        mbedtls_md_context_t ctx;
-        mbedtls_md_init(&ctx);
-        mbedtls_md_setup(&ctx, info, 1);
-        mbedtls_md_hmac_starts(&ctx, pmk, 32);
-        mbedtls_md_hmac_update(&ctx, input, input_len);
-        mbedtls_md_hmac_finish(&ctx, temp);
-        mbedtls_md_free(&ctx);
-
-        size_t bytes_to_copy = (WPA_PTK_LEN - bytes_generated > hash_len) ? hash_len : WPA_PTK_LEN - bytes_generated;
-        memcpy(ptk + bytes_generated, temp, bytes_to_copy);
-        bytes_generated += bytes_to_copy;
-        counter++;
+    // Generazione PTK usando le Pseudorandom Functions native del firmware
+    if (algorithm == PTK_ALG_SHA256) {
+        sha256_prf(pmk, 32, "Pairwise key expansion", data, sizeof(data), ptk, WPA_PTK_LEN);
+    } else {
+        sha1_prf(pmk, 32, "Pairwise key expansion", data, sizeof(data), ptk, WPA_PTK_LEN);
     }
 }
 
 static void calculate_mic(const uint8_t *ptk, const uint8_t *eapol, size_t eapol_len, uint8_t *mic, uint8_t key_descriptor) 
 {
-    /* TKIP: HMAC‑MD5 */
+    /* * OTTIMIZZAZIONE RAM: Abbiamo rimosso mbedtls_cipher_context e mbedtls_md_context.
+     * Risparmiamo altri ~150 byte di Stack RAM e snelliamo brutalmente l'esecuzione.
+     */
     if (key_descriptor == 1) {
-        mbedtls_md_context_t ctx;
-        const mbedtls_md_info_t *info = mbedtls_md_info_from_type(MBEDTLS_MD_MD5);
-        mbedtls_md_init(&ctx);
-        mbedtls_md_setup(&ctx, info, 1);
-        mbedtls_md_hmac_starts(&ctx, ptk, 16);
-        mbedtls_md_hmac_update(&ctx, eapol, eapol_len);
-        mbedtls_md_hmac_finish(&ctx, mic);
-        mbedtls_md_free(&ctx);
-    }
-    /* CCMP: HMAC‑SHA1 */
-    else if (key_descriptor == 2) {
-        uint8_t sha1[20];
-        mbedtls_md_context_t ctx;
-        const mbedtls_md_info_t *info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA1);
-        mbedtls_md_init(&ctx);
-        mbedtls_md_setup(&ctx, info, 1);
-        mbedtls_md_hmac_starts(&ctx, ptk, 16);
-        mbedtls_md_hmac_update(&ctx, eapol, eapol_len);
-        mbedtls_md_hmac_finish(&ctx, sha1);
-        mbedtls_md_free(&ctx);
-        memcpy(mic, sha1, 16);
+        hmac_md5(ptk, 16, eapol, eapol_len, mic);
     } 
-    /* CCMP+PMF: AES‑CMAC */
+    else if (key_descriptor == 2) {
+        hmac_sha1(ptk, 16, eapol, eapol_len, mic);
+    } 
     else if (key_descriptor == 3) {
-        uint8_t cmac[16];
-        mbedtls_cipher_context_t ctx;
-        const mbedtls_cipher_info_t *info = mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_128_ECB);
-        mbedtls_cipher_init(&ctx);
-        mbedtls_cipher_setup(&ctx, info);
-        mbedtls_cipher_cmac_starts(&ctx, ptk, 128);
-        mbedtls_cipher_cmac_update(&ctx, eapol, eapol_len);
-        mbedtls_cipher_cmac_finish(&ctx, cmac);
-        mbedtls_cipher_free(&ctx);
-        memcpy(mic, cmac, 16);
+        omac1_aes_128(ptk, eapol, eapol_len, mic);
     }
 }
 
-
 static void calculate_pmkid(const uint8_t *pmk, const uint8_t *mac_ap, const uint8_t *mac_sta, uint8_t *pmkid) 
 {
-    const char *pmk_name = "PMK Name";  // Etichetta utilizzata per generare PMKID
-    uint8_t data[20] = { 0 };  // Lunghezza: 8 ("PMK Name") + 6 (MAC AP) + 6 (MAC STA)
-    memcpy(data, pmk_name, 8);
+    uint8_t data[20];
+    memcpy(data, "PMK Name", 8);
     memcpy(data + 8, mac_ap, 6);
     memcpy(data + 14, mac_sta, 6);
 
-    mbedtls_md_context_t ctx;
-    const mbedtls_md_info_t *info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA1);
-
-    mbedtls_md_init(&ctx);
-    mbedtls_md_setup(&ctx, info, 1);
-    mbedtls_md_hmac_starts(&ctx, pmk, 32);  // PMK come chiave HMAC
-    mbedtls_md_hmac_update(&ctx, data, sizeof(data));
-    mbedtls_md_hmac_finish(&ctx, pmkid);  // Il risultato è il PMKID (primi 16 byte)
-
-    mbedtls_md_free(&ctx);
+    uint8_t hash[20];
+    hmac_sha1(pmk, 32, data, sizeof(data), hash);
+    memcpy(pmkid, hash, PMKID_LEN);
 }
 
 
@@ -158,42 +103,41 @@ bool verify_password(const char *passphrase, const char *ssid, size_t ssid_len,
                      const uint8_t *eapol, size_t eapol_len,
                      const uint8_t *expected_mic, uint8_t key_descriptor) 
 {
-    uint8_t pmk[32] = { 0 }; /* Master key */
-    uint8_t ptk[WPA_PTK_LEN] = { 0 }; /* Transient key */
+    int error;
+    uint8_t pmk[32] = { 0 }; 
+    uint8_t ptk[WPA_PTK_LEN] = { 0 }; 
     uint8_t calculated_mic[16] = { 0 };
 
-    /* 1. PMK Calculation */
-    calculate_pmk(passphrase, ssid, ssid_len, pmk);
+    error = calculate_pmk(passphrase, ssid, ssid_len, pmk);
+    if (error != 0) {
+        return false;
+    }
 
-    /* 2. PTK Calculation (SHA1 or SHA256) */
     int ptk_alg = (key_descriptor == 3) ? PTK_ALG_SHA256 : PTK_ALG_SHA1;
     calculate_ptk(pmk, mac_ap, mac_sta, anonce, snonce, ptk, ptk_alg);
 
-    /* 3. MIC Calculation */
     calculate_mic(ptk, eapol, eapol_len, calculated_mic, key_descriptor);
     
     bool ret = memcmp(calculated_mic, expected_mic, 16) == 0;
-    if(ret == true)
-    {
-        ESP_LOGI(TAG, "Password \"%s\" verified with handshake!.", passphrase);
+    if(ret == true) {
+        ESP_LOGI(TAG, "Password \"%s\" verified with handshake!", passphrase);
     }
     return ret;
 }
 
-
 bool verify_pmkid(const char *passphrase, const char *ssid, size_t ssid_len,
                   const uint8_t *mac_ap, const uint8_t *mac_sta,
-                  const uint8_t *expected_pmkid) {
-    uint8_t pmk[32] = { 0 };    // PMK è lungo 32 byte
-    uint8_t pmkid[20] = { 0 };  // PMKID è lungo 16 byte
+                  const uint8_t *expected_pmkid) 
+{
+    uint8_t pmk[32] = { 0 };  
+    uint8_t pmkid[20] = { 0 };  
 
     calculate_pmk(passphrase, ssid, ssid_len, pmk);
     calculate_pmkid(pmk, mac_ap, mac_sta, pmkid);
 
     bool ret = memcmp(pmkid, expected_pmkid, PMKID_LEN) == 0;
-    if(ret == true)
-    {
-        ESP_LOGI(TAG, "Password \"%s\" verified with PMKID!.", passphrase);
+    if(ret == true) {
+        ESP_LOGI(TAG, "Password \"%s\" verified with PMKID!", passphrase);
     }
     return ret;
 }

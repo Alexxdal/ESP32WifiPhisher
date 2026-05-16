@@ -4,6 +4,20 @@
 #include <esp_err.h>
 #include <esp_wifi.h>
 
+/**
+ * @brief Client ack tracking for unicast frames, 
+ * used to avoid counting unicast frames as dropped when they
+ * fail to send (since many APs will reject them)
+ */
+typedef struct {
+    uint8_t mac[6];
+    int64_t last_ack_time_us;
+    uint32_t fail_count;
+} client_ack_tracker_t;
+
+
+extern esp_err_t esp_wifi_internal_set_retry_counter(uint8_t short_retry, uint8_t long_retry);
+
 
 /**
  * @brief Init Wifi interface
@@ -45,6 +59,14 @@ esp_err_t wifi_set_temporary_channel(uint8_t new_channel, uint32_t window);
 
 
 /**
+ * @brief Change SoftAP channel using CSA (Channel Switch Announcement)
+ * * @param new_channel Il nuovo canale desiderato (1-13)
+ * @return esp_err_t 
+ */
+esp_err_t wifi_switch_ap_channel_csa(uint8_t new_channel);
+
+
+/**
  * @brief Get sent frames
  */
 uint32_t wifi_get_sent_frames(void);
@@ -78,5 +100,13 @@ void wifi_reset_frame_counters(void);
  * @brief Get current frames per second (PPS)
  */
 uint32_t wifi_get_frame_pps(void);
+
+
+/**
+ * @brief Check if a client is responsive based on ACK tracking
+ * This is used to avoid counting unicast frames as dropped when the client is not responding.
+ */
+bool wifi_mng_is_client_responsive(const uint8_t *mac);
+
 
 #endif

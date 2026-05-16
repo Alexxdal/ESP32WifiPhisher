@@ -5,28 +5,76 @@
 #include <esp_mac.h>
 #include <esp_event.h>
 #include <esp_log.h>
+#include <esp_timer.h>
 //#include "esp_private/wifi.h" 
 #include "config.h"
 #include "wifiMng.h"
 #include "nvs_keys.h"
 #include "utils.h"
 
+#define MAX_TRACKED_CLIENTS MAX_CLIENTS
+#define MAX_CONSECUTIVE_FAILS 10         // Dopo quanti ACK mancati lo consideriamo "sordo"
+#define BACKOFF_TIMEOUT_US    2000000    // 2 secondi di pausa prima di riprovare
 
 static const char *TAG = "WIFI_MNG";
 
 static volatile uint32_t g_tx_packets_success = 0;
 static volatile uint32_t g_tx_packets_dropped = 0;
+static client_ack_tracker_t ack_tracker[MAX_TRACKED_CLIENTS] = {0};
 /* --- PPS VARIABLES--- */
 static volatile uint32_t g_tx_pps = 0;
 static uint32_t last_tx_success_count = 0;
 static TimerHandle_t pps_timer = NULL;
 
 
-static void IRAM_ATTR wifi_80211_tx_done_cb(const esp_80211_tx_info_t *tx_info) {
-    if (tx_info->tx_status == WIFI_SEND_SUCCESS) {
+static inline void IRAM_ATTR update_ack_tracker(const uint8_t *mac, bool success) {
+    int empty_idx = -1;
+    for (int i = 0; i < MAX_TRACKED_CLIENTS; i++) {
+        // Trovato il MAC esistente
+        if (memcmp(ack_tracker[i].mac, mac, 6) == 0) {
+            if (success) {
+                ack_tracker[i].last_ack_time_us = esp_timer_get_time();
+                ack_tracker[i].fail_count = 0; // Resettiamo i fallimenti!
+            } else {
+                ack_tracker[i].fail_count++;   // Aumentiamo i fallimenti
+            }
+            return;
+        }
+        // Ci teniamo da parte il primo slot vuoto che incontriamo
+        if (empty_idx == -1 && ack_tracker[i].mac[0] == 0) {
+            empty_idx = i;
+        }
+    }
+    // Se non l'abbiamo trovato e c'è spazio, lo aggiungiamo
+    if (empty_idx != -1) {
+        memcpy(ack_tracker[empty_idx].mac, mac, 6);
+        if (success) {
+            ack_tracker[empty_idx].last_ack_time_us = esp_timer_get_time();
+            ack_tracker[empty_idx].fail_count = 0;
+        } else {
+            ack_tracker[empty_idx].fail_count = 1;
+        }
+    }
+}
+
+
+static void IRAM_ATTR wifi_80211_tx_done_cb(const esp_80211_tx_info_t *tx_info) 
+{
+    uint8_t *buffer = tx_info->data;
+    if (buffer == NULL) return;
+    bool is_unicast = (buffer[4] & 0x01) == 0;
+    
+    bool success = (tx_info->tx_status == WIFI_SEND_SUCCESS);
+
+    if (success) {
         g_tx_packets_success++;
     } else {
         g_tx_packets_dropped++;
+    }
+
+    if (is_unicast) {
+        uint8_t *dst_mac = buffer + 4;
+        update_ack_tracker(dst_mac, success);
     }
 }
 
@@ -269,6 +317,15 @@ esp_err_t wifi_set_channel_safe(uint8_t new_channel)
 
 esp_err_t wifi_set_temporary_channel(uint8_t new_channel, uint32_t window)
 {
+    uint8_t current_primary;
+    wifi_second_chan_t current_secondary;
+    esp_err_t err = esp_wifi_get_channel(&current_primary, &current_secondary);
+    
+    if (err != ESP_OK) return err;
+    if (current_primary == new_channel) {
+        return ESP_OK;
+    }
+
     wifi_roc_req_t roc_req = {
         .ifx = WIFI_IF_STA,
         .type = WIFI_ROC_REQ,
@@ -280,6 +337,41 @@ esp_err_t wifi_set_temporary_channel(uint8_t new_channel, uint32_t window)
     };
 
     return esp_wifi_remain_on_channel(&roc_req);
+}
+
+
+esp_err_t wifi_switch_ap_channel_csa(uint8_t new_channel)
+{
+    uint8_t current_primary;
+    wifi_second_chan_t current_secondary;
+    esp_err_t err = esp_wifi_get_channel(&current_primary, &current_secondary);
+    
+    if (err != ESP_OK) return err;
+    if (current_primary == new_channel) {
+        return ESP_OK;
+    }
+
+    ESP_LOGI(TAG, "Forcing SoftAP switch from CH %d to CH %d...", current_primary, new_channel);
+
+    wifi_config_t ap_config;
+    err = esp_wifi_get_config(WIFI_IF_AP, &ap_config);
+    if (err != ESP_OK) return err;
+    ap_config.ap.channel = new_channel;
+    ap_config.ap.beacon_interval = 100;
+    ap_config.ap.csa_count = 10;
+    // Applichiamo la configurazione. 
+    // Su ESP-IDF questo innesca l'aggiornamento della radio. 
+    // Sui chip più recenti genera un CSA implicito; sui più vecchi fa un salto brutale.
+    err = esp_wifi_set_config(WIFI_IF_AP, &ap_config);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to set new AP config: %s", esp_err_to_name(err));
+        return err;
+    }
+    // Pausa tattica: diamo tempo al telefono di accorgersi del salto 
+    // e di "inseguire" l'ESP32 sul nuovo canale prima di iniziare a inondare
+    // l'etere di pacchetti deauth (che potrebbero causare packet loss alla dashboard).
+    vTaskDelay(pdMS_TO_TICKS(5000)); 
+    return ESP_OK;
 }
 
 
@@ -318,4 +410,26 @@ void wifi_reset_frame_counters(void)
 uint32_t wifi_get_frame_pps(void) 
 {
     return g_tx_pps;
+}
+
+
+bool wifi_mng_is_client_responsive(const uint8_t *mac) 
+{
+    for (int i = 0; i < MAX_TRACKED_CLIENTS; i++) {
+        if (memcmp(ack_tracker[i].mac, mac, 6) == 0) {
+            // Se ha fallito troppe volte...
+            if (ack_tracker[i].fail_count >= MAX_CONSECUTIVE_FAILS) {
+                // ...e non è ancora passato il tempo di punizione (2 secondi)
+                if ((esp_timer_get_time() - ack_tracker[i].last_ack_time_us) < BACKOFF_TIMEOUT_US) {
+                    return false; // Il client è sordo. Evitiamo di sprecare colpi.
+                } else {
+                    // La punizione è finita, diamogli un'altra chance!
+                    ack_tracker[i].fail_count = 0; 
+                    return true;
+                }
+            }
+            return true;
+        }
+    }
+    return true;
 }
