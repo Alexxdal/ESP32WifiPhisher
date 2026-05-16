@@ -386,27 +386,27 @@ static esp_err_t api_admin_set_ap_settings(ws_frame_req_t *req)
 
     char ssid[32] = {0};
     char password[64] = {0};
-    int channel = 1;
-    wifi_phy_rate_t tx_rate = DEFAULT_WIFI_TX_RATE;
 
     if (cJSON_IsString(j_ssid)) {
+        if (strlen(j_ssid->valuestring) == 0 || strlen(j_ssid->valuestring) >= 32) {
+            cJSON_Delete(json);
+            api_send_status_frame(req, "error", "Invalid SSID length.");
+            return ESP_FAIL;
+        }
         strlcpy(ssid, j_ssid->valuestring, sizeof(ssid));
+        save_string_to_nvs(WIFI_SSID_KEY, (const char *)ssid);
     }
     if (cJSON_IsString(j_password)) {
         strlcpy(password, j_password->valuestring, sizeof(password));
+        save_string_to_nvs(WIFI_PASS_KEY, (const char *)password);
     }
     if (cJSON_IsNumber(j_channel)) {
-        channel = j_channel->valueint;
+        save_int_to_nvs(WIFI_CHAN_KEY, j_channel->valueint);
     }
     if (cJSON_IsNumber(j_tx_rate)) {
-        tx_rate = (wifi_phy_rate_t)j_tx_rate->valueint;
+        save_int_to_nvs(WIFI_TX_RATE_KEY, (int32_t)j_tx_rate->valueint);
     }
     cJSON_Delete(json);
-
-    save_string_to_nvs(WIFI_SSID_KEY, (const char *)ssid);
-    save_string_to_nvs(WIFI_PASS_KEY, (const char *)password);
-    save_int_to_nvs(WIFI_CHAN_KEY, channel);
-    save_int_to_nvs(WIFI_TX_RATE_KEY, (int32_t)tx_rate);
 
     api_send_status_frame(req, "ok", "AP settings saved successfully.");
 
