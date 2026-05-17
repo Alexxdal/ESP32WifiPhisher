@@ -61,9 +61,10 @@ int libwifi_parse_reassoc_req(struct libwifi_sta *sta, struct libwifi_frame *fra
         return -EINVAL;
     }
 
-    sta->tags.length = (frame->len - frame->header_len);
-    const unsigned char *tagged_params = frame->body;
+    sta->tags.length = frame->len - frame->header_len - sizeof(struct libwifi_reassoc_req_fixed_parameters);
+    const unsigned char *tagged_params = frame->body + sizeof(struct libwifi_reassoc_req_fixed_parameters);
     sta->tags.parameters = malloc(sta->tags.length);
+    if (!sta->tags.parameters) return -ENOMEM;
     memcpy(sta->tags.parameters, tagged_params, sta->tags.length);
 
     struct libwifi_tag_iterator it;
