@@ -27,32 +27,53 @@ static uint32_t last_tx_success_count = 0;
 static TimerHandle_t pps_timer = NULL;
 
 
-static inline void IRAM_ATTR update_ack_tracker(const uint8_t *mac, bool success) {
-    int empty_idx = -1;
+static inline void IRAM_ATTR update_ack_tracker(const uint8_t *mac, wifi_tx_status_t success) {
+    int target_idx = -1;
+    int64_t oldest_time = INT64_MAX;
+    int64_t now = esp_timer_get_time();
+
     for (int i = 0; i < MAX_TRACKED_CLIENTS; i++) {
-        // Trovato il MAC esistente
-        if (memcmp(ack_tracker[i].mac, mac, 6) == 0) {
-            if (success) {
-                ack_tracker[i].last_ack_time_us = esp_timer_get_time();
-                ack_tracker[i].fail_count = 0; // Resettiamo i fallimenti!
-            } else {
-                ack_tracker[i].fail_count++;   // Aumentiamo i fallimenti
-            }
-            return;
+        // Se il MAC esiste già, usiamo questo slot e usciamo dal loop
+        if (ack_tracker[i].active && memcmp(ack_tracker[i].mac, mac, 6) == 0) {
+            target_idx = i;
+            break;
         }
-        // Ci teniamo da parte il primo slot vuoto che incontriamo
-        if (empty_idx == -1 && ack_tracker[i].mac[0] == 0) {
-            empty_idx = i;
+        // Troviamo uno slot vuoto oppure il più vecchio (LRU)
+        if (!ack_tracker[i].active) {
+            // Priorità assoluta agli slot vuoti
+            if (target_idx == -1 || ack_tracker[target_idx].active) {
+                target_idx = i;
+            }
+        } else if (target_idx == -1 || (ack_tracker[target_idx].active && ack_tracker[i].last_activity_us < oldest_time)) {
+            // Tieni traccia del client più vecchio nel caso in cui dobbiamo sovrascrivere
+            oldest_time = ack_tracker[i].last_activity_us;
+            target_idx = i;
         }
     }
-    // Se non l'abbiamo trovato e c'è spazio, lo aggiungiamo
-    if (empty_idx != -1) {
-        memcpy(ack_tracker[empty_idx].mac, mac, 6);
-        if (success) {
-            ack_tracker[empty_idx].last_ack_time_us = esp_timer_get_time();
-            ack_tracker[empty_idx].fail_count = 0;
+
+    // 2. Aggiorna i dati dello slot individuato
+    if (target_idx != -1) {
+        // Se è un nuovo inserimento o un'eviction, resetta i campi
+        if (!ack_tracker[target_idx].active || memcmp(ack_tracker[target_idx].mac, mac, 6) != 0) {
+            memcpy(ack_tracker[target_idx].mac, mac, 6);
+            ack_tracker[target_idx].active = true;
+            ack_tracker[target_idx].fail_count = 0;
+            ack_tracker[target_idx].block_until_us = 0;
+        }
+
+        // Aggiorna sempre l'attività per l'LRU
+        ack_tracker[target_idx].last_activity_us = now;
+
+        // Gestione del tracking
+        if (success == WIFI_SEND_SUCCESS) {
+            ack_tracker[target_idx].fail_count = 0;
         } else {
-            ack_tracker[empty_idx].fail_count = 1;
+            ack_tracker[target_idx].fail_count++;
+            // Applica il backoff se il client non risponde più
+            if (ack_tracker[target_idx].fail_count >= MAX_CONSECUTIVE_FAILS) {
+                ack_tracker[target_idx].block_until_us = now + BACKOFF_TIMEOUT_US;
+                ack_tracker[target_idx].fail_count = 0;
+            }
         }
     }
 }
@@ -63,10 +84,8 @@ static void IRAM_ATTR wifi_80211_tx_done_cb(const esp_80211_tx_info_t *tx_info)
     uint8_t *buffer = tx_info->data;
     if (buffer == NULL) return;
     bool is_unicast = (buffer[4] & 0x01) == 0;
-    
-    bool success = (tx_info->tx_status == WIFI_SEND_SUCCESS);
 
-    if (success) {
+    if (tx_info->tx_status == WIFI_SEND_SUCCESS) {
         g_tx_packets_success++;
     } else {
         g_tx_packets_dropped++;
@@ -74,7 +93,7 @@ static void IRAM_ATTR wifi_80211_tx_done_cb(const esp_80211_tx_info_t *tx_info)
 
     if (is_unicast) {
         uint8_t *dst_mac = buffer + 4;
-        update_ack_tracker(dst_mac, success);
+        update_ack_tracker(dst_mac, tx_info->tx_status);
     }
 }
 
@@ -415,21 +434,15 @@ uint32_t wifi_get_frame_pps(void)
 
 bool wifi_mng_is_client_responsive(const uint8_t *mac) 
 {
+    bool responsive = true;
+    int64_t now = esp_timer_get_time();
     for (int i = 0; i < MAX_TRACKED_CLIENTS; i++) {
-        if (memcmp(ack_tracker[i].mac, mac, 6) == 0) {
-            // Se ha fallito troppe volte...
-            if (ack_tracker[i].fail_count >= MAX_CONSECUTIVE_FAILS) {
-                // ...e non è ancora passato il tempo di punizione (2 secondi)
-                if ((esp_timer_get_time() - ack_tracker[i].last_ack_time_us) < BACKOFF_TIMEOUT_US) {
-                    return false; // Il client è sordo. Evitiamo di sprecare colpi.
-                } else {
-                    // La punizione è finita, diamogli un'altra chance!
-                    ack_tracker[i].fail_count = 0; 
-                    return true;
-                }
+        if (ack_tracker[i].active && memcmp(ack_tracker[i].mac, mac, 6) == 0) {
+            if (now < ack_tracker[i].block_until_us) {
+                responsive = false;
             }
-            return true;
+            break;
         }
     }
-    return true;
+    return responsive;
 }
