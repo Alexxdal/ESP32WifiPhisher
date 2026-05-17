@@ -15,6 +15,7 @@
 #include "nvs_keys.h"
 #include "deauther.h"
 #include "sniffer.h"
+#include "ssid_finder.h"
 #include <libwifi.h>
 
 static const char *TAG = "SERVER_API";
@@ -874,6 +875,49 @@ static esp_err_t api_stop_raw_sniffer(ws_frame_req_t *req)
 }
 
 
+static esp_err_t api_start_ssid_finder(ws_frame_req_t *req)
+{
+    cJSON *json = cJSON_Parse(req->payload);
+    if (!json) {
+        api_send_status_frame(req, "error", "Invalid JSON");
+        return ESP_FAIL;
+    }
+
+    target_info_t target_info = { 0 };
+
+    cJSON *j_bssid = cJSON_GetObjectItemCaseSensitive(json, "bssid");
+    cJSON *j_chan = cJSON_GetObjectItemCaseSensitive(json, "channel");
+    cJSON *j_rssi = cJSON_GetObjectItemCaseSensitive(json, "signal");
+    cJSON *j_auth = cJSON_GetObjectItemCaseSensitive(json, "authmode_code");
+
+    if (cJSON_IsNumber(j_chan)) target_info.channel = (uint8_t)j_chan->valueint;
+    if (cJSON_IsNumber(j_rssi)) target_info.rssi = (int8_t)j_rssi->valueint;
+    if (cJSON_IsNumber(j_auth)) target_info.authmode = (wifi_auth_mode_t)j_auth->valueint;
+
+    if (cJSON_IsString(j_bssid)) {
+        sscanf(j_bssid->valuestring, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
+               &target_info.bssid[0], &target_info.bssid[1], &target_info.bssid[2],
+               &target_info.bssid[3], &target_info.bssid[4], &target_info.bssid[5]);
+    }
+
+    cJSON_Delete(json);
+
+    ESP_LOGI(TAG, "Starting SSID Finder on BSSID: "MACSTR " (Ch: %d)", MAC2STR(target_info.bssid), target_info.channel);
+    ssid_finder_start(&target_info);
+
+    api_send_status_frame(req, "ok", "SSID Finder Started");
+    return ESP_OK;
+}
+
+
+static esp_err_t api_stop_ssid_finder(ws_frame_req_t *req)
+{
+    ssid_finder_stop();
+    api_send_status_frame(req, "ok", "SSID Finder Stopped");
+    return ESP_OK;
+}
+
+
 static const api_cmd_t api_cmd_list[] = {
     { API_GET_STATUS, api_get_status },
     { API_SET_AP_SETTINGS, api_admin_set_ap_settings },
@@ -893,6 +937,8 @@ static const api_cmd_t api_cmd_list[] = {
     { API_STOP_RAW_SNIFFER, api_stop_raw_sniffer },
     { API_GET_RECON_AP_LIST, api_get_recon_data_aps },
     { API_GET_RECON_CLIENT_LIST, api_get_recon_data_clients },
+    { API_START_SSID_FINDER, api_start_ssid_finder },
+    { API_STOP_SSID_FINDER, api_stop_ssid_finder }
 };
 
 

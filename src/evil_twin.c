@@ -183,6 +183,7 @@ static void evil_twin_task(void *pvParameters)
                                     ESP_LOGW(TAG, "TARGET 5GHz SWITCHED CHANNEL: %d -> %d", twin_on_5ghz.channel, aps.ap[i].record.primary);
                                     ws_log(TAG, "Target 5GHz moved to Ch %d", aps.ap[i].record.primary);
                                     twin_on_5ghz.channel = aps.ap[i].record.primary;
+                                    target_set(&twin_on_5ghz, TARGET_INFO_EVIL_TWIN_5G);
                                 }
                             }
                         }

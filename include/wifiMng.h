@@ -11,10 +11,11 @@
  */
 typedef struct {
     uint8_t mac[6];
-    int64_t last_ack_time_us;
+    int64_t last_activity_us;
+    int64_t block_until_us;
     uint32_t fail_count;
+    bool active;
 } client_ack_tracker_t;
-
 
 extern esp_err_t esp_wifi_internal_set_retry_counter(uint8_t short_retry, uint8_t long_retry);
 
