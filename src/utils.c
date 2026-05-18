@@ -172,6 +172,53 @@ const char *wifi_rate_to_str(wifi_phy_rate_t rate)
 }
 
 
+const char *wifi_deauth_reason_to_str(uint16_t reason) 
+{
+    switch (reason) {
+        // Core IEEE 802.11 Reasons
+        case 1: return "Unspecified reason";
+        case 2: return "Previous authentication no longer valid";
+        case 3: return "Deauthenticated because sending station is leaving (or has left) BSS";
+        case 4: return "Disassociated due to inactivity";
+        case 5: return "Disassociated because AP is unable to handle all currently associated stations";
+        case 6: return "Class 2 frame received from nonauthenticated station";
+        case 7: return "Class 3 frame received from nonassociated station";
+        case 8: return "Disassociated because sending station has left the BSS";
+        case 9: return "Station requesting (re)association is not authenticated with responding station";
+        case 10: return "Disassociation due to reason outside the scope of this standard";
+        case 11: return "Specified information element not acceptable";
+        case 12: return "Power Capability element not acceptable"; // Non gestito da molti AP
+        case 13: return "Invalid information element";
+        case 14: return "Message Integrity Code (MIC) failure";
+        case 15: return "4-Way Handshake timeout";
+        case 16: return "Group Key update timeout";
+        case 17: return "Information element in 4-Way Handshake different from (Re)Association Request/Probe Response/Beacon frame";
+        case 18: return "Invalid group cipher";
+        case 19: return "Invalid pairwise cipher";
+        case 20: return "Invalid AKMP (Authentication and Key Management Protocol)";
+        case 21: return "Unsupported RSN (Robust Security Network) IE version";
+        case 22: return "Invalid RSN IE capabilities";
+        case 23: return "IEEE 802.1X Authentication failed";
+        case 24: return "Cipher suite rejected because of the security policy";
+        case 32: return "Disassociated for unspecified, QoS-related reason";
+        case 33: return "Disassociated because QAP lacks sufficient bandwidth for this QSTA";
+        case 34: return "Disassociated because of excessive number of frames need to be acknowledged, but are not acknowledged due to AP transmissions and/or poor channel conditions";
+        case 35: return "Disassociated because QSTA is transmitting outside the limits of its TXOPs";
+        case 39: return "Peer requested station to leave BSS";
+        // ESP-IDF internal
+        case 200: return "ESP_IDF: Beacon timeout";
+        case 201: return "ESP_IDF: No AP found";
+        case 202: return "ESP_IDF: Authentication failed";
+        case 203: return "ESP_IDF: Association failed";
+        case 204: return "ESP_IDF: Handshake timeout";
+        case 205: return "ESP_IDF: Connection failed";
+        case 206: return "ESP_IDF: AP dropped connection";
+
+        default: return "Unknown reason code";
+    }
+}
+
+
 void hex_dump_bytes(const char *tag, const uint8_t *buf, size_t len)
 {
     if (!buf || len == 0) return;

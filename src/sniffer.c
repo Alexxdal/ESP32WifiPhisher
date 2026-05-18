@@ -616,7 +616,7 @@ static void wifi_sniffer_packet_analyzer_handler(struct libwifi_frame *frame, sn
                 strcpy(subtype_str, "DISASSOC");
                 struct libwifi_parsed_disassoc dis = {0};
                 if (libwifi_parse_disassoc(&dis, frame) == 0) {
-                    snprintf(info, sizeof(info), "Reason:%u (0x%04X)", dis.fixed_parameters.reason_code, dis.fixed_parameters.reason_code);
+                    snprintf(info, sizeof(info), "Reason:%u (%s)", dis.fixed_parameters.reason_code, wifi_deauth_reason_to_str(dis.fixed_parameters.reason_code));
                 }
             } break;
 
@@ -625,7 +625,7 @@ static void wifi_sniffer_packet_analyzer_handler(struct libwifi_frame *frame, sn
                 strcpy(subtype_str, "DEAUTH");
                 struct libwifi_parsed_deauth de = {0};
                 if (libwifi_parse_deauth(&de, frame) == 0) {
-                    snprintf(info, sizeof(info), "Reason:%u", de.fixed_parameters.reason_code);
+                    snprintf(info, sizeof(info), "Reason:%u (%s)", de.fixed_parameters.reason_code, wifi_deauth_reason_to_str(de.fixed_parameters.reason_code));
                     libwifi_free_parsed_deauth(&de);
                 }
             } break;

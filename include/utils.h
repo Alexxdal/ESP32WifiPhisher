@@ -99,6 +99,15 @@ const char *wifi_rate_to_str(wifi_phy_rate_t rate);
 
 
 /**
+ * @brief Convert wifi deauth reason to string
+ * 
+ * @param reason 
+ * @return const char* 
+ */
+const char *wifi_deauth_reason_to_str(uint16_t reason);
+
+
+/**
  * @brief Hex dump bytes
  * 
  * @param tag 
