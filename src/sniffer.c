@@ -143,6 +143,11 @@ IRAM_ATTR static void promiscuous_callback(void *buf, wifi_promiscuous_pkt_type_
     const wifi_promiscuous_pkt_t *packet = (wifi_promiscuous_pkt_t *)buf;
     uint16_t len = packet->rx_ctrl.sig_len;
 
+    // Ignore CRTL packet
+    if ((packet->payload[0] & 0x0C) == 0x04) {
+        return; 
+    }
+
     if (packet_queue == NULL) {
         return; // Queue not initialized
     }
@@ -532,9 +537,33 @@ static void wifi_sniffer_packet_analyzer_handler(struct libwifi_frame *frame, sn
     if (type == TYPE_MANAGEMENT) {
         strcpy(type_str, "MGMT");
         switch(subtype) {
-            case SUBTYPE_ASSOC_REQ: strcpy(subtype_str, "ASSOC_REQ"); break;
+            case SUBTYPE_ASSOC_REQ: 
+            {
+                strcpy(subtype_str, "ASSOC_REQ");
+                struct libwifi_sta sta = {0};
+                if (libwifi_parse_assoc_req(&sta, frame) == 0) {
+                    snprintf(info, sizeof(info),
+                            "SSID:%s%s | Ch:%u",
+                            sta.ssid,
+                            sta.broadcast_ssid ? " (hidden)" : "",
+                            sta.channel);
+                    libwifi_free_sta(&sta);
+                }
+            } break;
             case SUBTYPE_ASSOC_RESP: strcpy(subtype_str, "ASSOC_RESP"); break;
-            case SUBTYPE_REASSOC_REQ: strcpy(subtype_str, "REASSOC_REQ"); break;
+            case SUBTYPE_REASSOC_REQ: 
+            {
+                strcpy(subtype_str, "REASSOC_REQ");
+                struct libwifi_sta sta = {0};
+                if (libwifi_parse_reassoc_req(&sta, frame) == 0) {
+                    snprintf(info, sizeof(info),
+                            "SSID:%s%s | Ch:%u",
+                            sta.ssid,
+                            sta.broadcast_ssid ? " (hidden)" : "",
+                            sta.channel);
+                    libwifi_free_sta(&sta);
+                }
+            } break;
             case SUBTYPE_REASSOC_RESP: strcpy(subtype_str, "REASSOC_RESP"); break;
             case SUBTYPE_PROBE_REQ: {
                 strcpy(subtype_str, "PROBE_REQ");
@@ -906,20 +935,14 @@ void wifi_sniffer_set_fine_filter(int type, uint32_t subtype, uint8_t channel)
     switch(type) {
         case 0: // ALL
             filter.filter_mask = WIFI_PROMIS_FILTER_MASK_MGMT | WIFI_PROMIS_FILTER_MASK_DATA | WIFI_PROMIS_FILTER_MASK_CTRL;
-            // Abilita tutti i control packets se ALL è selezionato (o solo quelli utili per non intasare)
-            ctrl_filter.filter_mask = WIFI_PROMIS_CTRL_FILTER_MASK_ALL;
-            esp_wifi_set_promiscuous_ctrl_filter(&ctrl_filter);
             break;
 
         case 1: // MANAGEMENT
             filter.filter_mask = WIFI_PROMIS_FILTER_MASK_MGMT;
-            // Nessun filtro CTRL hardware necessario
             break;
 
         case 2: // CONTROL
             filter.filter_mask = WIFI_PROMIS_FILTER_MASK_CTRL;
-            // Qui applichiamo la maschera specifica hardware passata dal frontend!
-            // Es. se subtype è (1<<29), passerà solo ACK
             ctrl_filter.filter_mask = subtype;
             esp_wifi_set_promiscuous_ctrl_filter(&ctrl_filter);
             break;
