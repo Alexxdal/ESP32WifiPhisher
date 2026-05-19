@@ -25,6 +25,7 @@ static client_ack_tracker_t ack_tracker[MAX_TRACKED_CLIENTS] = {0};
 static volatile uint32_t g_tx_pps = 0;
 static uint32_t last_tx_success_count = 0;
 static TimerHandle_t pps_timer = NULL;
+static bool wifi_connected = false;
 
 
 static inline void IRAM_ATTR update_ack_tracker(const uint8_t *mac, wifi_tx_status_t success) {
@@ -126,6 +127,18 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t e
         wifi_event_ap_stadisconnected_t* event = (wifi_event_ap_stadisconnected_t*) event_data;
         ESP_LOGI(TAG, "Station ("MACSTR") disconnected from AP, AID=%d, reason=%d (%s)", MAC2STR(event->mac), event->aid, event->reason, wifi_deauth_reason_to_str(event->reason));
     }
+    else if (event_id == WIFI_EVENT_STA_DISCONNECTED)
+    {
+        wifi_connected = false;
+        wifi_event_sta_disconnected_t* event = (wifi_event_sta_disconnected_t*) event_data;
+        ESP_LOGI(TAG, "Station disconnected from AP, reason=%d (%s)", event->reason, wifi_deauth_reason_to_str(event->reason));
+    }
+    else if (event_id == WIFI_EVENT_STA_CONNECTED)
+    {
+        wifi_connected = true;
+        wifi_event_sta_connected_t* event = (wifi_event_sta_connected_t*) event_data;
+        ESP_LOGI(TAG, "Station connected to AP, SSID=%.*s, BSSID="MACSTR, event->ssid_len, event->ssid, MAC2STR(event->bssid));
+    }
 }
 
 
@@ -225,6 +238,41 @@ esp_err_t wifi_init(void)
     }
 
     return ESP_OK;
+}
+
+
+esp_err_t wifi_connect(const char *ssid, const char *password)
+{
+    if (ssid == NULL || strlen(ssid) == 0) return ESP_ERR_INVALID_ARG;
+
+    wifi_config_t sta_config = {0};
+    strncpy((char *)sta_config.sta.ssid, ssid, sizeof(sta_config.sta.ssid) - 1);
+    
+    if (password && strlen(password) > 0) {
+        strncpy((char *)sta_config.sta.password, password, sizeof(sta_config.sta.password) - 1);
+    } else {
+        sta_config.sta.threshold.authmode = WIFI_AUTH_OPEN;
+    }
+    sta_config.sta.pmf_cfg.capable = true;
+    sta_config.sta.pmf_cfg.required = false;
+
+    esp_err_t err = esp_wifi_set_config(WIFI_IF_STA, &sta_config);
+    if (err != ESP_OK) {
+        ESP_LOGD(TAG, "Errore set_config STA: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    err = esp_wifi_connect();
+    if (err != ESP_OK) {
+        ESP_LOGD(TAG, "Errore wifi_connect: %s", esp_err_to_name(err));
+    }
+    return err;
+}
+
+
+bool wifi_is_connected(void) 
+{
+    return wifi_connected;
 }
 
 

@@ -15,7 +15,7 @@
 #include "nvs_keys.h"
 #include "deauther.h"
 #include "sniffer.h"
-#include "ssid_finder.h"
+#include "networking.h"
 #include <libwifi.h>
 
 static const char *TAG = "SERVER_API";
@@ -125,7 +125,14 @@ static esp_err_t api_get_status(ws_frame_req_t *req)
     cJSON_AddBoolToObject(root, "et_running", is_et_running);
     cJSON_AddBoolToObject(root, "deauth_running", is_deauth_running);
     cJSON_AddBoolToObject(root, "karma_running", is_karma_running);
-    
+
+    // Wifi connection status
+    cJSON_AddBoolToObject(root, "wifi_connected", wifi_is_connected());
+    wifi_config_t wifi_sta_config;
+    if( esp_wifi_get_config(WIFI_IF_STA, &wifi_sta_config) == ESP_OK ) {
+        cJSON_AddStringToObject(root, "wifi_sta_ssid", (char*)wifi_sta_config.sta.ssid);
+    }
+
     if(is_et_running) {
         // Basic Target Info
         cJSON_AddStringToObject(root, "ssid", (char*)et_target->ssid);
@@ -157,6 +164,20 @@ static esp_err_t api_get_status(ws_frame_req_t *req)
     cJSON_AddNumberToObject(root, "tx_sent", wifi_get_sent_frames());
     cJSON_AddNumberToObject(root, "tx_drop", wifi_get_dropped_frames());
     cJSON_AddNumberToObject(root, "tx_pps", wifi_get_frame_pps());
+
+    // Network Info
+    if (networking_has_ip()) {
+        esp_netif_ip_info_t *ip_info = networking_get_ip_info();
+        char ip_str[16];
+        char mask_str[16];
+        char gw_str[16];
+        snprintf(ip_str, sizeof(ip_str), IPSTR, IP2STR(&ip_info->ip));
+        snprintf(mask_str, sizeof(mask_str), IPSTR, IP2STR(&ip_info->netmask));
+        snprintf(gw_str, sizeof(gw_str), IPSTR, IP2STR(&ip_info->gw));
+        cJSON_AddStringToObject(root, "ip", ip_str);
+        cJSON_AddStringToObject(root, "netmask", mask_str);
+        cJSON_AddStringToObject(root, "gateway", gw_str);
+    }
 
     char *json_response = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
@@ -875,7 +896,7 @@ static esp_err_t api_stop_raw_sniffer(ws_frame_req_t *req)
 }
 
 
-static esp_err_t api_start_ssid_finder(ws_frame_req_t *req)
+static esp_err_t api_wifi_connect(ws_frame_req_t *req)
 {
     cJSON *json = cJSON_Parse(req->payload);
     if (!json) {
@@ -883,37 +904,23 @@ static esp_err_t api_start_ssid_finder(ws_frame_req_t *req)
         return ESP_FAIL;
     }
 
-    target_info_t target_info = { 0 };
+    char ssid[32] = {0};
+    char password[64] = {0};
 
-    cJSON *j_bssid = cJSON_GetObjectItemCaseSensitive(json, "bssid");
-    cJSON *j_chan = cJSON_GetObjectItemCaseSensitive(json, "channel");
-    cJSON *j_rssi = cJSON_GetObjectItemCaseSensitive(json, "signal");
-    cJSON *j_auth = cJSON_GetObjectItemCaseSensitive(json, "authmode_code");
+    cJSON *j_ssid = cJSON_GetObjectItemCaseSensitive(json, "ssid");
+    cJSON *j_password = cJSON_GetObjectItemCaseSensitive(json, "password");
 
-    if (cJSON_IsNumber(j_chan)) target_info.channel = (uint8_t)j_chan->valueint;
-    if (cJSON_IsNumber(j_rssi)) target_info.rssi = (int8_t)j_rssi->valueint;
-    if (cJSON_IsNumber(j_auth)) target_info.authmode = (wifi_auth_mode_t)j_auth->valueint;
-
-    if (cJSON_IsString(j_bssid)) {
-        sscanf(j_bssid->valuestring, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
-               &target_info.bssid[0], &target_info.bssid[1], &target_info.bssid[2],
-               &target_info.bssid[3], &target_info.bssid[4], &target_info.bssid[5]);
-    }
+    if (cJSON_IsString(j_ssid)) strlcpy(ssid, j_ssid->valuestring, sizeof(ssid));
+    if (cJSON_IsString(j_password)) strlcpy(password, j_password->valuestring, sizeof(password));
 
     cJSON_Delete(json);
 
-    ESP_LOGI(TAG, "Starting SSID Finder on BSSID: "MACSTR " (Ch: %d)", MAC2STR(target_info.bssid), target_info.channel);
-    ssid_finder_start(&target_info);
+    if(wifi_connect(ssid, password) != ESP_OK) {
+        api_send_status_frame(req, "error", "Failed to connect to WiFi");
+        return ESP_FAIL;
+    }
 
-    api_send_status_frame(req, "ok", "SSID Finder Started");
-    return ESP_OK;
-}
-
-
-static esp_err_t api_stop_ssid_finder(ws_frame_req_t *req)
-{
-    ssid_finder_stop();
-    api_send_status_frame(req, "ok", "SSID Finder Stopped");
+    api_send_status_frame(req, "ok", "Connection Attempted");
     return ESP_OK;
 }
 
@@ -937,8 +944,7 @@ static const api_cmd_t api_cmd_list[] = {
     { API_STOP_RAW_SNIFFER, api_stop_raw_sniffer },
     { API_GET_RECON_AP_LIST, api_get_recon_data_aps },
     { API_GET_RECON_CLIENT_LIST, api_get_recon_data_clients },
-    { API_START_SSID_FINDER, api_start_ssid_finder },
-    { API_STOP_SSID_FINDER, api_stop_ssid_finder }
+    { API_WIFI_CONNECT, api_wifi_connect },
 };
 
 

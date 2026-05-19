@@ -9,8 +9,6 @@
 #include "server.h"
 #include "server_api.h"
 
-/* Pages include */
-#include "web/passwords.h"
 
 static const char *TAG = "WEBSERVER";
 static httpd_handle_t server = NULL;

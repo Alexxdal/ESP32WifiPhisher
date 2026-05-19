@@ -8,7 +8,7 @@
 #include "dns.h"
 #include "passwordMng.h"
 #include "portmap.h"
-
+#include "networking.h"
 
 /**
  * @brief Block system when an unrecoverable error occurs.
@@ -53,6 +53,12 @@ void app_main()
 
     /* Configure DNAT for captive portal */
     if(setup_dnat_for_captive_portal() != ESP_OK)
+    {
+        fatal_error_handler();
+    }
+
+    /* Init networking */
+    if(networking_init() != ESP_OK)
     {
         fatal_error_handler();
     }

@@ -28,6 +28,24 @@ esp_err_t wifi_init(void);
 
 
 /**
+ * @brief Check if wifi is connected
+ * 
+ * @return true if connected, false otherwise
+ */
+bool wifi_is_connected(void);
+
+
+/**
+ * @brief Connect to a wifi network
+ * 
+ * @param ssid 
+ * @param password 
+ * @return esp_err_t 
+ */
+esp_err_t wifi_connect(const char *ssid, const char *password);
+
+
+/**
  * @brief Start wifi in AP mode
  * 
  */
