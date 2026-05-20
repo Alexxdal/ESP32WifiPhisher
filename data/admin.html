@@ -487,9 +487,18 @@
                 <span data-i18n="deauth_attack">Deauther</span>
             </div>
 
-            <div class="menu-item" onclick="showView('view-ssid-finder', this)">
-                <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
-                <span data-i18n="ssid_finder">Hidden SSID Finder</span>
+            <div class="menu-category" data-i18n="net_cat">Network Analysis</div>
+            <div class="menu-item" id="menu-sta" onclick="showView('view-sta', this)">
+                <svg viewBox="0 0 24 24"><path d="M12 21L15.6 16.2C14.6 15.45 13.35 15 12 15C10.65 15 9.4 15.45 8.4 16.2L12 21ZM12 3C7.95 3 4.21 4.34 1.2 6.6L3 9C5.5 7.12 8.62 6 12 6C15.38 6 18.5 7.12 21 9L22.8 6.6C19.79 4.34 16.05 3 12 3ZM12 9C9.3 9 6.81 9.89 4.8 11.4L6.6 13.8C8.1 12.67 9.97 12 12 12C14.03 12 15.9 12.67 17.4 13.8L19.2 11.4C17.19 9.89 14.7 9 12 9Z"/></svg> 
+                <span data-i18n="sta_connection">Target Connection</span>
+            </div>
+            <div class="menu-item" id="menu-host-discovery" onclick="showView('view-host-discovery', this)">
+                <svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+                <span data-i18n="host_discovery">Host Discovery</span>
+            </div>
+            <div class="menu-item" id="menu-port-scan" onclick="showView('view-port-scan', this)">
+                <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 9h-2V7h-2v5H6v-2H4v6h8v-4zm6 4h-6v2h6v-2zm0-4h-6v2h6v-2zm0-4h-6v2h6V8z"/></svg> 
+                <span data-i18n="port_scanner">Port Scanner</span>
             </div>
             
             <div class="menu-category" data-i18n="system_cat">System</div>
@@ -540,6 +549,7 @@
 
         <div id="toast" class="toast">Notification Message</div>
 
+        <!-- HOME -->
         <div id="view-home" class="view-container active">
             <div style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 1px solid #333; padding-bottom: 10px; margin-bottom: 20px;">
                 <h2 style="border:none; padding:0; margin:0;" data-i18n="dashboard_title">Dashboard</h2>
@@ -663,6 +673,41 @@
                         </div>
                     </div>
                 </div>
+
+                <div class="card" style="border-top: 3px solid #00bcd4;">
+                    <div class="stat-label">STA NETWORK & DISCOVERY</div>
+                    
+                    <div style="margin-top:20px; display:flex; flex-direction:column; gap:15px;">
+                        <div style="display:flex; align-items:center; justify-content:space-between; padding-bottom:10px; border-bottom:1px solid #333;">
+                            <div>
+                                <div style="font-size:0.85rem; font-weight:bold; color:#fff;" id="dash-sta-ssid">No Network</div>
+                                <div style="font-size:0.75rem; color:#888;">Active STA Connection</div>
+                            </div>
+                            <div id="dash-sta-badge" style="background:#222; color:#555; padding:4px 10px; border-radius:4px; font-size:0.7rem; font-weight:bold; letter-spacing:1px;">
+                                OFFLINE
+                            </div>
+                        </div>
+
+                        <div style="display:flex; align-items:center; justify-content:space-between; padding-bottom:10px; border-bottom:1px solid #333;">
+                            <div>
+                                <div style="font-size:0.85rem; font-weight:bold; color:var(--accent); font-family:monospace;" id="dash-sta-ip">--.--.--.--</div>
+                                <div style="font-size:0.75rem; color:#888;">Local IP Address</div>
+                            </div>
+                            <div style="text-align:right;">
+                                <div style="font-size:0.85rem; font-weight:bold; color:#ccc; font-family:monospace;" id="dash-sta-gw">--.--.--.--</div>
+                                <div style="font-size:0.75rem; color:#888;">Gateway</div>
+                            </div>
+                        </div>
+
+                        <div style="display:flex; align-items:center; justify-content:space-between; padding-bottom:10px; border-bottom:1px solid #333;">
+                            <div>
+                                <div style="font-size:0.85rem; font-weight:bold; color:var(--accent); font-family:monospace;" id="dash-sta-mask">--.--.--.--</div>
+                                <div style="font-size:0.75rem; color:#888;">Subnet Mask</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </div>
 
@@ -832,6 +877,7 @@
             </div>
         </div>
 
+        <!-- EVIL TWIN -->
         <div id="view-eviltwin" class="view-container">
             <h2 data-i18n="evil_twin_title">Evil Twin Attack</h2>
             <div class="card">
@@ -855,6 +901,7 @@
             </div>
         </div>
 
+        <!-- KARMA -->
         <div id="view-karma" class="view-container">
             <h2 data-i18n="karma_probe_scanner">Karma Probe Scanner</h2>
             
@@ -901,6 +948,7 @@
             </div>
         </div>
 
+        <!-- DEAUTHER -->
         <div id="view-deauth" class="view-container">
             <h2 data-i18n="deauth_attack_title">Deauthentication Attack</h2>
             
@@ -960,54 +1008,88 @@
             </div>
         </div>
 
-        <div id="view-ssid-finder" class="view-container">
-            <h2 data-i18n="ssid_finder_title">Hidden SSID Finder</h2>
-            
+        <div id="view-sta" class="view-container">
+            <h2 data-i18n="sta_connection_title">Target Connection (STA)</h2>
             <div class="card">
-                <label data-i18n="target_details">TARGET DETAILS</label>
-                <div style="margin-top: 10px; margin-bottom: 20px; border: 1px dashed var(--accent); padding: 15px; border-radius: 4px; background:#181818;">
-                    <div style="font-size: 1.3rem; font-weight:bold; color:white;" id="ssf-target-ssid" data-i18n="no_target_selected">No Target Selected</div>
-                    <div style="font-family:monospace; color: #888;" id="ssf-target-bssid">--:--:--:--:--:--</div>
-                    <div style="font-size: 0.8rem; color: #666; margin-top:5px;"><span data-i18n="lbl_channel">CHANNEL: </span> <span id="ssf-target-ch">--</span></div>
+                <p style="font-size:0.85rem; color:#aaa; margin-top:0;">Connect the ESP32 to a target network to access its internal subnet.</p>
+                
+                <div style="display:flex; gap:10px; margin-bottom:15px; flex-wrap: wrap;">
+                    <input type="text" id="sta-ssid" placeholder="Selected Target SSID" style="background:#222; cursor:not-allowed; flex:1; min-width: 200px;">
+                    <input type="text" id="sta-password" placeholder="WiFi Password (if required)" style="flex:1; min-width: 200px;">
                 </div>
-
-                <p style="margin-top:0; color:#aaa; font-size:0.9rem;" data-i18n="ssid_finder_desc">
-                    Scan the airwaves for Probe Responses and Association Requests to decloak hidden WiFi networks.
-                </p>
-
+                
                 <div class="btn-group">
-                    <button onclick="startSsidFinder()" id="btn-ssf-start">
-                        <svg style="width:16px; height:16px; vertical-align:middle; margin-right:5px;" viewBox="0 0 24 24"><path fill="currentColor" d="M8 5v14l11-7z"/></svg> 
-                        <span data-i18n="btn_start_scan">START FINDER</span>
-                    </button>
-                    <button class="danger" onclick="stopSsidFinder()" id="btn-ssf-stop" disabled style="opacity:0.5; cursor:not-allowed;">
-                        <svg style="width:16px; height:16px; vertical-align:middle; margin-right:5px;" viewBox="0 0 24 24"><path fill="currentColor" d="M6 6h12v12H6z"/></svg> 
-                        <span data-i18n="btn_stop_scan">STOP</span>
-                    </button>
-                    <button class="secondary" onclick="clearSsidTable()" data-i18n="btn_clear">CLEAR</button>
+                    <button onclick="connectSta()">CONNECT</button>
+                    <button class="secondary" onclick="disconnectSta()">DISCONNECT</button>
+                </div>
+                
+                <div style="margin-top:20px; font-size:0.85rem; padding: 15px; background: #121212; border-radius: 4px; border: 1px solid #333; display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <div style="grid-column: span 2; border-bottom: 1px solid #222; padding-bottom: 8px;">
+                        <span style="color:#666;">Connected Network:</span> <span id="sta-connected-ssid" style="font-weight:bold; color:#fff; font-size:0.95rem;">NONE</span>
+                    </div>
+                    <div><span style="color:#666;">Status:</span> <span id="sta-status" style="color:#ff5252; font-weight:bold;">DISCONNECTED</span></div>
+                    <div><span style="color:#666;">Local IP:</span> <span id="sta-ip" style="font-family:monospace; color:var(--accent);">--.--.--.--</span></div>
+                    <div><span style="color:#666;">Gateway:</span> <span id="sta-gw" style="font-family:monospace; color:#aaa;">--.--.--.--</span></div>
+                    <div><span style="color:#666;">Subnet:</span> <span id="sta-mask" style="font-family:monospace; color:#aaa;">--.--.--.--</span></div>
                 </div>
             </div>
+        </div>
 
-            <div class="card" style="padding:0; overflow-x:auto;">
-                <div style="padding:15px; border-bottom:1px solid #333; font-weight:bold; color:var(--accent);" data-i18n="decloaked_networks">
-                    DECLOAKED NETWORKS
+        <div id="view-host-discovery" class="view-container">
+            <h2 data-i18n="host_discovery_title">Host Discovery (ARP Sweep)</h2>
+            <div class="card">
+                <p style="margin-top:0; color:#aaa; font-size:0.9rem;">Map the internal network to find active devices, bypassing firewalls.</p>
+                <div class="btn-group" style="margin-bottom: 20px;">
+                    <button onclick="startHostScan()">
+                        <svg style="width:16px; height:16px; vertical-align:middle; margin-right:5px;" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/></svg> 
+                        START SUBNET SWEEP
+                    </button>
+                    <button class="secondary" onclick="document.getElementById('host-scan-body').innerHTML = '<tr><td colspan=\'4\' style=\'text-align:center; color:#666;\'>Cleared</td></tr>';">CLEAR</button>
                 </div>
-                <table class="wifi-table" style="font-family: 'Courier New', monospace; font-size: 0.85rem;">
-                    <thead>
-                        <tr>
-                            <th data-i18n="th_bssid">BSSID (AP)</th>
-                            <th data-i18n="th_discovered_ssid">Discovered SSID</th>
-                            <th data-i18n="th_ch">CH</th>
-                        </tr>
-                    </thead>
-                    <tbody id="ssid-finder-body">
-                        <tr>
-                            <td colspan="3" style="text-align:center; padding: 20px; color:#666;" data-i18n="ssf_waiting">
-                                Select a target and click 'START' to listen...
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+                
+                <div style="overflow-x:auto;">
+                    <table class="wifi-table" style="font-family: 'Courier New', monospace; font-size: 0.85rem;">
+                        <thead style="background: #181818;">
+                            <tr>
+                                <th>IP Address</th>
+                                <th>MAC Address</th>
+                                <th>Vendor</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="host-scan-body">
+                            <tr><td colspan="4" style="text-align:center; padding:20px; color:#666;">Run a sweep to find targets</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-port-scan" class="view-container">
+            <h2 data-i18n="port_scanner_title">TCP Port Scanner</h2>
+            <div class="card">
+                <div style="display:flex; gap:10px; margin-bottom:15px; flex-wrap: wrap;">
+                    <div style="flex:1; min-width:150px;">
+                        <label style="margin-top:0;">TARGET IP</label>
+                        <input type="text" id="ps-ip" placeholder="e.g. 192.168.1.5">
+                    </div>
+                    <div style="width:220px;">
+                        <label style="margin-top:0;">SCAN TYPE</label>
+                        <select id="ps-type" style="background:#121212; color:white; border:1px solid #444;">
+                            <option value="top20">Top 20 Ports (Fast)</option>
+                            <option value="top100">Top 100 Ports</option>
+                            <option value="iot">IoT Default Ports</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="btn-group">
+                    <button class="danger" onclick="startPortScan()">START SCAN</button>
+                </div>
+                
+                <div id="ps-terminal" style="margin-top:20px; background:var(--terminal-bg); padding:15px; height:250px; overflow-y:auto; border:1px solid #333; font-family:'Courier New', monospace; color:#0f0; font-size:0.85rem; border-radius:4px;">
+                    <div style="color:#666;">Waiting for target IP...</div>
+                </div>
             </div>
         </div>
 
@@ -1089,8 +1171,8 @@
             STOP_RAW_SNIFFER: 15,
             GET_RECON_DATA_AP: 16,
             GET_RECON_DATA_CLI: 17,
-            START_SSID_FINDER: 18,
-            STOP_SSID_FINDER: 19
+            WIFI_CONNECT: 18,
+            WIFI_DISCONNECT: 19,
         };
 
         // Stato globale
@@ -1698,6 +1780,86 @@
                     sdEl.innerText = data.sd ? "REC" : "ERR";
                     sdEl.style.color = data.sd ? "var(--accent)" : "var(--danger)";
                 }
+
+                // --- AGGIORNAMENTO NETWORK STATUS (IP, GW, MASK) ---
+                const dashStaSsid = document.getElementById('dash-sta-ssid');
+                const dashStaBadge = document.getElementById('dash-sta-badge');
+                const dashStaIp = document.getElementById('dash-sta-ip');
+                const dashStaGw = document.getElementById('dash-sta-gw');
+                const dashStaMask = document.getElementById('dash-sta-mask');
+
+                const staStatusEl = document.getElementById('sta-status');
+                const staIpEl = document.getElementById('sta-ip');
+                const staGwEl = document.getElementById('sta-gw');
+                const staMaskEl = document.getElementById('sta-mask');
+                const staSsidEl = document.getElementById('sta-connected-ssid');
+
+                const activeSsid = data.wifi_sta_ssid ? data.wifi_sta_ssid : "No Network";
+
+                
+                if (data.has_ip) {
+                    // Dashboard Card
+                    if(dashStaBadge) {
+                        dashStaSsid.innerText = activeSsid;
+                        dashStaIp.innerText = data.ip;
+                        dashStaGw.innerText = data.gateway || "--.--.--.--";
+                        dashStaMask.innerText = data.netmask || "--.--.--.--";
+                        dashStaBadge.innerText = "CONNECTED";
+                        dashStaBadge.style.background = "rgba(0, 230, 118, 0.2)";
+                        dashStaBadge.style.color = "var(--accent)";
+                        dashStaBadge.style.border = "1px solid var(--accent)";
+                    }
+                    // STA Tab
+                    if(staStatusEl) {
+                        staStatusEl.innerText = "CONNECTED";
+                        staStatusEl.style.color = "var(--accent)";
+                        staIpEl.innerText = data.ip;
+                        staGwEl.innerText = data.gateway || "--.--.--.--";
+                        staMaskEl.innerText = data.netmask || "--.--.--.--";
+                        if(staSsidEl) staSsidEl.innerText = activeSsid;
+                    }
+                }
+                else if (data.wifi_connected) {
+                    // Dashboard Card
+                    if(dashStaBadge) {
+                        dashStaSsid.innerText = activeSsid;
+                        dashStaIp.innerText = "--.--.--.--";
+                        dashStaGw.innerText = "--.--.--.--";
+                        dashStaMask.innerText = "--.--.--.--";
+                        dashStaBadge.innerText = "DHCP REQ...";
+                        dashStaBadge.style.background = "rgba(255, 171, 64, 0.2)";
+                        dashStaBadge.style.color = "#ffab40";
+                        dashStaBadge.style.border = "1px solid #ffab40";
+                    }
+                    // STA Tab
+                    if(staStatusEl) {
+                        staStatusEl.innerText = "OBTAINING IP...";
+                        staStatusEl.style.color = "#ffab40";
+                        staIpEl.innerText = "--.--.--.--";
+                        if(staSsidEl) staSsidEl.innerText = activeSsid;
+                    }
+                } else {
+                    // Dashboard Card
+                    if(dashStaBadge) {
+                        dashStaSsid.innerText = "No Network";
+                        dashStaIp.innerText = "--.--.--.--";
+                        dashStaGw.innerText = "--.--.--.--";
+                        dashStaMask.innerText = "--.--.--.--";
+                        dashStaBadge.innerText = "OFFLINE";
+                        dashStaBadge.style.background = "#222";
+                        dashStaBadge.style.color = "#555";
+                        dashStaBadge.style.border = "1px solid transparent";
+                    }
+                    // STA Tab
+                    if(staStatusEl) {
+                        staStatusEl.innerText = "DISCONNECTED";
+                        staStatusEl.style.color = "var(--danger)";
+                        staIpEl.innerText = "--.--.--.--";
+                        staGwEl.innerText = "--.--.--.--";
+                        staMaskEl.innerText = "--.--.--.--";
+                        if(staSsidEl) staSsidEl.innerText = "NONE";
+                    }
+                }
             } catch (e) { console.error(e); }
         }
 
@@ -1783,6 +1945,11 @@
                 }
                 document.getElementById('ssf-target-bssid').innerText = bssid;
                 document.getElementById('ssf-target-ch').innerText = channel;
+            }
+
+            const staSsidInput = document.getElementById('sta-ssid');
+            if (staSsidInput) {
+                staSsidInput.value = ssid || "";
             }
 
             showToast(`Target Selected: ${ssid || '<hidden>'}`);
@@ -2129,65 +2296,26 @@
             } catch(e) { console.warn("CLI Fetch Error:", e); }
         }
 
-
-        // ==========================================
-        // HIDDEN SSID FINDER LOGIC
-        // ==========================================
-        async function startSsidFinder() {
-            if (!currentTarget) { 
-                showToast("Select a Target from the Scanner first!"); 
-                return; 
-            }
-            log("Starting SSID Finder on " + currentTarget.bssid, "warning");
+        async function connectSta() {
+            const ssid = document.getElementById('sta-ssid').value;
+            const pwd = document.getElementById('sta-password').value;
+            if(!ssid) { showToast("Select a target AP from Scanner first!"); return; }
             
-            const btnStart = document.getElementById('btn-ssf-start');
-            const btnStop = document.getElementById('btn-ssf-stop');
-
+            log(`Connecting STA to ${ssid}...`, "warning");
+            document.getElementById('sta-status').innerText = "CONNECTING...";
+            document.getElementById('sta-status').style.color = "#ffab40";
+            
             try {
-                await sendCommand(CMD.START_SSID_FINDER, { 
-                    bssid: currentTarget.bssid, 
-                    channel: currentTarget.channel,
-                    signal: currentTarget.signal,
-                    authmode_code: currentTarget.authmode
-                });
-                
-                showToast("SSID Finder Started");
-                isSsidFinderRunning = true;
-
-                btnStart.disabled = true; btnStart.style.opacity = "0.5"; btnStart.style.cursor = "not-allowed";
-                btnStop.disabled = false; btnStop.style.opacity = "1"; btnStop.style.cursor = "pointer";
-
-                document.getElementById('ssid-finder-body').innerHTML = `
-                    <tr><td colspan="3" style="text-align:center; color:#666; font-style:italic;">
-                        Listening and sending deauth to ${currentTarget.bssid}...
-                    </td></tr>`;
-            } catch(e) {
-                log("Error starting SSID Finder: " + e, "error");
-            }
+                await sendCommand(CMD.WIFI_CONNECT, { ssid: ssid, password: pwd });
+                showToast("Connection requested...");
+            } catch(e) { log("STA connect error: " + e, "error"); }
         }
 
-        async function stopSsidFinder() {
-            log("Stopping SSID Finder...", "info");
-            const btnStart = document.getElementById('btn-ssf-start');
-            const btnStop = document.getElementById('btn-ssf-stop');
-
+        async function disconnectSta() {
+            log(`Disconnecting STA...`, "warning");
             try {
-                await sendCommand(CMD.STOP_SSID_FINDER);
-                showToast("SSID Finder Stopped");
-                isSsidFinderRunning = false;
-
-                btnStart.disabled = false; btnStart.style.opacity = "1"; btnStart.style.cursor = "pointer";
-                btnStop.disabled = true; btnStop.style.opacity = "0.5"; btnStop.style.cursor = "not-allowed";
-            } catch(e) {
-                log("Error stopping SSID Finder: " + e, "error");
-            }
-        }
-
-        function clearSsidTable() {
-            document.getElementById('ssid-finder-body').innerHTML = `
-                <tr><td colspan="3" style="text-align:center; padding: 20px; color:#666;">
-                    Cleared. Select a target and press Start.
-                </td></tr>`;
+                await sendCommand(CMD.WIFI_DISCONNECT);
+            } catch(e) { log("Disconnect error: " + e, "error"); }
         }
 
         function updateTargetMonitors() {

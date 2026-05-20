@@ -6,6 +6,7 @@
 #include <esp_log.h>
 #include <lwip/sockets.h>
 #include <cJSON.h>
+#include "evil_twin.h"
 #include "server.h"
 #include "server_api.h"
 
@@ -267,7 +268,7 @@ static esp_err_t redirect_handler(httpd_req_t *req)
 				break;
 
 			default:
-				uri = "/upgrade.html";
+				uri = "/admin.html";
 				break;
 		}
 	}

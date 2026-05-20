@@ -131,13 +131,13 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t e
     {
         wifi_connected = false;
         wifi_event_sta_disconnected_t* event = (wifi_event_sta_disconnected_t*) event_data;
-        ESP_LOGI(TAG, "Station disconnected from AP, reason=%d (%s)", event->reason, wifi_deauth_reason_to_str(event->reason));
+        ESP_LOGI(TAG, "Device disconnected from AP, reason=%d (%s)", event->reason, wifi_deauth_reason_to_str(event->reason));
     }
     else if (event_id == WIFI_EVENT_STA_CONNECTED)
     {
         wifi_connected = true;
         wifi_event_sta_connected_t* event = (wifi_event_sta_connected_t*) event_data;
-        ESP_LOGI(TAG, "Station connected to AP, SSID=%.*s, BSSID="MACSTR, event->ssid_len, event->ssid, MAC2STR(event->bssid));
+        ESP_LOGI(TAG, "Device connected to AP, SSID=%.*s, BSSID="MACSTR, event->ssid_len, event->ssid, MAC2STR(event->bssid));
     }
 }
 

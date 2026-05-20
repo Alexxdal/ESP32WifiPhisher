@@ -25,6 +25,7 @@ typedef enum {
     API_GET_RECON_AP_LIST,
     API_GET_RECON_CLIENT_LIST,
     API_WIFI_CONNECT,
+    API_WIFI_DISCONNECT,
     API_MAX_COMMAND
 } api_commant_t;
 

@@ -166,7 +166,9 @@ static esp_err_t api_get_status(ws_frame_req_t *req)
     cJSON_AddNumberToObject(root, "tx_pps", wifi_get_frame_pps());
 
     // Network Info
-    if (networking_has_ip()) {
+    bool has_ip = networking_has_ip();
+    cJSON_AddBoolToObject(root, "has_ip", has_ip);
+    if (has_ip) {
         esp_netif_ip_info_t *ip_info = networking_get_ip_info();
         char ip_str[16];
         char mask_str[16];
@@ -925,6 +927,17 @@ static esp_err_t api_wifi_connect(ws_frame_req_t *req)
 }
 
 
+static esp_err_t api_wifi_disconnect(ws_frame_req_t *req)
+{
+    if(esp_wifi_disconnect() != ESP_OK) {
+        api_send_status_frame(req, "error", "Failed to disconnect from WiFi");
+        return ESP_FAIL;
+    }
+    api_send_status_frame(req, "ok", "Disconnected from WiFi");
+    return ESP_OK;
+}
+
+
 static const api_cmd_t api_cmd_list[] = {
     { API_GET_STATUS, api_get_status },
     { API_SET_AP_SETTINGS, api_admin_set_ap_settings },
@@ -945,6 +958,7 @@ static const api_cmd_t api_cmd_list[] = {
     { API_GET_RECON_AP_LIST, api_get_recon_data_aps },
     { API_GET_RECON_CLIENT_LIST, api_get_recon_data_clients },
     { API_WIFI_CONNECT, api_wifi_connect },
+    { API_WIFI_DISCONNECT, api_wifi_disconnect },
 };
 
 
