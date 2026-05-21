@@ -79,12 +79,15 @@ typedef struct {
  */
 #define MAX_HANDSHAKE_NUM 10
 typedef struct {
+    uint8_t ssid[33];
     uint8_t bssid[6];
     uint8_t mac_sta[6];
     uint8_t anonce[32];
     uint8_t snonce[32];
     uint8_t mic[16];
     uint8_t pmkid[16];
+    uint8_t eapol_m1[256];
+    uint16_t eapol_m1_len;
     uint8_t eapol[256];
     uint16_t eapol_len;
     uint8_t key_decriptor_version;

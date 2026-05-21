@@ -502,6 +502,12 @@
             </div>
             
             <div class="menu-category" data-i18n="system_cat">System</div>
+
+            <div class="menu-item" onclick="showView('view-handshakes', this)">
+                <svg viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg> 
+                <span data-i18n="captured_handshakes">Captured Handshake</span>
+            </div>
+
             <div class="menu-item" onclick="showView('view-passwords', this)">
                 <svg viewBox="0 0 24 24"><path d="M12.65 10C11.83 7.67 9.61 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.61 0 4.83-1.67 5.65-4H17v4h4v-4h2v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z" /></svg> 
                 <span data-i18n="captured_creds">Captured Creds</span>
@@ -517,6 +523,8 @@
     </div> <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
 
     <div class="main-content">
+
+        <!-- TOP BAR -->
         <div class="top-bar">
             <div class="mobile-toggle" onclick="toggleSidebar()">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
@@ -1008,6 +1016,7 @@
             </div>
         </div>
 
+        <!-- STA CONNECTION -->
         <div id="view-sta" class="view-container">
             <h2 data-i18n="sta_connection_title">Target Connection (STA)</h2>
             <div class="card">
@@ -1035,6 +1044,7 @@
             </div>
         </div>
 
+        <!-- HOST DISCOVERY -->
         <div id="view-host-discovery" class="view-container">
             <h2 data-i18n="host_discovery_title">Host Discovery (ARP Sweep)</h2>
             <div class="card">
@@ -1065,6 +1075,7 @@
             </div>
         </div>
 
+        <!-- PORT SCANNER -->
         <div id="view-port-scan" class="view-container">
             <h2 data-i18n="port_scanner_title">TCP Port Scanner</h2>
             <div class="card">
@@ -1093,6 +1104,34 @@
             </div>
         </div>
 
+        <!-- HADNSHAKES -->
+        <div id="view-handshakes" class="view-container">
+            <h2 data-i18n="captured_handshakes">Captured Handshakes</h2>
+            <div class="card" style="padding:0; overflow-x:auto;">
+                <div style="padding:15px; border-bottom:1px solid #333; font-weight:bold; color:var(--accent);">
+                    LIST OF CAPTURED HANDSHAKES
+                </div>
+                <table class="wifi-table" style="font-family: 'Courier New', monospace; font-size: 0.85rem;">
+                    <thead style="background: #181818;">
+                        <tr>
+                            <th>Target SSID</th>
+                            <th>BSSID (Access Point)</th>
+                            <th>Channel</th>
+                            <th>Encryption Type</th>
+                            <th>Capture Mode</th>
+                            <th style="text-align: center;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="handshakers-bank-body">
+                        <tr>
+                            <td colspan="6" style="text-align:center; padding:20px; color:#666;">No handshake captured.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- PASSWORDS -->
         <div id="view-passwords" class="view-container">
             <h2 data-i18n="captured_creds_title">Captured Credentials</h2>
             <div class="card">
@@ -1106,6 +1145,7 @@
             </div>
         </div>
 
+        <!-- SETTINGS -->
         <div id="view-settings" class="view-container">
             <h2 data-i18n="configuration_title">Configuration</h2>
             <div class="card">
@@ -1141,6 +1181,7 @@
             </div>
         </div>
 
+        <!-- TERMINAL -->
         <div class="terminal-panel" id="terminal">
             <div class="log-entry"><span class="log-time">[SYSTEM]</span> <span class="log-info" data-i18n="sys_ready">Ready.</span></div>
         </div>
@@ -1173,6 +1214,7 @@
             GET_RECON_DATA_CLI: 17,
             WIFI_CONNECT: 18,
             WIFI_DISCONNECT: 19,
+            DOWNLOAD_HANDSHAKE: 20,
         };
 
         // Stato globale
@@ -1541,6 +1583,23 @@
             ws.onmessage = (event) => {
                 try {
                     const msg = JSON.parse(event.data);
+                    if (msg.type === 'pcap_file') {
+                        const byteCharacters = atob(msg.payload);
+                        const byteNumbers = new Array(byteCharacters.length);
+                        for (let i = 0; i < byteCharacters.length; i++) {
+                            byteNumbers[i] = byteCharacters.charCodeAt(i);
+                        }
+                        const byteArray = new Uint8Array(byteNumbers);
+                        const blob = new Blob([byteArray], {type: "application/vnd.tcpdump.pcap"});
+                        const link = document.createElement('a');
+                        link.href = window.URL.createObjectURL(blob);
+                        link.download = msg.filename;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        showToast("PCAP Downloaded successfully!");
+                        return;
+                    }
                     if (msg.type === 'packet') { handlePacket(msg); return; }
                     if (msg.type === 'log') { log(msg.msg, msg.level); return; }
                     if (msg.req_id && pendingRequests.has(msg.req_id)) {
@@ -2254,6 +2313,7 @@
                 });
 
                 updateTargetMonitors();
+                renderHandshakeBank();
             } catch(e) { console.warn("AP Fetch Error:", e); }
         }
 
@@ -2337,6 +2397,52 @@
 
             if (document.getElementById('view-eviltwin').classList.contains('active')) updateUI('et');
             if (document.getElementById('view-deauth').classList.contains('active')) updateUI('deauth');
+        }
+
+        function renderHandshakeBank() {
+            const bankBody = document.getElementById('handshakers-bank-body');
+            if (!bankBody) return;
+
+            // Filtriamo localmente dalla memoria globale solo gli AP che hanno un handshake (hs > 0)
+            const captured = lastApsData.filter(ap => ap.hs > 0);
+
+            if (captured.length === 0) {
+                bankBody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px; color:#666;">In ascolto sul canale radio... Nessun handshake rilevato.</td></tr>`;
+                return;
+            }
+
+            bankBody.innerHTML = '';
+            captured.forEach(ap => {
+                let typeText = ap.hs === 2 ? "WPA (4-WAY)" : "PMKID HASH";
+                let badgeColor = ap.hs === 2 ? "var(--accent)" : "#ffab40";
+                let bGColor = ap.hs === 2 ? "rgba(0, 230, 118, 0.1)" : "rgba(255, 171, 64, 0.1)";
+
+                bankBody.innerHTML += `
+                    <tr style="border-bottom: 1px solid #222;">
+                        <td style="font-weight:bold; color:#fff;">${ap.ssid || '<span style="color:#555">&lt;hidden&gt;</span>'}</td>
+                        <td style="font-family:monospace; color:#aaa;">${ap.bssid.toUpperCase()}</td>
+                        <td style="color:#fff;">${ap.ch}</td>
+                        <td style="color:#888;">${ap.sec}</td>
+                        <td>
+                            <span style="background:${bGColor}; color:${badgeColor}; border: 1px solid ${badgeColor}; padding:2px 6px; border-radius:3px; font-size:0.7rem; font-weight:bold;">
+                                ${typeText}
+                            </span>
+                        </td>
+                        <td style="text-align:center;">
+                            <button style="padding:5px 12px; font-size:0.7rem; margin:0;" onclick="downloadTargetPcap('${ap.bssid}')">
+                                DOWNLOAD PCAP
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        async function downloadTargetPcap(bssid) {
+            showToast("Generating custom PCAP structure...");
+            try {
+                await sendCommand(CMD.DOWNLOAD_HANDSHAKE, { bssid: bssid });
+            } catch (e) { log("PCAP Download requested timeout/error", "error"); }
         }
 
         // ==========================================

@@ -388,7 +388,7 @@ static void wifi_sniffer_capture_handshakes(struct libwifi_frame *frame, sniffer
     int msg_type = libwifi_check_wpa_message(frame);
     int64_t current_time = esp_timer_get_time(); // Time in microseconds
 
-    if (xSemaphoreTake(handshake_semaphore, pdMS_TO_TICKS(10)) == pdTRUE) 
+    if (xSemaphoreTake(handshake_semaphore, pdMS_TO_TICKS(20)) == pdTRUE) 
     {
         /* --- HANDLE M1 (AP -> Station) --- */
         if (msg_type == HANDSHAKE_M1)
@@ -409,6 +409,16 @@ static void wifi_sniffer_capture_handshakes(struct libwifi_frame *frame, sniffer
                 memset(entry, 0, sizeof(handshake_info_t));
                 memcpy(entry->bssid, bssid, 6);
                 memcpy(entry->mac_sta, dest_mac, 6);
+                //Get SSID from detected APs list
+                if (xSemaphoreTake(aps_semaphore, pdMS_TO_TICKS(50)) == pdTRUE) {
+                    for (int ap_entry_id = 0; ap_entry_id < detected_aps.count; ap_entry_id++) {
+                        if (memcmp(detected_aps.ap[ap_entry_id].record.bssid, bssid, 6) == 0) {
+                            strncpy((char *)entry->ssid, (char *)detected_aps.ap[ap_entry_id].record.ssid, 32);
+                            break;
+                        }
+                    }
+                    xSemaphoreGive(aps_semaphore);
+                }
                 captured_handshakes.count++;
             }
 
@@ -435,6 +445,12 @@ static void wifi_sniffer_capture_handshakes(struct libwifi_frame *frame, sniffer
                             ws_log(TAG, "PMKID Captured: %02X... (Client: %02X...)", bssid[0], dest_mac[0]);
                         }
                     }
+                }
+                uint16_t raw_len = 0;
+                uint8_t *raw_ptr = find_eapol_frame(sniffer_pkt->payload, sniffer_pkt->length, &raw_len);
+                if (raw_ptr && raw_len <= sizeof(entry->eapol_m1)) {
+                    memcpy(entry->eapol_m1, raw_ptr, raw_len);
+                    entry->eapol_m1_len = raw_len;
                 }
             }
         }
@@ -480,9 +496,9 @@ static void wifi_sniffer_capture_handshakes(struct libwifi_frame *frame, sniffer
                         entry->eapol_len = raw_len;
                         
                         /* Zero out the MIC in the raw frame if needed (standard practice) */
-                        if (entry->eapol_len > 81 + 16) {
-                            memset(entry->eapol + 81, 0, 16);
-                        }
+                        //if (entry->eapol_len > 81 + 16) {
+                        //    memset(entry->eapol + 81, 0, 16);
+                        //}
 
                         if (!entry->handshake_captured) {
                             entry->handshake_captured = true;
