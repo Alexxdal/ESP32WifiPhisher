@@ -278,6 +278,7 @@ static esp_err_t api_get_recon_data_aps(ws_frame_req_t *req)
 static esp_err_t api_get_recon_data_clients(ws_frame_req_t *req)
 {
     client_list_t *recon_clients = (client_list_t *)malloc(sizeof(client_list_t));
+    probe_request_list_t *recon_probes = (probe_request_list_t *)malloc(sizeof(probe_request_list_t));
 
     if (!recon_clients) {
         if (recon_clients) free(recon_clients);
@@ -285,7 +286,14 @@ static esp_err_t api_get_recon_data_clients(ws_frame_req_t *req)
         return ESP_ERR_NO_MEM;
     }
 
+    if (!recon_probes) {
+        if (recon_probes) free(recon_probes);
+        ESP_LOGE(TAG, "No Heap memory for recon structs!");
+        return ESP_ERR_NO_MEM;
+    }
+
     wifi_sniffer_get_clients(recon_clients);
+    wifi_sniffer_get_probes(recon_probes);
 
     // 2. Crea il JSON
     cJSON *root = cJSON_CreateObject();
@@ -311,6 +319,18 @@ static esp_err_t api_get_recon_data_clients(ws_frame_req_t *req)
         cJSON_AddStringToObject(cli_obj, "bssid", bssid_str);
         cJSON_AddNumberToObject(cli_obj, "ch", recon_clients->client[i].channel);
         cJSON_AddNumberToObject(cli_obj, "rssi", recon_clients->client[i].rssi);
+        cJSON *ssid_probes_array = cJSON_AddArrayToObject(cli_obj, "probes");
+        // Controllo di sicurezza se recon_probes non è stato ancora inizializzato
+        if (recon_probes != NULL) 
+        {
+            for(int p = 0; p < recon_probes->num_probes; p++) {
+                if(memcmp(recon_probes->probes[p].mac, recon_clients->client[i].mac, 6) == 0) {
+                    char safe_ssid[33] = {0};
+                    strncpy(safe_ssid, (char*)recon_probes->probes[p].ssid, 32);
+                    cJSON_AddItemToArray(ssid_probes_array, cJSON_CreateString(safe_ssid));
+                }
+            }
+        }
         cJSON_AddNumberToObject(cli_obj, "pkts", recon_clients->client[i].packets_tx + recon_clients->client[i].packets_rx);
         cJSON_AddNumberToObject(cli_obj, "bytes", recon_clients->client[i].bytes_tx + recon_clients->client[i].bytes_rx);
         cJSON_AddItemToArray(clients_array, cli_obj);
@@ -320,6 +340,7 @@ static esp_err_t api_get_recon_data_clients(ws_frame_req_t *req)
     char *json_response = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
     free(recon_clients);
+    free(recon_probes);
 
     if (json_response == NULL) {
         ESP_LOGE(TAG, "cJSON Print Failed! JSON too large for available Heap.");
@@ -874,7 +895,6 @@ static esp_err_t api_start_raw_sniffer(ws_frame_req_t *req)
         cJSON_Delete(json);
     }
 
-    wifi_sniffer_start_packet_analyzer(true);
     wifi_start_sniffing();
 
     // 3. Gestione Canale / Hopping
@@ -1088,6 +1108,22 @@ static esp_err_t api_download_handshake(ws_frame_req_t *req)
 }
 
 
+static esp_err_t api_start_packet_analyzer(ws_frame_req_t *req)
+{
+    wifi_sniffer_start_packet_analyzer(true);
+    api_send_status_frame(req, "ok", "Packet Analyzer Started");
+    return ESP_OK;
+}
+
+
+static esp_err_t api_stop_packet_analyzer(ws_frame_req_t *req)
+{
+    wifi_sniffer_start_packet_analyzer(false);
+    api_send_status_frame(req, "ok", "Packet Analyzer Stopped");
+    return ESP_OK;
+}
+
+
 static const api_cmd_t api_cmd_list[] = {
     { API_GET_STATUS, api_get_status },
     { API_SET_AP_SETTINGS, api_admin_set_ap_settings },
@@ -1110,6 +1146,8 @@ static const api_cmd_t api_cmd_list[] = {
     { API_WIFI_CONNECT, api_wifi_connect },
     { API_WIFI_DISCONNECT, api_wifi_disconnect },
     { API_DOWNLOAD_HANDSHAKE, api_download_handshake },
+    { API_START_PACKET_ANALYZER, api_start_packet_analyzer },
+    { API_STOP_PACKET_ANALYZER, api_stop_packet_analyzer }
 };
 
 

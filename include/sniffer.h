@@ -117,6 +117,13 @@ typedef struct {
 } sniffer_packet_t;
 
 
+/**
+ * @brief Initialize the Wi-Fi sniffer
+ * 
+ * @return esp_err_t 
+ */
+esp_err_t wifi_sniffer_init(void);
+
 
 /**
  * @brief Start packet sniffing in promiscuous mode

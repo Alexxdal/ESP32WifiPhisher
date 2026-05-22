@@ -9,6 +9,7 @@
 #include "passwordMng.h"
 #include "portmap.h"
 #include "networking.h"
+#include "sniffer.h"
 
 /**
  * @brief Block system when an unrecoverable error occurs.
@@ -47,6 +48,12 @@ void app_main()
 
     /* Init wifi */
     if(wifi_init())
+    {
+        fatal_error_handler();
+    }
+
+    /* Init Wifi Sniffer */
+    if(wifi_sniffer_init() != ESP_OK)
     {
         fatal_error_handler();
     }

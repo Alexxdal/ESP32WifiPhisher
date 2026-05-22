@@ -839,29 +839,44 @@
                 <h2 style="border:none; margin:0;" data-i18n="recon_title">Network Reconnaissance</h2>
             </div>
 
-            <div class="card" style="padding:0; overflow-x:auto; margin-bottom: 20px;">
-                <div style="padding:10px 15px; background:#181818; border-bottom:1px solid #333; font-weight:bold; color:var(--accent); font-size: 0.85rem;">
-                    ACCESS POINTS
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #333; padding-bottom:15px; margin-bottom:20px; flex-wrap:wrap; gap:15px;"> 
+                <!-- TOOLBAR MINIMALE AIRODUMP-STYLE -->
+                <div style="display:flex; align-items:center; gap:10px; background:#121212; padding:8px 12px; border-radius:6px; border:1px solid #333;">
+                    <span style="font-size:0.75rem; color:#aaa; font-weight:bold; letter-spacing:1px;" data-i18n="channel">CH:</span>
+                    <select id="recon-chan" style="width: auto; padding: 4px 20px 4px 8px; height: 30px; font-size: 0.8rem; margin:0; min-width: 110px;">
+                        <option value="0">ALL (HOP)</option>
+                        <!-- I canali verranno popolati via JS -->
+                    </select>
+                    
+                    <button onclick="startRecon()" id="btn-recon-start" style="padding: 6px 12px; margin:0; font-size:0.75rem;">START</button>
+                    <button class="danger" onclick="stopRecon()" id="btn-recon-stop" disabled style="opacity:0.5; cursor:not-allowed; padding: 6px 12px; margin:0; font-size:0.75rem;">STOP</button>
+                    <button class="secondary" onclick="clearReconData()" style="padding: 6px 12px; margin:0; font-size:0.75rem;">CLEAR</button>
                 </div>
-                <table class="wifi-table" style="font-family: 'Courier New', monospace; font-size: 0.8rem;">
-                    <thead style="background: #1e1e1e;">
-                        <tr>
-                            <th data-i18n="th_essid">ESSID</th>
-                            <th data-i18n="th_bssid">BSSID</th>
-                            <th data-i18n="th_pwr">PWR</th>
-                            <th data-i18n="th_ch">CH</th>
-                            <th data-i18n="th_pkts">FRAMES</th>
-                            <th data-i18n="th_clients">CLIENTS</th> 
-                            <th data-i18n="th_bytes">BYTES</th>
-                            <th data-i18n="th_sec">ENC</th>
-                            <th data-i18n="th_hs">HS</th>
-                        </tr>
-                    </thead>
-                    <tbody id="recon-ap-body">
-                        <tr><td colspan="9" style="text-align:center; padding:15px; color:#666;">Start an attack or scan to listen...</td></tr>
-                    </tbody>
-                </table>
             </div>
+
+            <div class="card" style="padding:0; overflow-x:auto; margin-bottom: 20px;">
+                    <div style="padding:10px 15px; background:#181818; border-bottom:1px solid #333; font-weight:bold; color:var(--accent); font-size: 0.85rem;">
+                        ACCESS POINTS
+                    </div>
+                    <table class="wifi-table" style="font-family: 'Courier New', monospace; font-size: 0.8rem;">
+                        <thead style="background: #1e1e1e;">
+                            <tr>
+                                <th data-i18n="th_essid">ESSID</th>
+                                <th data-i18n="th_bssid">BSSID</th>
+                                <th data-i18n="th_pwr">PWR</th>
+                                <th data-i18n="th_ch">CH</th>
+                                <th data-i18n="th_pkts">FRAMES</th>
+                                <th data-i18n="th_clients">CLIENTS</th> 
+                                <th data-i18n="th_bytes">BYTES</th>
+                                <th data-i18n="th_sec">ENC</th>
+                                <th data-i18n="th_hs">HS</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recon-ap-body">
+                            <tr><td colspan="9" style="text-align:center; padding:15px; color:#666;">Start an attack or scan to listen...</td></tr>
+                        </tbody>
+                    </table>
+                </div>  
 
             <div class="card" style="padding:0; overflow-x:auto;">
                 <div style="padding:10px 15px; background:#181818; border-bottom:1px solid #333; font-weight:bold; color:#00bcd4; font-size: 0.85rem;">
@@ -874,12 +889,13 @@
                             <th data-i18n="th_assoc_ap">AP (SSID)</th>
                             <th data-i18n="th_ch">CH</th>
                             <th data-i18n="th_pwr">PWR</th>
+                            <th data-i18n="th_probes">PROBES</th>
                             <th data-i18n="th_pkts">FRAMES</th>
                             <th data-i18n="th_bytes">BYTES</th>
                         </tr>
                     </thead>
                     <tbody id="recon-cli-body">
-                        <tr><td colspan="6" style="text-align:center; padding:15px; color:#666;">Waiting for clients...</td></tr>
+                        <tr><td colspan="7" style="text-align:center; padding:15px; color:#666;">Waiting for clients...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -1215,6 +1231,8 @@
             WIFI_CONNECT: 18,
             WIFI_DISCONNECT: 19,
             DOWNLOAD_HANDSHAKE: 20,
+            START_PACKET_ANALYZER: 21,
+            STOP_PACKET_ANALYZER: 22,
         };
 
         // Stato globale
@@ -1943,7 +1961,7 @@
                     const safeSsid = net.ssid.replace(/'/g, "\\'");
                     
                     tr.innerHTML = `
-                        <td style="font-weight:bold; color:white;"> ${ (net.ssid && net.ssid.trim()) !== "" ? net.ssid : `<span style="color:#666">&lt;hidden&gt;</span>`}</td>
+                        <td style="font-weight:bold; ${(net.ssid && net.ssid.trim()) !== "" ? 'color:white;' : 'color:#666;'}">${(net.ssid && net.ssid.trim()) !== "" ? net.ssid : 'Hidden SSID'}</td>
                         <td>${net.signal}</td>
                         <td>${net.channel}</td>
                         <td style="font-family:monospace; font-size:0.85rem;">${net.bssid}</td>
@@ -1999,7 +2017,7 @@
                     ssfSsid.innerText = ssid;
                     ssfSsid.style.color = "white";
                 } else {
-                    ssfSsid.innerText = "<hidden>";
+                    ssfSsid.innerText = "[Hidden SSID]";
                     ssfSsid.style.color = "#666";
                 }
                 document.getElementById('ssf-target-bssid').innerText = bssid;
@@ -2011,7 +2029,7 @@
                 staSsidInput.value = ssid || "";
             }
 
-            showToast(`Target Selected: ${ssid || '<hidden>'}`);
+            showToast(`Target Selected: ${ssid || '[Hidden SSID]'}`);
             
             const evilTwinMenu = document.querySelectorAll('.menu-item')[3]; 
             showView('view-eviltwin', evilTwinMenu);
@@ -2191,7 +2209,7 @@
             }
         }
         
-        function startCapture() {
+        async function startCapture() {
             const btnStart = document.getElementById('btn-sniff-start');
             const btnStop = document.getElementById('btn-sniff-stop');
             
@@ -2202,16 +2220,22 @@
 
             log(`Starting Sniffer: CH=${hopping?'HOP':channel}, Type=${type}, Sub=${subtype}`, "info");
 
-            // Invia comando al backend (CMD.START_RAW_SNIFFER = 14)
-            sendCommand(CMD.START_RAW_SNIFFER, { 
-                type: type,
-                subtype: subtype,
-                channel: channel,
-                hopping: hopping
-            }).then(() => {
+            try {
+                // 1. Invia PRIMA il comando di Start Sniffer (applica filtri, canale, ecc)
+                await sendCommand(CMD.START_RAW_SNIFFER, { 
+                    type: type,
+                    subtype: subtype,
+                    channel: channel,
+                    hopping: hopping
+                });
+
+                // 2. Invia POI il comando per agganciare il Packet Analyzer
+                await sendCommand(CMD.START_PACKET_ANALYZER);
+
                 snifferActive = true;
-                showToast("Sniffer Started");
+                showToast("Packet Analyzer Started");
                 
+                // Aggiorna la UI
                 btnStart.disabled = true; btnStart.style.opacity = "0.5"; btnStart.style.cursor = "not-allowed";
                 btnStop.disabled = false; btnStop.style.opacity = "1"; btnStop.style.cursor = "pointer";
 
@@ -2219,21 +2243,28 @@
                 document.getElementById('sniff-hop').disabled = true;
                 document.getElementById('sniff-type').disabled = true;
                 document.getElementById('sniff-subtype').disabled = true;
-            }).catch(err => {
-                showToast("Error starting: " + err);
-                log("Sniffer Start Error: " + err, "error");
-            });
+            } catch (err) {
+                showToast("Error starting analyzer: " + err);
+                log("Packet Analyzer Start Error: " + err, "error");
+            }
         }
 
-        function stopCapture() {
+        async function stopCapture() {
             const btnStart = document.getElementById('btn-sniff-start');
             const btnStop = document.getElementById('btn-sniff-stop');
 
-            sendCommand(CMD.STOP_RAW_SNIFFER).then(() => {
-                snifferActive = false;
-                showToast("Sniffer Stopped");
-                log("Packet Sniffer stopped.", "warning");
+            try {
+                // 1. Invia PRIMA il comando per sganciare il Packet Analyzer
+                await sendCommand(CMD.STOP_PACKET_ANALYZER);
 
+                // 2. Invia POI il comando per fermare lo Sniffer radio
+                await sendCommand(CMD.STOP_RAW_SNIFFER);
+
+                snifferActive = false;
+                showToast("Packet Analyzer Stopped");
+                log("Packet Analyzer stopped.", "warning");
+
+                // Aggiorna la UI
                 btnStart.disabled = false; btnStart.style.opacity = "1"; btnStart.style.cursor = "pointer";
                 btnStop.disabled = true; btnStop.style.opacity = "0.5"; btnStop.style.cursor = "not-allowed";
 
@@ -2243,7 +2274,9 @@
                 document.getElementById('sniff-subtype').disabled = false;
                 
                 updateSubtypes();
-            });
+            } catch (err) {
+                log("Packet Analyzer Stop Error: " + err, "error");
+            }
         }
         
         // ==========================================
@@ -2299,7 +2332,7 @@
 
                     apBody.innerHTML += `
                         <tr>
-                            <td style="font-weight:bold; color:#fff;">${ap.ssid || '<span style="color:#666">&lt;hidden&gt;</span>'}</td>
+                            <td style="font-weight:bold; ${(ap.ssid && ap.ssid.trim()) !== "" ? 'color:#fff;' : 'color:#666;'}">${(ap.ssid && ap.ssid.trim()) !== "" ? ap.ssid : '[Hidden SSID]'}</td>
                             <td style="color:#aaa; font-family:monospace;">${bssidUpper}</td>
                             <td style="color:${ap.rssi > -70 ? '#00e676' : (ap.rssi > -85 ? '#ffab40' : '#ff5252')}">${ap.rssi}</td>
                             <td style="color:#fff;">${ap.ch}</td>
@@ -2346,6 +2379,7 @@
                             <td style="color:#00e676; font-weight:bold;">${associatedApName}</td>
                             <td style="color:#fff;">${cli.ch}</td>
                             <td style="color:${cli.rssi > -70 ? '#00e676' : (cli.rssi > -85 ? '#ffab40' : '#ff5252')}">${cli.rssi}</td>
+                            <td style="color:#fff;">${Array.isArray(cli.probes) ? cli.probes.join(', ') : ''}</td>
                             <td>${cli.pkts}</td>
                             <td style="color:#aaa;">${formatBigNumber(cli.bytes)}</td>
                         </tr>
@@ -2446,14 +2480,106 @@
         }
 
         // ==========================================
+        // RECON: START / STOP CONTROLS
+        // ==========================================
+        function populateReconChannels() {
+            const sel = document.getElementById('recon-chan');
+            if(!sel) return;
+            
+            let grp24 = document.createElement('optgroup');
+            grp24.label = "2.4 GHz";
+            for(let i=1; i<=14; i++) {
+                let opt = document.createElement('option');
+                opt.value = i; opt.innerText = "CH " + i;
+                grp24.appendChild(opt);
+            }
+            sel.appendChild(grp24);
+
+            let grp5 = document.createElement('optgroup');
+            grp5.label = "5 GHz";
+            const ch5 = [36, 40, 44, 48, 52, 56, 60, 64, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144, 149, 153, 157, 161, 165];
+            ch5.forEach(c => {
+                let opt = document.createElement('option');
+                opt.value = c; opt.innerText = "CH " + c;
+                grp5.appendChild(opt);
+            });
+            sel.appendChild(grp5);
+        }
+
+        function startRecon() {
+            const chanVal = parseInt(document.getElementById('recon-chan').value);
+            const hopping = (chanVal === 0);
+            const channel = hopping ? 1 : chanVal; // Fallback al ch 1 iniziale se in hopping
+            
+            log(`Starting Airodump (airodump-ng): CH=${hopping ? 'HOPPING' : channel}`, "info");
+            
+            sendCommand(CMD.START_RAW_SNIFFER, { 
+                type: 0, 
+                subtype: 0, 
+                channel: channel, 
+                hopping: hopping
+            }).then(() => {
+                isReconRunning = true;
+                showToast("Airodump Started");
+                
+                const btnStart = document.getElementById('btn-recon-start');
+                const btnStop = document.getElementById('btn-recon-stop');
+                
+                btnStart.disabled = true; btnStart.style.opacity = "0.5"; btnStart.style.cursor = "not-allowed";
+                document.getElementById('recon-chan').disabled = true;
+                
+                btnStop.disabled = false; btnStop.style.opacity = "1"; btnStop.style.cursor = "pointer";
+            }).catch(err => {
+                showToast("Error starting Airodump");
+                log("Airodump Start Error: " + err, "error");
+            });
+        }
+
+        function stopRecon() {
+            log("Stopping Airodump...", "warning");
+            
+            sendCommand(CMD.STOP_RAW_SNIFFER).then(() => {
+                isReconRunning = false;
+                showToast("Airodump Stopped");
+                
+                const btnStart = document.getElementById('btn-recon-start');
+                const btnStop = document.getElementById('btn-recon-stop');
+                
+                btnStart.disabled = false; btnStart.style.opacity = "1"; btnStart.style.cursor = "pointer";
+                document.getElementById('recon-chan').disabled = false;
+                
+                btnStop.disabled = true; btnStop.style.opacity = "0.5"; btnStop.style.cursor = "not-allowed";
+            }).catch(err => {
+                log("Airodump Stop Error: " + err, "error");
+            });
+        }
+
+        function clearReconData() {
+            lastApsData = [];
+            lastClientsData = [];
+            apMap = {};
+            
+            const apBody = document.getElementById('recon-ap-body');
+            if(apBody) apBody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:15px; color:#666;">Data cleared. Start Airodump to map networks...</td></tr>';
+            
+            const cliBody = document.getElementById('recon-cli-body');
+            if(cliBody) cliBody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:15px; color:#666;">Data cleared. Waiting for clients...</td></tr>';
+            
+            showToast("Airodump Data Cleared");
+            log("Airodump memory cleared.", "info");
+        }
+        // ==========================================
         // INIT
         // ==========================================
         document.addEventListener('DOMContentLoaded', () => {
             initLanguage();
-            connectWS();
             updateAttackTypeDesc();
             populateChannels();
+            populateReconChannels();
             log("System UI Initialized.");
+            // Ritardo di 800ms per permettere all'ESP32 di chiudere il socket HTTP
+            // prima di dover gestire l'handshake del WebSocket.
+            setTimeout(connectWS, 800);
         });
 
     </script>
