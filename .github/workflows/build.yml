@@ -1,0 +1,35 @@
+name: Build ESP32 Firmware
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install PlatformIO
+      run: |
+        pip install platformio
+        pio --version
+
+    - name: Build firmware (esp32s3)
+      run: |
+        pio run -e esp32s3
+
+    - name: Upload firmware binary
+      uses: actions/upload-artifact@v4
+      with:
+        name: ESP32WifiPhisher_esp32s3
+        path: .pio/build/esp32s3/*.bin
