@@ -11,6 +11,7 @@
 #include "wifiMng.h"
 #include "nvs_keys.h"
 #include "utils.h"
+#include "esp_wifi_usb.h"
 
 #define MAX_TRACKED_CLIENTS MAX_CLIENTS
 #define MAX_CONSECUTIVE_FAILS 10         // Dopo quanti ACK mancati lo consideriamo "sordo"
@@ -26,6 +27,7 @@ static volatile uint32_t g_tx_pps = 0;
 static uint32_t last_tx_success_count = 0;
 static TimerHandle_t pps_timer = NULL;
 static bool wifi_connected = false;
+static bool wifi_usb_connected = false;
 
 
 static inline void IRAM_ATTR update_ack_tracker(const uint8_t *mac, wifi_tx_status_t success) {
@@ -186,6 +188,7 @@ static esp_err_t wifi_set_tx_rate(wifi_interface_t ifx, wifi_phy_rate_t target_r
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to set TX rate: %s", esp_err_to_name(err));
     }
+
     return err;
 }
 
@@ -372,6 +375,10 @@ esp_err_t wifi_set_channel_safe(uint8_t new_channel)
     if(err != ESP_OK) {
         ESP_LOGW(TAG, "Channel switch failed (%s) - Radio locked", esp_err_to_name(err));
     }
+
+    if(wifi_usb_connected == true) {
+        esp_wifi_usb_set_channel(new_channel);
+    }
     return err;
 }
 
@@ -401,6 +408,10 @@ esp_err_t wifi_set_temporary_channel(uint8_t new_channel, uint32_t window)
         .rx_cb = NULL,
         .done_cb = NULL
     };
+
+    if(wifi_usb_connected == true) {
+        esp_wifi_usb_set_channel(new_channel);
+    }
 
     return esp_wifi_remain_on_channel(&roc_req);
 }
@@ -438,6 +449,10 @@ esp_err_t wifi_switch_ap_channel_csa(uint8_t new_channel)
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to set new AP config: %s", esp_err_to_name(err));
         return err;
+    }
+
+    if(wifi_usb_connected == true) {
+        esp_wifi_usb_set_channel(new_channel);
     }
     // Pausa tattica: diamo tempo al telefono di accorgersi del salto 
     // e di "inseguire" l'ESP32 sul nuovo canale prima di iniziare a inondare
@@ -498,4 +513,16 @@ bool wifi_mng_is_client_responsive(const uint8_t *mac)
         }
     }
     return responsive;
+}
+
+
+bool wifi_usb_present(void)
+{
+    return wifi_usb_connected;
+}
+
+
+void wifi_usb_set_present(bool presence)
+{
+    wifi_usb_connected = presence;
 }

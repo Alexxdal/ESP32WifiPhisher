@@ -127,5 +127,14 @@ uint32_t wifi_get_frame_pps(void);
  */
 bool wifi_mng_is_client_responsive(const uint8_t *mac);
 
+/**
+ * @brief Check is there is an usb wifi dongle connected
+ */
+bool wifi_usb_present(void);
+
+/**
+ * @brief Set usb wifi presence
+ */
+void wifi_usb_set_present(bool presence);
 
 #endif

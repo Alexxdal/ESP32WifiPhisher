@@ -11,6 +11,12 @@
 #include "networking.h"
 #include "sniffer.h"
 #include "console.h"
+#include "scanner.h"
+#include "esp_wifi_usb.h"
+
+
+static const char *TAG = "MAIN";
+
 
 /**
  * @brief Block system when an unrecoverable error occurs.
@@ -41,6 +47,16 @@ void app_main()
     }
     ESP_ERROR_CHECK(ret);
 
+#if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3)
+    if(esp_wifi_usb_init(2000) == ESP_OK) {
+        esp_wifi_usb_set_tx_power(50);
+        ESP_ERROR_CHECK(esp_wifi_usb_start());
+        wifi_usb_set_present(true);
+    } else {
+        wifi_usb_set_present(false);
+    }
+#endif
+
     /* Init password manager */
     if(password_manager_init())
     {
@@ -60,10 +76,10 @@ void app_main()
     }
 
     /* Configure DNAT for captive portal */
-    if(setup_dnat_for_captive_portal() != ESP_OK)
+    /*if(setup_dnat_for_captive_portal() != ESP_OK)
     {
         fatal_error_handler();
-    }
+    }*/
 
     /* Init networking */
     if(networking_init() != ESP_OK)
