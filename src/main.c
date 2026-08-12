@@ -12,7 +12,10 @@
 #include "sniffer.h"
 #include "console.h"
 #include "scanner.h"
-#include "esp_wifi_usb.h"
+
+#if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3)
+    #include "esp_wifi_usb.h"
+#endif
 
 
 static const char *TAG = "MAIN";
@@ -115,6 +118,21 @@ void app_main()
     ESP_ERROR_CHECK(esp_task_wdt_init(&wdt_conf));
 
     //console_init();
+
+
+    /* Dns reverse lookup test */
+    /*
+    wifi_connect("Vodafone-Maroc", "Marocmarocko1$");
+    while(!networking_has_ip()) {
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+    ip4_addr_t target_ip, dns_server;
+    IP4_ADDR(&target_ip, 8, 8, 8, 8);   // IP di cui vogliamo il nome
+    IP4_ADDR(&dns_server, 1, 1, 1, 1);  // DNS a cui chiediamo (va bene lo stesso)
+    char hostname[128];
+    dns_reverse_lookup(target_ip, dns_server, hostname, sizeof(hostname));
+    ESP_LOGI("TEST", "PTR di 8.8.8.8 -> %s", hostname);
+    */
 
     /* Suspend main task */
     vTaskSuspend(NULL); 
