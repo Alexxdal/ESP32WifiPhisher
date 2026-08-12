@@ -3,6 +3,6 @@
 
 #include <esp_err.h>
 
-esp_err_t subnet_scan(void);
+char* subnet_scan(void);
 
 #endif /* _SCANNER_H */

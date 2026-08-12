@@ -17,6 +17,7 @@
 #include "deauther.h"
 #include "sniffer.h"
 #include "networking.h"
+#include "scanner.h"
 #include <libwifi.h>
 
 static const char *TAG = "SERVER_API";
@@ -1195,6 +1196,49 @@ static esp_err_t api_get_wifi_last_credentials(ws_frame_req_t *req)
 }
 
 
+static esp_err_t api_start_host_scan(ws_frame_req_t *req)
+{
+    char *scan_results_str = subnet_scan();
+
+    if (scan_results_str == NULL) {
+        api_send_status_frame(req, "error", "Failed to scan or insufficient memory");
+        return ESP_FAIL;
+    }
+
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddNumberToObject(root, "req_id", req->req_id);
+    cJSON_AddStringToObject(root, "type", "host_scan_results");
+    cJSON_AddStringToObject(root, "status", "ok");
+    
+    cJSON *scan_array = cJSON_Parse(scan_results_str);
+    if (scan_array) {
+        cJSON_AddItemToObject(root, "data", scan_array);
+    }
+    
+    char *json_response = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    free(scan_results_str);
+
+    if (!json_response) {
+        return ESP_FAIL;
+    }
+
+    ws_frame_req_t cmd;
+    cmd.hd = req->hd;
+    cmd.fd = req->fd;
+    cmd.payload = json_response;
+    cmd.len = strlen(json_response);
+    cmd.need_free = true;
+
+    if (ws_send_command_to_queue(&cmd) != ESP_OK) {
+        free(json_response);
+        return ESP_FAIL;
+    }
+
+    return ESP_OK;
+}
+
+
 static const api_cmd_t api_cmd_list[] = {
     { API_GET_STATUS, api_get_status },
     { API_SET_AP_SETTINGS, api_admin_set_ap_settings },
@@ -1219,7 +1263,8 @@ static const api_cmd_t api_cmd_list[] = {
     { API_DOWNLOAD_HANDSHAKE, api_download_handshake },
     { API_START_PACKET_ANALYZER, api_start_packet_analyzer },
     { API_STOP_PACKET_ANALYZER, api_stop_packet_analyzer },
-    { API_GET_LAST_WIFI_CREDENTIALS, api_get_wifi_last_credentials }
+    { API_GET_LAST_WIFI_CREDENTIALS, api_get_wifi_last_credentials },
+    { API_HOST_DISCOVERY, api_start_host_scan }
 };
 
 

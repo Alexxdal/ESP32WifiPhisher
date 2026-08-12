@@ -1065,7 +1065,7 @@
         <div id="view-host-discovery" class="view-container">
             <h2 data-i18n="host_discovery_title">Host Discovery (ARP Sweep)</h2>
             <div class="card">
-                <p style="margin-top:0; color:#aaa; font-size:0.9rem;">Map the internal network to find active devices, bypassing firewalls.</p>
+                <p style="margin-top:0; color:#aaa; font-size:0.9rem;">Map the internal network to find active devices.</p>
                 <div class="btn-group" style="margin-bottom: 20px;">
                     <button onclick="startHostScan()">
                         <svg style="width:16px; height:16px; vertical-align:middle; margin-right:5px;" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/></svg> 
@@ -1080,7 +1080,7 @@
                             <tr>
                                 <th>IP Address</th>
                                 <th>MAC Address</th>
-                                <th>Vendor</th>
+                                <th>Hostname</th>
                                 <th>Action</th>
                             </tr>
                         </thead>
@@ -1208,7 +1208,7 @@
         // ==========================================
         // CONFIGURAZIONE & COSTANTI
         // ==========================================
-        const WS_URL = `ws://192.168.4.1/ws`;
+        const WS_URL = `ws://${window.location.host}/ws`;
         
         const CMD = {
             GET_STATUS: 0,
@@ -1235,6 +1235,7 @@
             START_PACKET_ANALYZER: 21,
             STOP_PACKET_ANALYZER: 22,
             GET_LAST_WIFI_CREDENTIALS: 23,
+            HOST_DISCOVERY: 24
         };
 
         // Stato globale
@@ -1339,45 +1340,45 @@
         }
 
         function showView(viewId, menuItem) {
-        try {
-            // 1. Forza la chiusura sidebar PRIMA di fare qualsiasi altra cosa
-            const sidebar = document.getElementById('sidebar');
-            if (sidebar) sidebar.classList.remove('open');
+            try {
+                // 1. Forza la chiusura sidebar PRIMA di fare qualsiasi altra cosa
+                const sidebar = document.getElementById('sidebar');
+                if (sidebar) sidebar.classList.remove('open');
 
-            // 2. Cambio classe Active sui container
-            document.querySelectorAll('.view-container').forEach(el => el.classList.remove('active'));
-            const targetView = document.getElementById(viewId);
-            if (targetView) targetView.classList.add('active');
+                // 2. Cambio classe Active sui container
+                document.querySelectorAll('.view-container').forEach(el => el.classList.remove('active'));
+                const targetView = document.getElementById(viewId);
+                if (targetView) targetView.classList.add('active');
 
-            // 3. Cambio classe Active sul menu
-            document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active'));
-            if (menuItem) {
-                menuItem.classList.add('active');
-                const span = menuItem.querySelector('span');
-                if (span) document.getElementById('page-title').innerText = span.innerText;
+                // 3. Cambio classe Active sul menu
+                document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active'));
+                if (menuItem) {
+                    menuItem.classList.add('active');
+                    const span = menuItem.querySelector('span');
+                    if (span) document.getElementById('page-title').innerText = span.innerText;
+                }
+
+                // 4. Esecuzione logiche specifiche (protette da try interno)
+                if (viewId === 'view-settings') loadApSettings();
+                if (viewId === 'view-passwords') fetchPasswords();
+                if (viewId === 'view-deauth') updateDeauthUI();
+                
+                // Se è Recon, aggiorna i dati ma non bloccare l'interfaccia
+                if (viewId === 'view-recon') {
+                    if (typeof fetchReconDataAp === "function") fetchReconDataAp();
+                    if (typeof fetchReconDataCli === "function") fetchReconDataCli();
+                }
+
+            } catch (err) {
+                console.error("Errore nel cambio vista:", err);
+                // Anche se c'è un errore, chiudiamo la sidebar per non bloccare l'utente
+                document.getElementById('sidebar').classList.remove('open');
             }
 
-            // 4. Esecuzione logiche specifiche (protette da try interno)
-            if (viewId === 'view-settings') loadApSettings();
-            if (viewId === 'view-passwords') fetchPasswords();
-            if (viewId === 'view-deauth') updateDeauthUI();
-            
-            // Se è Recon, aggiorna i dati ma non bloccare l'interfaccia
-            if (viewId === 'view-recon') {
-                if (typeof fetchReconDataAp === "function") fetchReconDataAp();
-                if (typeof fetchReconDataCli === "function") fetchReconDataCli();
-            }
-
-        } catch (err) {
-            console.error("Errore nel cambio vista:", err);
-            // Anche se c'è un errore, chiudiamo la sidebar per non bloccare l'utente
-            document.getElementById('sidebar').classList.remove('open');
+            // Reset scroll
+            const mainContent = document.querySelector('.main-content');
+            if (mainContent) mainContent.scrollTop = 0;
         }
-
-        // Reset scroll
-        const mainContent = document.querySelector('.main-content');
-        if (mainContent) mainContent.scrollTop = 0;
-    }
 
         function updateAttackTypeDesc() {
             const type = document.getElementById('deauth-frame-type').value;
@@ -2588,7 +2589,60 @@
                 log("Last wifi credentials loaded from memory.", "info");
             } catch(e) { console.warn("Last Wifi Credentials Fetch Error:", e); }
         }
-        
+
+        async function startHostScan() {
+            const tbody = document.getElementById('host-scan-body');
+            
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--accent);">Subnet scan in progress (this may take a few seconds)...</td></tr>';
+            
+            try {
+                // Chiama l'API WebSocket (ID 24)
+                const res = await sendCommand(CMD.HOST_DISCOVERY);
+                
+                // Estrae l'array "data" dal JSON di risposta
+                const scanData = res.data; 
+                
+                tbody.innerHTML = ''; 
+                
+                if (!scanData || scanData.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#666;">Nessun host trovato</td></tr>';
+                    return;
+                }
+
+                scanData.forEach(host => {
+                    const tr = document.createElement('tr');
+                    
+                    let displayName = host.hostname;
+                    if (displayName === "N/A" || !displayName) {
+                        displayName = "<span style='color:#666; font-style:italic;'>Unknown</span>";
+                    } else {
+                        displayName = `<span style='color:#fff;'>${displayName}</span>`;
+                    }
+                    
+                    tr.innerHTML = `
+                        <td style="color:var(--accent); font-weight:bold; font-family:monospace;">${host.ip}</td>
+                        <td style="font-family:monospace; color:#aaa;">${host.mac}</td>
+                        <td>${displayName}</td>
+                        <td>
+                            <button style="padding:4px 8px; font-size:0.7rem; margin:0;" 
+                                    onclick="document.getElementById('ps-ip').value='${host.ip}'; showToast('IP ${host.ip} copiato nel Port Scanner!');">
+                                USE IP
+                            </button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+                
+                showToast("Subnet Sweep Completato!");
+                log(`Trovati ${scanData.length} host nella rete.`, "success");
+                
+            } catch (err) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--danger);">Errore durante la scansione</td></tr>';
+                showToast("Errore Host Discovery");
+                log("Errore chiamata API Host Discovery: " + err, "error");
+            }
+        }
+
         // ==========================================
         // INIT
         // ==========================================
