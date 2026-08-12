@@ -185,16 +185,19 @@ void dns_server_stop(void)
 }
 
 
-void dns_reverse_lookup(ip4_addr_t target_ip, ip4_addr_t dns_server, char *out_name, size_t max_len)
+// timeout_ms/max_attempts let callers doing many lookups back-to-back (e.g. a
+// subnet scan) use a much shorter budget than the 3x10s default, which is
+// tuned for a single one-off lookup over the internet, not a fast LAN.
+void dns_reverse_lookup_ex(ip4_addr_t target_ip, ip4_addr_t dns_server, char *out_name, size_t max_len, uint32_t timeout_ms, int max_attempts)
 {
     snprintf(out_name, max_len, "N/A");
-
+ 
     int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (sock < 0) {
         ESP_LOGD(TAG, "socket() failed, errno=%d", errno);
         return;
     }
-
+ 
     // Bind explicitly to the STA interface
     esp_netif_t *sta_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
     if (sta_netif == NULL) {
@@ -210,7 +213,7 @@ void dns_reverse_lookup(ip4_addr_t target_ip, ip4_addr_t dns_server, char *out_n
         ESP_LOGD(TAG, "STA has no valid IP yet");
         close(sock); return;
     }
-
+ 
     struct sockaddr_in local_addr = {
         .sin_family      = AF_INET,
         .sin_port        = htons(0),
@@ -220,26 +223,26 @@ void dns_reverse_lookup(ip4_addr_t target_ip, ip4_addr_t dns_server, char *out_n
         ESP_LOGD(TAG, "bind() failed, errno=%d (%s)", errno, strerror(errno));
         close(sock); return;
     }
-
+ 
     struct sockaddr_in dest_addr = {
         .sin_family = AF_INET,
         .sin_port   = htons(53),
         .sin_addr.s_addr = dns_server.addr
     };
-
+ 
     uint8_t buffer[512] = {0};
-
+ 
     // Header
     buffer[0] = 0xAA; buffer[1] = 0xBB;
     buffer[2] = 0x01; buffer[3] = 0x00;
     buffer[5] = 0x01; // QDCOUNT = 1
-
+ 
     // Question: build x.x.x.x.in-addr.arpa
     uint8_t *ptr = &buffer[12];
     uint32_t ip = lwip_ntohl(target_ip.addr);
     char temp_buf[4];
     int len;
-
+ 
     for (int i = 0; i < 4; i++) {
         // Explicit cast to match the %lu format specifier
         len = snprintf(temp_buf, sizeof(temp_buf), "%lu", (unsigned long)((ip >> (i * 8)) & 0xFF));
@@ -247,7 +250,7 @@ void dns_reverse_lookup(ip4_addr_t target_ip, ip4_addr_t dns_server, char *out_n
         memcpy(ptr, temp_buf, len);
         ptr += len;
     }
-
+ 
     // NOTE: \xHH hex escapes in C keep consuming hex digits, so
     // "\x04arpa" would be parsed as the single byte 0x4A ('a' is a valid
     // hex digit) instead of length-byte 0x04 followed by "arpa" — this was
@@ -256,33 +259,33 @@ void dns_reverse_lookup(ip4_addr_t target_ip, ip4_addr_t dns_server, char *out_n
     const char *arpa_suffix = "\x07in-addr\x04" "arpa";
     memcpy(ptr, arpa_suffix, 14); // 8 ("in-addr" label) + 5 ("arpa" label) + 1 (implicit '\0' terminator)
     ptr += 14;
-
+ 
     *ptr++ = 0x00; *ptr++ = 0x0C; // QTYPE  = PTR
     *ptr++ = 0x00; *ptr++ = 0x01; // QCLASS = IN
-
+ 
     int request_len = ptr - buffer;
-
+ 
     // Send with retry
     int recv_len = 0;
     bool response_received = false;
-
-    for (int attempt = 1; attempt <= 3; attempt++) {
+ 
+    for (int attempt = 1; attempt <= max_attempts; attempt++) {
         if (sendto(sock, buffer, request_len, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr)) < 0) {
             ESP_LOGD(TAG, "Attempt %d: sendto failed, errno=%d", attempt, errno);
             continue;
         }
-
+ 
         // Wait for the socket to be readable via select(), then read with a
         // plain blocking recvfrom() (avoids relying on SO_RCVTIMEO directly).
         fd_set readfds;
         FD_ZERO(&readfds);
         FD_SET(sock, &readfds);
-        struct timeval select_tv = { .tv_sec = 10, .tv_usec = 0 };
+        struct timeval select_tv = { .tv_sec = timeout_ms / 1000, .tv_usec = (timeout_ms % 1000) * 1000 };
         if (select(sock + 1, &readfds, NULL, NULL, &select_tv) <= 0) {
             ESP_LOGD(TAG, "Attempt %d: no response", attempt);
             continue;
         }
-
+ 
         struct sockaddr_in source_addr;
         socklen_t socklen = sizeof(source_addr);
         recv_len = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr *)&source_addr, &socklen);
@@ -291,12 +294,12 @@ void dns_reverse_lookup(ip4_addr_t target_ip, ip4_addr_t dns_server, char *out_n
             break;
         }
     }
-
+ 
     if (!response_received) {
-        ESP_LOGD(TAG, "No response from " IPSTR ":53 after 3 attempts", IP2STR(&dns_server));
+        ESP_LOGD(TAG, "No response from " IPSTR ":53 after %d attempts", IP2STR(&dns_server), max_attempts);
         close(sock); return;
     }
-
+ 
     // Check transaction ID and RCODE
     if (buffer[0] != 0xAA || buffer[1] != 0xBB) {
         ESP_LOGD(TAG, "Unexpected transaction ID: got 0x%02X%02X, expected 0xAABB", buffer[0], buffer[1]);
@@ -307,17 +310,17 @@ void dns_reverse_lookup(ip4_addr_t target_ip, ip4_addr_t dns_server, char *out_n
         ESP_LOGD(TAG, "Response RCODE=%d (1=FormErr 2=ServFail 3=NXDomain 5=Refused)", rcode);
         close(sock); return;
     }
-
+ 
     uint16_t answers = (buffer[6] << 8) | buffer[7]; // ANCOUNT is 16-bit
     if (answers == 0) {
         ESP_LOGD(TAG, "ANCOUNT=0: response has no PTR record");
         close(sock); return;
     }
-
+ 
     // Skip the response's Question section, starting at byte 12
     int idx = 12;
     uint16_t qdcount = (buffer[4] << 8) | buffer[5];
-
+ 
     for (int q = 0; q < qdcount && idx < recv_len; q++) {
         // Skip QNAME
         while (idx < recv_len) {
@@ -333,7 +336,7 @@ void dns_reverse_lookup(ip4_addr_t target_ip, ip4_addr_t dns_server, char *out_n
         }
         idx += 4; // QTYPE + QCLASS
     }
-
+ 
     // idx now points to the start of the Answer section
     if ((buffer[idx] & 0xC0) == 0xC0) idx += 2;
     else {
@@ -344,25 +347,25 @@ void dns_reverse_lookup(ip4_addr_t target_ip, ip4_addr_t dns_server, char *out_n
         if (idx < recv_len) idx++;
     }
     parse_rdata:
-
+ 
     if (idx + 10 > recv_len) {
         ESP_LOGD(TAG, "Truncated/malformed answer (idx=%d recv_len=%d)", idx, recv_len);
         close(sock); return;
     }
-
+ 
     uint16_t type = (buffer[idx] << 8) | buffer[idx + 1];
     idx += 10; // Type(2) + Class(2) + TTL(4) + RDLENGTH(2)
-
+ 
     if (type != 12 || idx >= recv_len) {
         ESP_LOGD(TAG, "Unexpected record type: %d (expected 12=PTR)", type);
         close(sock); return;
     }
-
+ 
     // Decode the PTR name
     int out_idx = 0;
     int i = idx;
     int jumps = 0;
-
+ 
     while (i < recv_len && buffer[i] != 0 && out_idx < (int)(max_len - 1)) {
         if ((buffer[i] & 0xC0) == 0xC0) {
             if (++jumps > 5 || i + 1 >= recv_len) break;
@@ -376,4 +379,10 @@ void dns_reverse_lookup(ip4_addr_t target_ip, ip4_addr_t dns_server, char *out_n
     }
     out_name[out_idx] = '\0';
     close(sock);
+}
+ 
+
+void dns_reverse_lookup(ip4_addr_t target_ip, ip4_addr_t dns_server, char *out_name, size_t max_len)
+{
+    dns_reverse_lookup_ex(target_ip, dns_server, out_name, max_len, 10000, 3);
 }

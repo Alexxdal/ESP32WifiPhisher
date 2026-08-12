@@ -28,4 +28,10 @@ void dns_server_stop(void);
  */
 void dns_reverse_lookup(ip4_addr_t target_ip, ip4_addr_t dns_server, char *out_name, size_t max_len);
 
+
+/**
+ * @brief Resolve hostname from IP using specified DNS server
+ */
+void dns_reverse_lookup_ex(ip4_addr_t target_ip, ip4_addr_t dns_server, char *out_name, size_t max_len, uint32_t timeout_ms, int max_attempts);
+
 #endif
