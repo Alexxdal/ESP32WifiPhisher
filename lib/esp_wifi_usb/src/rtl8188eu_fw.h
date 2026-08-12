@@ -1,3 +1,5 @@
+#if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3)
+
 uint8_t array_mp_8188e_s_fw_nic[] = {
 0xE3, 0x88, 0x20, 0x00, 0x1C, 0x00, 0x00, 0x00,
 0x05, 0x04, 0x22, 0x24, 0x96, 0x3E, 0x02, 0x00,
@@ -2009,3 +2011,5 @@ uint8_t array_mp_8188e_s_fw_nic[] = {
 };
 
 uint32_t array_length_mp_8188e_s_fw_nic = 16054;
+
+#endif

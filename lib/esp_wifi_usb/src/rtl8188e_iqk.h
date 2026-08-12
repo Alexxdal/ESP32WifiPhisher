@@ -1,3 +1,5 @@
+#if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3)
+
 /*
  * rtl8188e_iqk.h - Calibrazione IQ (IQK) e del sintetizzatore (LCK)
  *
@@ -20,3 +22,5 @@ void rtl8188e_iq_calibrate(usb_device_handle_t dev);
 void rtl8188e_lc_calibrate(usb_device_handle_t dev);
 
 #endif /* RTL8188E_IQK_H */
+
+#endif

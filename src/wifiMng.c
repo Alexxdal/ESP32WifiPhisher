@@ -11,7 +11,10 @@
 #include "wifiMng.h"
 #include "nvs_keys.h"
 #include "utils.h"
-#include "esp_wifi_usb.h"
+
+#if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3)
+    #include "esp_wifi_usb.h"
+#endif
 
 #define MAX_TRACKED_CLIENTS MAX_CLIENTS
 #define MAX_CONSECUTIVE_FAILS 10         // Dopo quanti ACK mancati lo consideriamo "sordo"
@@ -376,9 +379,12 @@ esp_err_t wifi_set_channel_safe(uint8_t new_channel)
         ESP_LOGW(TAG, "Channel switch failed (%s) - Radio locked", esp_err_to_name(err));
     }
 
+    #if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3)
     if(wifi_usb_connected == true) {
         esp_wifi_usb_set_channel(new_channel);
     }
+    #endif
+
     return err;
 }
 
@@ -409,9 +415,11 @@ esp_err_t wifi_set_temporary_channel(uint8_t new_channel, uint32_t window)
         .done_cb = NULL
     };
 
+    #if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3)
     if(wifi_usb_connected == true) {
         esp_wifi_usb_set_channel(new_channel);
     }
+    #endif
 
     return esp_wifi_remain_on_channel(&roc_req);
 }
@@ -451,9 +459,11 @@ esp_err_t wifi_switch_ap_channel_csa(uint8_t new_channel)
         return err;
     }
 
+    #if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3)
     if(wifi_usb_connected == true) {
         esp_wifi_usb_set_channel(new_channel);
     }
+    #endif
     // Pausa tattica: diamo tempo al telefono di accorgersi del salto 
     // e di "inseguire" l'ESP32 sul nuovo canale prima di iniziare a inondare
     // l'etere di pacchetti deauth (che potrebbero causare packet loss alla dashboard).

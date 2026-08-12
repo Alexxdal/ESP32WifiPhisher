@@ -1,3 +1,5 @@
+#if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3)
+
 #include <string.h>
 #include "rtl8188e_rx.h"
 #include "rtl8188e_usb.h"
@@ -274,3 +276,5 @@ void rtl8188_rx_task(void *arg)
     ESP_LOGI(TAG, "RX task stopped");
     vTaskDelete(NULL);
 }
+
+#endif

@@ -1,3 +1,5 @@
+#if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3)
+
 #include "rtl8188e_iqk.h"
 #include "rtl8188e_usb.h"
 #include "rtl8188e_phy.h"
@@ -621,3 +623,5 @@ void rtl8188e_lc_calibrate(usb_device_handle_t dev)
     else
         rtl_write8(dev, REG_TXPAUSE, 0x00);
 }
+
+#endif

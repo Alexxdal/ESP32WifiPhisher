@@ -1,3 +1,5 @@
+#if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3)
+
 #include "rtl8188e_phy.h"
 #include "rtl8188e_usb.h"
 #include "rtl8188e_tables.h"
@@ -422,3 +424,5 @@ void rtl8188e_set_channel(usb_device_handle_t dev_hdl, uint8_t channel)
 
     ESP_LOGD(TAG, "Tuned to channel %d (20 MHz)", channel);
 }
+
+#endif

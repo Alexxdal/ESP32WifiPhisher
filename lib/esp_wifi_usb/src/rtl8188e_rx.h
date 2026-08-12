@@ -1,3 +1,5 @@
+#if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3)
+
 /*
  * rtl8188e_rx.h - Ricezione pacchetti e diagnostica
  */
@@ -13,3 +15,5 @@ void rtl8188_rx_task(void *arg);
 void rtl8188_dump_rx_state(void);
 
 #endif /* RTL8188E_RX_H */
+
+#endif

@@ -17,7 +17,10 @@
 #include "evil_twin.h"
 #include "karma_attack.h"
 #include "deauther.h"
-#include "esp_wifi_usb.h"
+
+#if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3)
+    #include "esp_wifi_usb.h"
+#endif
 
 #define HANDSHAKE_TIMEOUT_US 2000000 // 2 Seconds timeout between M1 and M2 and M3
 
@@ -1125,11 +1128,13 @@ esp_err_t wifi_start_sniffing(void)
 
     ESP_LOGI(TAG, "Wifi Sniffer Started.");
 
+    #if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3)
     if(wifi_usb_present()) {
         esp_wifi_usb_set_promiscuous(true);
         esp_wifi_usb_set_promiscuous_rx_cb(promiscuous_callback);
         ESP_LOGI(TAG, "Wifi Sniffer USB Started.");
     }
+    #endif
 
     return ESP_OK;
 
@@ -1150,11 +1155,13 @@ esp_err_t wifi_stop_sniffing(void)
     filter_channel = 0;
     ESP_LOGI(TAG, "Wifi Sniffer Stopped.");
 
+    #if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3)
     if(wifi_usb_present()) {
         esp_wifi_usb_set_promiscuous(false);
         esp_wifi_usb_set_promiscuous_rx_cb(NULL);
         ESP_LOGI(TAG, "Wifi Sniffer USB Started.");
     }
+    #endif
 
     return ESP_OK;
 }
@@ -1169,10 +1176,13 @@ void wifi_sniffer_set_fine_filter(int type, uint32_t subtype, uint8_t channel)
     // Switch to filter channel if specified (0 means all channels)
     if (channel != 0) {
         /* If there is usb wifi dont switch ap channel */
+        #if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3)
         if(wifi_usb_present()) {
             esp_wifi_usb_set_channel(channel);
         }
-        else {
+        else 
+        #endif
+        {
             wifi_switch_ap_channel_csa(channel);
         }
     }
@@ -1183,9 +1193,12 @@ void wifi_sniffer_set_fine_filter(int type, uint32_t subtype, uint8_t channel)
     // Reset Ctrl Filter di default (nessun pacchetto control)
     wifi_promiscuous_filter_t ctrl_filter = { .filter_mask = 0 };
     esp_wifi_set_promiscuous_ctrl_filter(&ctrl_filter);
+
+    #if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3)
     if(wifi_usb_present()) {
         esp_wifi_usb_set_promiscuous_ctrl_filter(&ctrl_filter);
     }
+    #endif
 
     switch(type) {
         case 0: // ALL
@@ -1200,9 +1213,12 @@ void wifi_sniffer_set_fine_filter(int type, uint32_t subtype, uint8_t channel)
             filter.filter_mask = WIFI_PROMIS_FILTER_MASK_CTRL;
             ctrl_filter.filter_mask = subtype;
             esp_wifi_set_promiscuous_ctrl_filter(&ctrl_filter);
+
+            #if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3)
             if(wifi_usb_present()) {
                 esp_wifi_usb_set_promiscuous_ctrl_filter(&ctrl_filter);
             }
+            #endif
             break;
 
         case 3: // DATA
@@ -1212,9 +1228,12 @@ void wifi_sniffer_set_fine_filter(int type, uint32_t subtype, uint8_t channel)
 
     // Applica filtro principale
     esp_wifi_set_promiscuous_filter(&filter);
+
+    #if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3)
     if(wifi_usb_present()) {
         esp_wifi_usb_set_promiscuous_filter(&filter);
     }
+    #endif
 }
 
 
@@ -1550,7 +1569,9 @@ static void wifi_sniffer_channel_hopping_task(void *param)
     uint8_t current_channel = 1;
     const uint32_t ROC_DURATION_MS = 20;
     const uint32_t AP_REST_TIME_MS = 80;
+    #if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3)
     const uint32_t NEXT_CHANNEL_DELAY_MS = 300;
+    #endif
 
     while (1)
     {
@@ -1563,11 +1584,14 @@ static void wifi_sniffer_channel_hopping_task(void *param)
             channel_to_scan = current_channel;
         }
 
+        #if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3)
         if(wifi_usb_present()) {
             esp_wifi_usb_set_channel(channel_to_scan);
             vTaskDelay(pdMS_TO_TICKS(NEXT_CHANNEL_DELAY_MS));
         }
-        else {
+        else 
+        #endif
+        {
             wifi_roc_req_t req = {
                 .ifx = WIFI_IF_STA,
                 .type = WIFI_ROC_REQ,

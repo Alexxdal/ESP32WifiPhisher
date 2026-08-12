@@ -1,3 +1,5 @@
+#if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3)
+
 #include "rtl8188e_usb.h"
 
 static const char *TAG = "RTL8188_USB";
@@ -316,3 +318,5 @@ esp_err_t rtl_write_block(usb_device_handle_t dev_hdl, uint16_t reg_addr, const 
     vSemaphoreDelete(sync_sem);
     return err;
 }
+
+#endif
