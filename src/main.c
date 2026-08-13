@@ -119,6 +119,10 @@ void app_main()
 
     //console_init();
 
+    if(scanner_init() != ESP_OK) 
+    {
+        fatal_error_handler();
+    }
 
     /* Dns reverse lookup test */
     wifi_connect("Vodafone-Maroc", "Marocmarocko1$");

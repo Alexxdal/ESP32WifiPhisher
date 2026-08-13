@@ -31,6 +31,7 @@ typedef enum {
     API_STOP_PACKET_ANALYZER,
     API_GET_LAST_WIFI_CREDENTIALS,
     API_HOST_DISCOVERY,
+    API_PORT_SCAN,
     API_MAX_COMMAND
 } api_command_t;
 

@@ -401,6 +401,21 @@
             pointer-events: auto;
         }
 
+        #view-port-scan.active {
+            display: flex !important;
+            flex-direction: column;
+            overflow: hidden; /* Blocca lo scroll dell'intera pagina */
+            padding-bottom: 200px; /* Rimuove lo spazio extra in fondo (era a 150px) */
+        }
+
+        #view-port-scan > .card {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden; /* Obbliga la card a non superare i bordi dello schermo */
+            margin-bottom: 0;
+        }
+
         /* Responsive */
         @media (max-width: 768px) {
             .sidebar {
@@ -1094,29 +1109,48 @@
 
         <!-- PORT SCANNER -->
         <div id="view-port-scan" class="view-container">
-            <h2 data-i18n="port_scanner_title">TCP Port Scanner</h2>
+            <h2 data-i18n="port_scanner_title">Port Scanner</h2>
             <div class="card">
-                <div style="display:flex; gap:10px; margin-bottom:15px; flex-wrap: wrap;">
-                    <div style="flex:1; min-width:150px;">
+                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap:15px; margin-bottom:15px;">
+                    <div>
                         <label style="margin-top:0;">TARGET IP</label>
                         <input type="text" id="ps-ip" placeholder="e.g. 192.168.1.5">
                     </div>
-                    <div style="width:220px;">
-                        <label style="margin-top:0;">SCAN TYPE</label>
-                        <select id="ps-type" style="background:#121212; color:white; border:1px solid #444;">
-                            <option value="top20">Top 20 Ports (Fast)</option>
-                            <option value="top100">Top 100 Ports</option>
-                            <option value="iot">IoT Default Ports</option>
+                    <div>
+                        <label style="margin-top:0;">SCAN METHOD</label>
+                        <select id="ps-method">
+                            <option value="1">SYN Scan (Stealth)</option>
+                            <option value="0">Connect Scan</option>
+                            <option value="2">FIN Scan</option>
+                            <option value="3">NULL Scan</option>
+                            <option value="4">XMAS Scan</option>
+                            <option value="5">ACK Scan</option>
+                            <option value="6">UDP Scan</option>
                         </select>
+                    </div>
+                    <div>
+                        <label style="margin-top:0;">PORTS TARGET</label>
+                        <select id="ps-ports-preset" onchange="toggleCustomPorts()">
+                            <option value="top20">Top 20 Ports (Fast)</option>
+                            <option value="top100">Top 50 Ports</option>
+                            <option value="iot">IoT Default Ports</option>
+                            <option value="custom">Custom (Manual)</option>
+                        </select>
+                    </div>
+                    <div id="custom-ports-container" style="display:none;">
+                        <label style="margin-top:0;">CUSTOM PORTS</label>
+                        <input type="text" id="ps-custom-ports" placeholder="80, 443, 8080">
                     </div>
                 </div>
                 
                 <div class="btn-group">
-                    <button class="danger" onclick="startPortScan()">START SCAN</button>
+                    <button class="danger" onclick="startPortScan()" id="btn-ps-start">START SCAN</button>
+                    <button class="secondary" onclick="stopPortScan()" id="btn-ps-stop" disabled style="opacity:0.5; cursor:not-allowed;">STOP</button>
+                    <button class="secondary" onclick="document.getElementById('ps-terminal').innerHTML = '<div style=\'color:#666;\'>Ready. Enter target and click START.</div>';">CLEAR</button>
                 </div>
                 
-                <div id="ps-terminal" style="margin-top:20px; background:var(--terminal-bg); padding:15px; height:250px; overflow-y:auto; border:1px solid #333; font-family:'Courier New', monospace; color:#0f0; font-size:0.85rem; border-radius:4px;">
-                    <div style="color:#666;">Waiting for target IP...</div>
+                <div id="ps-terminal" style="margin-top:20px; background:var(--terminal-bg); padding:15px; flex: 1; min-height: 150px; overflow-y:auto; border:1px solid #333; font-family:'Courier New', monospace; color:#0f0; font-size:0.85rem; border-radius:4px;">
+                    <div style="color:#666;">Ready. Enter target and click START.</div>
                 </div>
             </div>
         </div>
@@ -1235,7 +1269,8 @@
             START_PACKET_ANALYZER: 21,
             STOP_PACKET_ANALYZER: 22,
             GET_LAST_WIFI_CREDENTIALS: 23,
-            HOST_DISCOVERY: 24
+            HOST_DISCOVERY: 24,
+            PORT_SCAN_SINGLE: 25
         };
 
         // Stato globale
@@ -2644,6 +2679,136 @@
         }
 
         // ==========================================
+        // PORT SCANNER LOGIC
+        // ==========================================
+        let isPortScanRunning = false;
+
+        function toggleCustomPorts() {
+            const val = document.getElementById('ps-ports-preset').value;
+            const container = document.getElementById('custom-ports-container');
+            if(val === 'custom') {
+                container.style.display = 'block';
+            } else {
+                container.style.display = 'none';
+            }
+        }
+
+        function getPortList() {
+            let preset = document.getElementById('ps-ports-preset').value;
+            
+            if(preset === 'top20') {
+                return [21, 22, 23, 25, 53, 80, 110, 111, 135, 139, 143, 443, 445, 993, 995, 1723, 3306, 3389, 5900, 8080];
+            }
+            if(preset === 'top100') {
+                // Le 50/100 porte più comuni (per mantenere la velocità accettabile)
+                return [20, 21, 22, 23, 25, 53, 67, 68, 69, 80, 110, 111, 119, 123, 135, 137, 138, 139, 143, 161, 
+                        162, 389, 443, 445, 465, 500, 514, 515, 587, 631, 873, 990, 993, 995, 1080, 1194, 1433, 
+                        1521, 1723, 2049, 2121, 3128, 3306, 3389, 5060, 5432, 5900, 5938, 8000, 8080, 8443, 8888, 10000];
+            }
+            if(preset === 'iot') {
+                return [21, 22, 23, 80, 443, 1883, 5683, 8080, 8443, 3702, 1900, 554, 8000, 37777];
+            }
+            if(preset === 'custom') {
+                let raw = document.getElementById('ps-custom-ports').value;
+                if(!raw) return [];
+                // Accetta formati separati da virgola
+                return raw.split(',').map(p => parseInt(p.trim())).filter(p => !isNaN(p) && p > 0 && p <= 65535);
+            }
+            return [];
+        }
+
+        async function startPortScan() {
+            const ip = document.getElementById('ps-ip').value.trim();
+            if(!ip) { showToast("Error: Insert Target IP"); return; }
+            
+            const ports = getPortList();
+            if(!ports || ports.length === 0) { showToast("Error: Invalid or empty port list"); return; }
+            
+            const methodSelect = document.getElementById('ps-method');
+            const method = parseInt(methodSelect.value);
+            const methodName = methodSelect.options[methodSelect.selectedIndex].text;
+            
+            const term = document.getElementById('ps-terminal');
+            
+            // Pulisce il terminale
+            term.innerHTML = `<div style="color:var(--accent)">Starting ${methodName} on ${ip} (${ports.length} ports)...</div>`;
+            
+            isPortScanRunning = true;
+            const btnStart = document.getElementById('btn-ps-start');
+            const btnStop = document.getElementById('btn-ps-stop');
+            
+            btnStart.disabled = true; btnStart.style.opacity = "0.5"; btnStart.style.cursor = "not-allowed";
+            btnStop.disabled = false; btnStop.style.opacity = "1"; btnStop.style.cursor = "pointer";
+            
+            // Loop Sequenziale per ogni porta
+            for(let i = 0; i < ports.length; i++) {
+                if(!isPortScanRunning) {
+                    term.innerHTML += `<div style="color:var(--warning)">Scan aborted by user.</div>`;
+                    term.scrollTop = term.scrollHeight;
+                    break;
+                }
+
+                const port = ports[i];
+                
+                // Div temporaneo di attesa
+                const waitDiv = document.createElement('div');
+                waitDiv.style.color = '#aaa';
+                waitDiv.innerText = `Scanning port ${port}...`;
+                term.appendChild(waitDiv);
+                term.scrollTop = term.scrollHeight;
+                
+                try {
+                    // Manda il comando WebSocket per l'ESATTA porta corrente
+                    const res = await sendCommand(CMD.PORT_SCAN_SINGLE, { 
+                        ip: ip, 
+                        port: port, 
+                        method: method 
+                    });
+                    
+                    // Decodifica la risposta usando il tuo enum C:
+                    // 0=PORT_OPEN, 1=PORT_CLOSED, 2=PORT_FILTERED, 3=PORT_ERROR
+                    let statusColor = '#ffab40';
+                    let statusText = 'UNKNOWN';
+                    
+                    if (res.status_code === 0) { 
+                        statusColor = '#00e676'; 
+                        statusText = 'OPEN'; 
+                    }
+                    else if (res.status_code === 1) { 
+                        statusColor = '#ff5252'; 
+                        statusText = 'CLOSED'; 
+                    }
+                    else if (res.status_code === 2) { 
+                        statusColor = '#ffab40'; 
+                        statusText = 'FILTERED / TIMEOUT'; 
+                    }
+                    else { 
+                        statusColor = 'var(--danger)'; 
+                        statusText = 'ERROR'; 
+                    }
+
+                    waitDiv.innerHTML = `Port <span style="color:white; font-weight:bold;">${port}</span> <span style="color:${statusColor}; font-weight:bold;">[${statusText}]</span>`;
+                } catch(e) {
+                    waitDiv.innerHTML = `Port <span style="color:white; font-weight:bold;">${port}</span> <span style="color:var(--danger);">[ERROR: Timeout or disconnection]</span>`;
+                }
+            }
+            
+            if(isPortScanRunning) {
+                term.innerHTML += `<div style="color:var(--accent); margin-top:10px;">Scan completed.</div>`;
+                term.scrollTop = term.scrollHeight;
+            }
+            
+            isPortScanRunning = false;
+            btnStart.disabled = false; btnStart.style.opacity = "1"; btnStart.style.cursor = "pointer";
+            btnStop.disabled = true; btnStop.style.opacity = "0.5"; btnStop.style.cursor = "not-allowed";
+        }
+
+        function stopPortScan() {
+            isPortScanRunning = false;
+            showToast("Stopping port scan...");
+        }
+
+        // ==========================================
         // INIT
         // ==========================================
         document.addEventListener('DOMContentLoaded', () => {
@@ -2654,7 +2819,7 @@
             log("System UI Initialized.");
             // Ritardo di 800ms per permettere all'ESP32 di chiudere il socket HTTP
             // prima di dover gestire l'handshake del WebSocket.
-            setTimeout(connectWS, 800);
+            setTimeout(connectWS, 1000);
         });
 
     </script>

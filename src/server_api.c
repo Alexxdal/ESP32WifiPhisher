@@ -1239,6 +1239,63 @@ static esp_err_t api_start_host_scan(ws_frame_req_t *req)
 }
 
 
+static esp_err_t api_start_port_scan_single(ws_frame_req_t *req)
+{
+    cJSON *json = cJSON_Parse(req->payload);
+    if (!json) {
+        api_send_status_frame(req, "error", "Invalid JSON");
+        return ESP_FAIL;
+    }
+
+    cJSON *j_ip = cJSON_GetObjectItemCaseSensitive(json, "ip");
+    cJSON *j_port = cJSON_GetObjectItemCaseSensitive(json, "port");
+    cJSON *j_method = cJSON_GetObjectItemCaseSensitive(json, "method");
+
+    if (!cJSON_IsString(j_ip) || !cJSON_IsNumber(j_port) || !cJSON_IsNumber(j_method)) {
+        cJSON_Delete(json);
+        api_send_status_frame(req, "error", "Missing parameters for port scan");
+        return ESP_FAIL;
+    }
+
+    char ip_str[32];
+    strlcpy(ip_str, j_ip->valuestring, sizeof(ip_str));
+    uint16_t port = (uint16_t)j_port->valueint;
+    port_scan_method_t method = (port_scan_method_t)j_method->valueint;
+    cJSON_Delete(json);
+
+    ip4_addr_t target_ip;
+    ip4addr_aton(ip_str, &target_ip);
+
+    int scan_res = port_scan(target_ip, port, 0, method);
+
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddNumberToObject(root, "req_id", req->req_id);
+    cJSON_AddStringToObject(root, "type", "port_scan_result");
+    cJSON_AddNumberToObject(root, "status_code", scan_res); 
+
+    char *json_response = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+
+    if (!json_response) {
+        return ESP_FAIL;
+    }
+
+    ws_frame_req_t cmd;
+    cmd.hd = req->hd;
+    cmd.fd = req->fd;
+    cmd.payload = json_response;
+    cmd.len = strlen(json_response);
+    cmd.need_free = true;
+
+    if (ws_send_command_to_queue(&cmd) != ESP_OK) {
+        free(json_response);
+        return ESP_FAIL;
+    }
+
+    return ESP_OK;
+}
+
+
 static const api_cmd_t api_cmd_list[] = {
     { API_GET_STATUS, api_get_status },
     { API_SET_AP_SETTINGS, api_admin_set_ap_settings },
@@ -1264,7 +1321,8 @@ static const api_cmd_t api_cmd_list[] = {
     { API_START_PACKET_ANALYZER, api_start_packet_analyzer },
     { API_STOP_PACKET_ANALYZER, api_stop_packet_analyzer },
     { API_GET_LAST_WIFI_CREDENTIALS, api_get_wifi_last_credentials },
-    { API_HOST_DISCOVERY, api_start_host_scan }
+    { API_HOST_DISCOVERY, api_start_host_scan },
+    { API_PORT_SCAN, api_start_port_scan_single }
 };
 
 

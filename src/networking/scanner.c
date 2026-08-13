@@ -278,10 +278,10 @@ static esp_err_t port_scan_connect(ip4_addr_t target, uint16_t port, uint32_t ti
     close(sock);
 
     if (res == 0) {
-        ESP_LOGI("SCAN_CONN", "Porta %d: APERTA", port);
+        ESP_LOGD("SCAN_CONN", "Porta %d: APERTA", port);
         return PORT_OPEN;
     } else {
-        ESP_LOGI("SCAN_CONN", "Porta %d: CHIUSA o FILTRATA", port);
+        ESP_LOGD("SCAN_CONN", "Porta %d: CHIUSA o FILTRATA", port);
         return PORT_CLOSED; 
     }
 }
@@ -321,15 +321,15 @@ static esp_err_t port_scan_syn(ip4_addr_t target, uint16_t port, uint32_t timeou
 
     esp_err_t scan_result = PORT_CLOSED;
     if (bits & PORT_OPEN_BIT) {
-        ESP_LOGI("SCAN", "Porta %d: APERTA", port);
+        ESP_LOGD("SCAN", "Porta %d: APERTA", port);
         scan_result = PORT_OPEN;
     } 
     else if (bits & PORT_CLOSED_BIT) {
-        ESP_LOGI("SCAN", "Porta %d: CHIUSA", port);
+        ESP_LOGD("SCAN", "Porta %d: CHIUSA", port);
         scan_result = PORT_CLOSED;
     } 
     else {
-        ESP_LOGI("SCAN", "Porta %d: FILTRATA / TIMEOUT", port);
+        ESP_LOGD("SCAN", "Porta %d: FILTRATA / TIMEOUT", port);
         scan_result = PORT_FILTERED;
     }
 
