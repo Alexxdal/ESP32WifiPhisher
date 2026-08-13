@@ -7,11 +7,99 @@
 #include "lwip/sockets.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/event_groups.h"
 #include "cJSON.h"
 #include "networking.h"
 #include "dns.h"
+/* Raw ip operation */
+#include "lwip/raw.h"
+#include "lwip/tcp.h"
+#include "lwip/ip.h"
+#include "lwip/inet_chksum.h"
+#include "lwip/tcpip.h"
+#include "lwip/prot/tcp.h"
+#include "lwip/prot/ip4.h"
 
 static const char *TAG = "SCANNER";
+
+static struct raw_pcb *g_raw_pcb = NULL;
+static EventGroupHandle_t scanner_event_group = NULL;
+
+#define SCAN_DEFAULT_TIMEOUT_MS     200
+#define RAW_PACKET_SRC_PORT         12345
+#define PORT_OPEN_BIT               BIT0  // SYN-ACK
+#define PORT_CLOSED_BIT             BIT1  // RST
+
+
+static u8_t receive_raw_callback(void *arg, struct raw_pcb *pcb, struct pbuf *p, const ip_addr_t *addr)
+{
+    struct ip_hdr *iphdr = (struct ip_hdr *)p->payload;
+    u16_t iphdr_hlen = IPH_HL_BYTES(iphdr);
+
+    if (p->len >= iphdr_hlen + sizeof(struct tcp_hdr)) 
+    {
+        struct tcp_hdr *tcphdr = (struct tcp_hdr *)((u8_t *)p->payload + iphdr_hlen);
+
+        if (lwip_ntohs(tcphdr->dest) == RAW_PACKET_SRC_PORT) {
+            uint8_t flags = TCPH_FLAGS(tcphdr);
+            if ((flags & TCP_SYN) && (flags & TCP_ACK)) {
+                if (scanner_event_group != NULL) {
+                    xEventGroupSetBits(scanner_event_group, PORT_OPEN_BIT);
+                }
+            } 
+            else if (flags & TCP_RST) {
+                if (scanner_event_group != NULL) {
+                    xEventGroupSetBits(scanner_event_group, PORT_CLOSED_BIT);
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+
+esp_err_t scanner_init(void)
+{
+    scanner_event_group = xEventGroupCreate();
+    if (scanner_event_group == NULL) {
+        return ESP_ERR_NO_MEM;
+    }
+    xEventGroupClearBits(scanner_event_group, PORT_OPEN_BIT | PORT_CLOSED_BIT);
+
+    LOCK_TCPIP_CORE();
+    g_raw_pcb = raw_new(IP_PROTO_TCP);
+    if (g_raw_pcb) {
+        raw_recv(g_raw_pcb, receive_raw_callback, NULL);
+        raw_bind(g_raw_pcb, IP_ADDR_ANY);
+    }
+    UNLOCK_TCPIP_CORE();
+
+    if (g_raw_pcb == NULL) {
+        vEventGroupDelete(scanner_event_group);
+        return ESP_ERR_NO_MEM;
+    }
+
+    return ESP_OK;
+}
+
+
+esp_err_t scanner_deinit(void)
+{
+    LOCK_TCPIP_CORE();
+    if (g_raw_pcb != NULL) {
+        raw_remove(g_raw_pcb);
+        g_raw_pcb = NULL;
+    }
+    UNLOCK_TCPIP_CORE();
+
+    if (scanner_event_group != NULL) {
+        vEventGroupDelete(scanner_event_group);
+        scanner_event_group = NULL;
+    }
+
+    return ESP_OK;
+}
+
 
 char* subnet_scan(void)
 {
@@ -113,6 +201,145 @@ char* subnet_scan(void)
 
     char *results = cJSON_PrintUnformatted(result_array);
     cJSON_Delete(result_array);
-
     return results;
+}
+
+
+static void send_custom_raw_packet(const ip_addr_t *my_ip, const ip_addr_t *target_ip, uint16_t port)
+{
+    if (g_raw_pcb == NULL) return;
+
+    struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, sizeof(struct tcp_hdr), PBUF_RAM);
+    if (p == NULL) return;
+
+    struct tcp_hdr *tcphdr = (struct tcp_hdr *)p->payload;
+    memset(tcphdr, 0, sizeof(struct tcp_hdr));
+
+    tcphdr->src    = lwip_htons(RAW_PACKET_SRC_PORT);
+    tcphdr->dest   = lwip_htons(port);
+    tcphdr->seqno  = lwip_htonl(1000);
+    TCPH_HDRLEN_FLAGS_SET(tcphdr, 5, TCP_SYN);
+    tcphdr->wnd    = lwip_htons(8192);
+    tcphdr->chksum = 0;
+    tcphdr->chksum = ip_chksum_pseudo(p, IP_PROTO_TCP, p->len, my_ip, target_ip);
+
+    LOCK_TCPIP_CORE();
+    raw_sendto(g_raw_pcb, p, target_ip);
+    UNLOCK_TCPIP_CORE();
+
+    pbuf_free(p);
+}
+
+
+static esp_err_t port_scan_connect(ip4_addr_t target, uint16_t port, uint32_t timeout_ms) 
+{
+    int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+    if (sock < 0) {
+        return PORT_ERROR;
+    }
+
+    struct timeval timeout;
+    timeout.tv_sec = 0;
+    timeout.tv_usec = timeout_ms * 1000;
+    // set send and receive timout
+    setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
+
+    struct sockaddr_in dest_addr;
+    dest_addr.sin_family = AF_INET;
+    dest_addr.sin_addr.s_addr = target.addr;
+    dest_addr.sin_port = htons(port);
+
+    int err = connect(sock, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+    close(sock);
+
+    if (err == 0) {
+        return PORT_OPEN;
+    } else {
+        // Closed or filtered by firewall
+        return PORT_CLOSED; 
+    }
+}
+
+
+static esp_err_t port_scan_syn(ip4_addr_t target, uint16_t port, uint32_t timeout_ms)
+{
+    //Get local IP
+    esp_netif_ip_info_t *sta_ip = networking_get_ip_info();
+    esp_netif_t *esp_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+
+    if (esp_netif == NULL || sta_ip == NULL) {
+        ESP_LOGE(TAG, "Wifi Interface not ready.");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (scanner_event_group == NULL) {
+        return ESP_ERR_NO_MEM;
+    }
+    xEventGroupClearBits(scanner_event_group, PORT_OPEN_BIT | PORT_CLOSED_BIT);
+
+    ip_addr_t my_ip;
+    ip_addr_copy_from_ip4(my_ip, sta_ip->ip);
+    
+    ip_addr_t target_ip;
+    ip_addr_copy_from_ip4(target_ip, target);
+
+    send_custom_raw_packet(&my_ip, &target_ip, port);
+
+    EventBits_t bits = xEventGroupWaitBits(
+        scanner_event_group, 
+        PORT_OPEN_BIT | PORT_CLOSED_BIT, 
+        pdTRUE,         // Clear on exit
+        pdFALSE,        // Wait for ANY bit (non tutti insieme)
+        pdMS_TO_TICKS(timeout_ms)
+    );
+
+    esp_err_t scan_result = PORT_CLOSED;
+    if (bits & PORT_OPEN_BIT) {
+        ESP_LOGI("SCAN", "Porta %d: APERTA", port);
+        scan_result = PORT_OPEN;
+    } 
+    else if (bits & PORT_CLOSED_BIT) {
+        ESP_LOGI("SCAN", "Porta %d: CHIUSA", port);
+        scan_result = PORT_CLOSED;
+    } 
+    else {
+        ESP_LOGI("SCAN", "Porta %d: FILTRATA / TIMEOUT", port);
+        scan_result = PORT_FILTERED;
+    }
+
+    return scan_result;
+}
+
+
+esp_err_t port_scan(ip4_addr_t target, uint16_t port, uint32_t timeout_ms, port_scan_method_t method)
+{
+    esp_err_t err = PORT_ERROR;
+
+    if(timeout_ms == 0) {
+        timeout_ms = SCAN_DEFAULT_TIMEOUT_MS;
+    }
+
+    switch(method) 
+    {
+        case TCP_CONNECT_SCAN:
+            err = port_scan_connect(target, port, timeout_ms);
+            break;
+        
+        case TCP_SYN_SCAN:
+            err = port_scan_syn(target, port, timeout_ms);
+            break;
+
+        case TCP_FIN_SCAN:
+        case TCP_NULL_SCAN:
+        case TCP_XMAS_SCAN:
+        case TCP_ACK_SCAN:
+        case UDP_SCAN:
+            break;
+
+        default:
+            err = port_scan_connect(target, port, timeout_ms);
+            break;
+    }
+
+    return err;
 }
