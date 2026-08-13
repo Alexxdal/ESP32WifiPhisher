@@ -124,13 +124,6 @@ void app_main()
         fatal_error_handler();
     }
 
-    /* Dns reverse lookup test */
-    wifi_connect("Vodafone-Maroc", "Marocmarocko1$");
-    while(!networking_has_ip()) {
-        vTaskDelay(pdMS_TO_TICKS(1000));
-    }
-    subnet_scan();
-
     /* Suspend main task */
     vTaskSuspend(NULL); 
 }
