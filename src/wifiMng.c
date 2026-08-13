@@ -214,11 +214,13 @@ esp_err_t wifi_init(void)
     ESP_ERROR_CHECK(esp_wifi_set_max_tx_power(84));
 
     wifi_phy_rate_t target_rate = 0;
-    if(read_int_from_nvs(WIFI_TX_RATE_KEY, (int32_t *)&target_rate) != ESP_OK )
-    {
+    if(read_int_from_nvs(WIFI_TX_RATE_KEY, (int32_t *)&target_rate) != ESP_OK ) {
         target_rate = DEFAULT_WIFI_TX_RATE;
     }
-    ESP_ERROR_CHECK(wifi_set_tx_rate(WIFI_IF_STA, target_rate));
+    esp_err_t tx_rate_err = wifi_set_tx_rate(WIFI_IF_STA, target_rate);
+    if (tx_rate_err != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to set TX rate on STA (chip may not support this phymode): %s", esp_err_to_name(tx_rate_err));
+    }
 
 #if CONFIG_SOC_WIFI_SUPPORT_5G
     wifi_bandwidths_t bands = {
