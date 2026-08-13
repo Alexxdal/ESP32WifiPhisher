@@ -238,24 +238,50 @@ static esp_err_t port_scan_connect(ip4_addr_t target, uint16_t port, uint32_t ti
         return PORT_ERROR;
     }
 
-    struct timeval timeout;
-    timeout.tv_sec = 0;
-    timeout.tv_usec = timeout_ms * 1000;
-    // set send and receive timout
-    setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
+    int flags = fcntl(sock, F_GETFL, 0);
+    fcntl(sock, F_SETFL, flags | O_NONBLOCK);
 
     struct sockaddr_in dest_addr;
     dest_addr.sin_family = AF_INET;
     dest_addr.sin_addr.s_addr = target.addr;
     dest_addr.sin_port = htons(port);
 
-    int err = connect(sock, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+    int res = connect(sock, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+
+    if (res < 0 && errno == EINPROGRESS) {
+        fd_set fdset;
+        FD_ZERO(&fdset);
+        FD_SET(sock, &fdset);
+
+        struct timeval timeout;
+        timeout.tv_sec = timeout_ms / 1000;
+        timeout.tv_usec = (timeout_ms % 1000) * 1000;
+        res = select(sock + 1, NULL, &fdset, NULL, &timeout);
+
+        if (res == 1) {
+            int so_error = 0;
+            socklen_t len = sizeof(so_error);
+            getsockopt(sock, SOL_SOCKET, SO_ERROR, &so_error, &len);
+            
+            if (so_error == 0) {
+                res = 0; 
+            } else {
+                // Connection Refused / RST
+                res = -1;
+            }
+        } else {
+            // Select error
+            res = -1;
+        }
+    }
+
     close(sock);
 
-    if (err == 0) {
+    if (res == 0) {
+        ESP_LOGI("SCAN_CONN", "Porta %d: APERTA", port);
         return PORT_OPEN;
     } else {
-        // Closed or filtered by firewall
+        ESP_LOGI("SCAN_CONN", "Porta %d: CHIUSA o FILTRATA", port);
         return PORT_CLOSED; 
     }
 }
