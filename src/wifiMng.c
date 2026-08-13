@@ -19,6 +19,9 @@
 #define MAX_TRACKED_CLIENTS MAX_CLIENTS
 #define MAX_CONSECUTIVE_FAILS 10         // Dopo quanti ACK mancati lo consideriamo "sordo"
 #define BACKOFF_TIMEOUT_US    2000000    // 2 secondi di pausa prima di riprovare
+// Wifi Connection
+#define MAX_WIFI_RETRIES 3
+#define WIFI_TIMEOUT_MS  10000
 
 static const char *TAG = "WIFI_MNG";
 
@@ -268,11 +271,31 @@ esp_err_t wifi_connect(const char *ssid, const char *password)
         return err;
     }
 
-    err = esp_wifi_connect();
-    if (err != ESP_OK) {
-        ESP_LOGD(TAG, "Errore wifi_connect: %s", esp_err_to_name(err));
+    for (int attempt = 1; attempt <= MAX_WIFI_RETRIES; attempt++) 
+    {
+        wifi_connected = false;
+        err = esp_wifi_connect();
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "Error esp_wifi_connect: %s", esp_err_to_name(err));
+            vTaskDelay(pdMS_TO_TICKS(1000));
+            continue; 
+        }
+
+        int wait_time = 0;
+        while (wait_time < WIFI_TIMEOUT_MS) {
+            if (wifi_connected) {
+                return ESP_OK;
+            }
+            vTaskDelay(pdMS_TO_TICKS(100));
+            wait_time += 100;
+        }
+
+        esp_wifi_disconnect(); 
+        vTaskDelay(pdMS_TO_TICKS(1000)); 
     }
-    return err;
+
+    ESP_LOGE(TAG, "Failed to connect to Wi-Fi after %d attempts.", MAX_WIFI_RETRIES);
+    return ESP_FAIL;
 }
 
 
