@@ -1184,7 +1184,7 @@
 
         <!-- HOST DISCOVERY -->
         <div id="view-host-discovery" class="view-container">
-            <h2 data-i18n="host_discovery_title">Host Discovery (ARP Sweep)</h2>
+            <h2 data-i18n="host_discovery_title">Subnet Scan</h2>
             
             <div class="card">
                 <p style="margin-top:0; color:#aaa; font-size:0.9rem; margin-bottom: 20px;">Map the internal network to find active devices, hostnames, and exposed services.</p>
@@ -2893,6 +2893,14 @@
             })[c]);
         }
 
+        // Numeric IPv4 sort key - plain string sort would put "192.168.1.10"
+        // before "192.168.1.2", so compare the dotted quad as one number instead.
+        function ipToSortKey(ip) {
+            const parts = (ip || '').split('.').map(Number);
+            if (parts.length !== 4 || parts.some(n => Number.isNaN(n))) return -1;
+            return ((parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]) >>> 0;
+        }
+
         function clearHostScan() {
             hostScanData = [];
             document.getElementById('hd-filter').value = '';
@@ -3001,7 +3009,7 @@
                     include_ssdp: includeSsdp
                 });
 
-                hostScanData = res.data || [];
+                hostScanData = (res.data || []).sort((a, b) => ipToSortKey(a.ip) - ipToSortKey(b.ip));
                 renderHostScanTable();
                 updateHostScanStats();
 
