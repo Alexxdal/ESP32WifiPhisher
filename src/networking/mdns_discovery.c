@@ -23,7 +23,7 @@ static const char *SERVICE_TYPES[] = {
 };
 #define SERVICE_TYPES_COUNT (sizeof(SERVICE_TYPES) / sizeof(SERVICE_TYPES[0]))
 
-#define MDNS_QUERY_TIMEOUT_MS   2000
+#define MDNS_QUERY_TIMEOUT_MS   700
 #define MDNS_MAX_RESULTS_PER_Q  16
 
 char* mdns_discover(void)
