@@ -51,9 +51,10 @@ esp_err_t read_string_from_nvs(const char* key, char* value)
     }
 
     err = nvs_get_str(nvs_handle, key, value, &required_size);
-    if (err != ESP_OK) 
+    if (err != ESP_OK)
     {
         ESP_LOGD(TAG, "Errore nel leggere la stringa (%s)\n", esp_err_to_name(err));
+        nvs_close(nvs_handle);
         return ESP_FAIL;
     }
 

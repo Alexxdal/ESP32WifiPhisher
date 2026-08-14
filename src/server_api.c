@@ -281,16 +281,23 @@ static esp_err_t api_get_recon_data_clients(ws_frame_req_t *req)
     client_list_t *recon_clients = (client_list_t *)malloc(sizeof(client_list_t));
     probe_request_list_t *recon_probes = (probe_request_list_t *)malloc(sizeof(probe_request_list_t));
 
+    esp_err_t alloc_err = ESP_OK;
     if (!recon_clients) {
-        if (recon_clients) free(recon_clients);
+        
         ESP_LOGE(TAG, "No Heap memory for recon structs!");
-        return ESP_ERR_NO_MEM;
+        alloc_err = ESP_ERR_NO_MEM;
     }
 
     if (!recon_probes) {
-        if (recon_probes) free(recon_probes);
+        
         ESP_LOGE(TAG, "No Heap memory for recon structs!");
-        return ESP_ERR_NO_MEM;
+        alloc_err = ESP_ERR_NO_MEM;
+    }
+
+    if(alloc_err != ESP_OK) {
+        if (recon_clients) free(recon_clients);
+        if (recon_probes) free(recon_probes);
+        return alloc_err;
     }
 
     wifi_sniffer_get_clients(recon_clients);
@@ -300,6 +307,7 @@ static esp_err_t api_get_recon_data_clients(ws_frame_req_t *req)
     cJSON *root = cJSON_CreateObject();
     if (root == NULL) {
         free(recon_clients);
+        free(recon_probes);
         return ESP_FAIL;
     }
 
