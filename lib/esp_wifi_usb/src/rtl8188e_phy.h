@@ -1,5 +1,3 @@
-#if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3)
-
 /*
  * rtl8188e_phy.h - Baseband e transceiver RF
  */
@@ -43,4 +41,3 @@ void rtl8188e_igi_sweep_diagnostic(usb_device_handle_t dev_hdl);
 
 #endif /* RTL8188E_PHY_H */
 
-#endif

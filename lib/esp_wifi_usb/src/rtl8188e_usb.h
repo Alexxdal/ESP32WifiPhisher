@@ -1,5 +1,3 @@
-#if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3)
-
 /*
  * rtl8188e_usb.h - Accesso ai registri del chip via control transfer USB
  *
@@ -31,4 +29,3 @@ esp_err_t rtl_write_block(usb_device_handle_t dev_hdl, uint16_t reg_addr,
 
 #endif /* RTL8188E_USB_H */
 
-#endif

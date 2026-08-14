@@ -1,5 +1,3 @@
-#if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3)
-
 /*
  * rtl8188e_driver.h - Stato condiviso del driver
  */
@@ -23,4 +21,3 @@ extern TaskHandle_t             driver_task_hdl;
 
 #endif /* RTL8188E_DRIVER_H */
 
-#endif

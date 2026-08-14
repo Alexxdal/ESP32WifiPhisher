@@ -1,4 +1,5 @@
-#if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3)
+#ifndef RTL8188EU_FW_H
+#define RTL8188EU_FW_H
 
 uint8_t array_mp_8188e_s_fw_nic[] = {
 0xE3, 0x88, 0x20, 0x00, 0x1C, 0x00, 0x00, 0x00,
@@ -2012,4 +2013,4 @@ uint8_t array_mp_8188e_s_fw_nic[] = {
 
 uint32_t array_length_mp_8188e_s_fw_nic = 16054;
 
-#endif
+#endif /* RTL8188EU_FW_H */

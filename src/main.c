@@ -29,7 +29,7 @@ static void fatal_error_handler(void)
 { 
     while(true)
     {
-        ESP_LOGE("FATAL_ERROR:", "Fatal error occurred, system is blocked and can't continue execution.");
+        ESP_LOGE(TAG, "Fatal error occurred, system is blocked and can't continue execution.");
         vTaskDelay(pdMS_TO_TICKS(5000));
     } 
 }

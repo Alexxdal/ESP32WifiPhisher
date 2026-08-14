@@ -1,5 +1,3 @@
-#if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3)
-
 #include "rtl8188e_hal.h"
 #include "rtl8188e_usb.h"
 #include "rtl8188e_tables.h"
@@ -536,4 +534,3 @@ void rtl8188e_start_radio(usb_device_handle_t dev_hdl)
     ESP_LOGD(TAG, "MAC and DMA are online!");
 }
 
-#endif

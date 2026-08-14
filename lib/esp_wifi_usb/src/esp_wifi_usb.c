@@ -1,5 +1,3 @@
-#if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3)
-
 /*
  * esp_wifi_usb.c - Implementation of the esp_wifi-style public API
  */
@@ -897,4 +895,3 @@ esp_err_t esp_wifi_usb_80211_tx(const void *buffer, int len, bool en_sys_seq)
     return err;
 }
 
-#endif
