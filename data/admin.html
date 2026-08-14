@@ -351,6 +351,112 @@
             background-color: #2a2a2a;
         }
 
+        /* --- HOST DISCOVERY: Fing-style row list --- */
+        .host-row {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border);
+            transition: background 0.15s;
+        }
+
+        .host-row:last-child {
+            border-bottom: none;
+        }
+
+        .host-row:hover {
+            background-color: rgba(255, 255, 255, 0.03);
+        }
+
+        .host-icon {
+            flex: 0 0 auto;
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            background: #1a1a1a;
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+        }
+
+        .host-icon svg {
+            width: 22px;
+            height: 22px;
+        }
+
+        .host-info {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+
+        .host-name {
+            color: white;
+            font-weight: 600;
+            font-size: 0.95rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .host-sub {
+            color: var(--text-muted);
+            font-size: 0.78rem;
+            font-family: 'Courier New', monospace;
+            margin-top: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .host-badges {
+            margin-top: 6px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+        }
+
+        .host-badge {
+            display: inline-block;
+            background: var(--accent-dim);
+            color: var(--accent);
+            border: 1px solid rgba(0, 230, 118, 0.3);
+            border-radius: 3px;
+            padding: 2px 7px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+            white-space: nowrap;
+        }
+
+        .host-ip {
+            flex: 0 0 auto;
+            text-align: right;
+        }
+
+        .host-ip-addr {
+            color: var(--accent);
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            font-size: 0.85rem;
+        }
+
+        .host-use-btn {
+            display: block;
+            margin: 6px 0 0 auto !important;
+            padding: 3px 10px !important;
+            font-size: 0.65rem !important;
+        }
+
+        .host-empty {
+            text-align: center;
+            padding: 30px;
+            color: #666;
+            font-style: italic;
+        }
+
         /* --- TERMINAL WINDOW (New) --- */
         .terminal-panel {
             position: absolute;
@@ -1079,31 +1185,74 @@
         <!-- HOST DISCOVERY -->
         <div id="view-host-discovery" class="view-container">
             <h2 data-i18n="host_discovery_title">Host Discovery (ARP Sweep)</h2>
+            
             <div class="card">
-                <p style="margin-top:0; color:#aaa; font-size:0.9rem;">Map the internal network to find active devices.</p>
-                <div class="btn-group" style="margin-bottom: 20px;">
-                    <button onclick="startHostScan()">
-                        <svg style="width:16px; height:16px; vertical-align:middle; margin-right:5px;" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/></svg> 
-                        START SUBNET SWEEP
-                    </button>
-                    <button class="secondary" onclick="document.getElementById('host-scan-body').innerHTML = '<tr><td colspan=\'4\' style=\'text-align:center; color:#666;\'>Cleared</td></tr>';">CLEAR</button>
+                <p style="margin-top:0; color:#aaa; font-size:0.9rem; margin-bottom: 20px;">Map the internal network to find active devices, hostnames, and exposed services.</p>
+
+                <!-- 1. DASHBOARD STATS -->
+                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap:15px; margin-bottom:25px;">
+                    <div style="background:#121212; border:1px solid #333; border-radius:6px; padding:15px; text-align:center;">
+                        <div style="font-size:1.8rem; font-weight:bold; color:var(--accent); font-family:monospace;" id="hd-stat-hosts">--</div>
+                        <div style="font-size:0.7rem; color:#888; text-transform:uppercase; letter-spacing:1px; margin-top:5px;">Hosts Found</div>
+                    </div>
+                    <div style="background:#121212; border:1px solid #333; border-radius:6px; padding:15px; text-align:center;">
+                        <div style="font-size:1.8rem; font-weight:bold; color:var(--accent); font-family:monospace;" id="hd-stat-services">--</div>
+                        <div style="font-size:0.7rem; color:#888; text-transform:uppercase; letter-spacing:1px; margin-top:5px;">With Services</div>
+                    </div>
+                    <div style="background:#121212; border:1px solid #333; border-radius:6px; padding:15px; text-align:center;">
+                        <div style="font-size:1.8rem; font-weight:bold; color:var(--accent); font-family:monospace;" id="hd-stat-vendors">--</div>
+                        <div style="font-size:0.7rem; color:#888; text-transform:uppercase; letter-spacing:1px; margin-top:5px;">Vendors</div>
+                    </div>
+                    <div style="background:#121212; border:1px solid #333; border-radius:6px; padding:15px; text-align:center;">
+                        <div style="font-size:1.8rem; font-weight:bold; color:#ccc; font-family:monospace;" id="hd-stat-time">--:--</div>
+                        <div style="font-size:0.7rem; color:#888; text-transform:uppercase; letter-spacing:1px; margin-top:5px;">Last Scan</div>
+                    </div>
                 </div>
-                
-                <div style="overflow-x:auto;">
-                    <table class="wifi-table" style="font-family: 'Courier New', monospace; font-size: 0.85rem;">
-                        <thead style="background: #181818;">
-                            <tr>
-                                <th>IP Address</th>
-                                <th>MAC Address</th>
-                                <th>Hostname</th>
-                                <th>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody id="host-scan-body">
-                            <tr><td colspan="4" style="text-align:center; padding:20px; color:#666;">Run a sweep to find targets</td></tr>
-                        </tbody>
-                    </table>
+
+                <!-- 2. CONTROL TOOLBAR -->
+                <div style="background:#181818; border:1px solid #333; border-radius:6px; padding:15px; margin-bottom:25px; display:flex; flex-wrap:wrap; gap:20px; justify-content:space-between; align-items:center;">
+                    
+                    <!-- Scan Options -->
+                    <div style="display:flex; flex-wrap:wrap; gap:15px; align-items:center;">
+                        <span style="font-size:0.75rem; color:#888; font-weight:bold; letter-spacing:1px;">OPTIONS:</span>
+                        
+                        <label style="display:flex; align-items:center; gap:8px; font-size:0.85rem; color:#ccc; cursor:pointer;">
+                            <input type="checkbox" id="hd-include-mdns" style="width:auto; margin:0; accent-color:var(--accent);">
+                            mDNS 
+                            <span style="color:#666; font-size:0.75rem; background:#111; padding:2px 6px; border-radius:3px;">+5 sec</span>
+                        </label>
+                        
+                        <label style="display:flex; align-items:center; gap:8px; font-size:0.85rem; color:#ccc; cursor:pointer;">
+                            <input type="checkbox" id="hd-include-ssdp" style="width:auto; margin:0; accent-color:var(--accent);">
+                            SSDP/UPnP
+                            <span style="color:#666; font-size:0.75rem; background:#111; padding:2px 6px; border-radius:3px;" title="Includes one extra HTTP request per UPnP device to read its friendly name/model">+3-6 sec</span>
+                        </label>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="btn-group" style="margin-top:0;">
+                        <button onclick="startHostScan()" style="margin:0;">
+                            <svg style="width:16px; height:16px; vertical-align:middle; margin-right:5px;" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/></svg> 
+                            START SWEEP
+                        </button>
+                        <button class="secondary" onclick="clearHostScan();" style="margin:0;">CLEAR</button>
+                    </div>
                 </div>
+
+                <!-- 3. TABLE HEADER & FILTER -->
+                <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:10px; flex-wrap:wrap; gap:10px;">
+                    <div style="font-weight:bold; color:var(--accent); font-size: 0.85rem; padding-left:5px;">DISCOVERED TARGETS</div>
+                    <input type="text" id="hd-filter" oninput="renderHostScanTable()" placeholder="Filter by IP, MAC, Hostname..." 
+                           style="width:100%; max-width: 300px; padding:8px 12px; background:#121212; border:1px solid #444; border-radius:4px; color:white; font-size:0.8rem; margin:0;">
+                </div>
+
+                <!-- 4. DEVICE LIST (Fing-style rows) -->
+                <div style="border:1px solid #333; border-radius:6px; background:#121212; overflow:hidden;">
+                    <div id="host-scan-body">
+                        <div class="host-empty">Run a sweep to find targets</div>
+                    </div>
+                </div>
+
             </div>
         </div>
 
@@ -2641,54 +2790,226 @@
             } catch(e) { console.warn("Last Wifi Credentials Fetch Error:", e); }
         }
 
-        async function startHostScan() {
-            const tbody = document.getElementById('host-scan-body');
-            
-            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--accent);">Subnet scan in progress (this may take a few seconds)...</td></tr>';
-            
-            try {
-                // Chiama l'API WebSocket (ID 24)
-                const res = await sendCommand(CMD.HOST_DISCOVERY);
-                
-                // Estrae l'array "data" dal JSON di risposta
-                const scanData = res.data; 
-                
-                tbody.innerHTML = ''; 
-                
-                if (!scanData || scanData.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#666;">Nessun host trovato</td></tr>';
-                    return;
+        let hostScanData = [];
+
+        // Monochrome icon set for the Fing-style row list. Device identity is
+        // conveyed by icon shape (not color) to stay consistent with the
+        // single-accent dark theme used everywhere else in this UI.
+        const HOST_DEVICE_ICONS = {
+            router: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L4 7v2h16V7l-8-5zM5 10v2h1v9h2v-6h8v6h2v-9h1v-2H5zm4 2h6v2H9v-2z"/></svg>',
+            media: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 14H3V5h18v12zM10 8l6 4-6 4V8z"/></svg>',
+            printer: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>',
+            phone: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 1H7c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-2-2-2zm0 18H7V4h10v15z"/></svg>',
+            computer: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2H0v2h24v-2h-4zM4 6h16v10H4V6z"/></svg>',
+            camera: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 2 7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>',
+            iot: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 2v2H4v2h2v12H4v2h2v2h2v-2h8v2h2v-2h2v-2h-2V6h2V4h-2V2h-2v2H8V2H6zm2 4h8v12H8V6z"/></svg>',
+            device: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm1-13h-2v6l5.25 3.15.75-1.23-4-2.42V7z"/></svg>'
+        };
+
+        // Guess a device category from vendor name + advertised mDNS/SSDP
+        // service types, purely to pick a representative icon - not shown
+        // anywhere else, so a wrong guess just falls back to a generic dot.
+        function classifyHostIcon(host) {
+            const vendor = (host.vendor || '').toLowerCase();
+            const hostname = (host.hostname || '').toLowerCase();
+            const types = (host.services || []).map(s => (s.type || '').toLowerCase());
+            // The UPnP friendlyName/manufacturer/modelName (when resolved via
+            // ssdp_fetch_device_info) is a far more reliable signal than
+            // guessing from vendor OUI alone - e.g. "Fire TV di Stefano" or
+            // "Vodafone Power Station WiFi 6" tells us exactly what it is.
+            const nameHints = [host.friendly_name, host.manufacturer, host.model].filter(Boolean).join(' ').toLowerCase();
+
+            if (/router|gateway|modem|station wifi|access point/.test(nameHints)) {
+                return 'router';
+            }
+            if (/fire ?tv|apple ?tv|chromecast|smart ?tv|\btv\b|roku|shield|soundbar|speaker|echo dot|echo show/.test(nameHints)) {
+                return 'media';
+            }
+            if (/printer|laserjet|deskjet|officejet|inkjet/.test(nameHints)) {
+                return 'printer';
+            }
+            if (/camera|\bcam\b|doorbell/.test(nameHints)) {
+                return 'camera';
+            }
+            if (/iphone|ipad|android|galaxy|pixel phone/.test(nameHints)) {
+                return 'phone';
+            }
+            if (/macbook|imac|desktop|laptop|workstation/.test(nameHints)) {
+                return 'computer';
+            }
+
+            if (types.some(t => t.includes('internetgatewaydevice') || t.includes('wandevice') || t.includes('wanconnectiondevice')) ||
+                /tp-link|netgear|arcadyan|vodafone|d-link|asus|linksys|huawei|zte corp|fastweb|technicolor|sagemcom/.test(vendor)) {
+                return 'router';
+            }
+            if (types.some(t => t.includes('mediarenderer') || t.includes('mediaserver') || t.includes('googlecast') || t.includes('airplay') || t.includes('raop')) ||
+                /sonos|roku|amazon/.test(vendor) || /chromecast|appletv|firetv|echo/.test(hostname)) {
+                return 'media';
+            }
+            if (types.some(t => t.includes('_ipp') || t.includes('printer')) ||
+                /canon|epson|brother industries|hewlett|hp inc|lexmark/.test(vendor)) {
+                return 'printer';
+            }
+            if (/hikvision|dahua|axis communications|reolink|foscam|ubiquiti/.test(vendor) || hostname.includes('cam')) {
+                return 'camera';
+            }
+            if (/apple|samsung electronics|xiaomi|oneplus|google/.test(vendor) && /iphone|android|galaxy|pixel/.test(hostname)) {
+                return 'phone';
+            }
+            if (types.some(t => t.includes('_smb') || t.includes('workstation')) ||
+                /dell|lenovo|intel corp|microsoft|raspberry|asustek/.test(vendor)) {
+                return 'computer';
+            }
+            if (/tuya|espressif|shenzhen|meross|sonoff|shelly|itead|china dragon/.test(vendor)) {
+                return 'iot';
+            }
+            return 'device';
+        }
+
+        // Friendly label for a service badge - shown directly on the row,
+        // no hover needed.
+        function friendlyServiceLabel(s) {
+            if (s.source === 'mdns') {
+                const map = {
+                    '_googlecast._tcp': 'Cast', '_airplay._tcp': 'AirPlay', '_raop._tcp': 'AirPlay Audio',
+                    '_ipp._tcp': 'Printer', '_http._tcp': 'HTTP', '_https._tcp': 'HTTPS',
+                    '_smb._tcp': 'SMB', '_ssh._tcp': 'SSH', '_afpovertcp._tcp': 'AFP'
+                };
+                const key = (s.type || '').toLowerCase().replace('.local', '').replace(/\.$/, '');
+                if (map[key]) return map[key];
+                return (s.type || 'mDNS').replace(/^_/, '').replace(/\._tcp.*$/i, '').replace(/\._udp.*$/i, '') || 'mDNS';
+            }
+            const map = {
+                'internetgatewaydevice': 'Router', 'wanconnectiondevice': 'Router', 'wandevice': 'Router', 'lanconnectiondevice': 'Router',
+                'mediarenderer': 'Media Renderer', 'mediaserver': 'Media Server', 'basicdevice': 'UPnP Device'
+            };
+            const key = (s.type || '').toLowerCase();
+            return map[key] || s.type || 'UPnP';
+        }
+
+        function escapeHtml(str) {
+            return String(str ?? '').replace(/[&<>"']/g, c => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            })[c]);
+        }
+
+        function clearHostScan() {
+            hostScanData = [];
+            document.getElementById('hd-filter').value = '';
+            document.getElementById('host-scan-body').innerHTML = '<div class="host-empty">Cleared</div>';
+            document.getElementById('hd-stat-hosts').textContent = '--';
+            document.getElementById('hd-stat-services').textContent = '--';
+            document.getElementById('hd-stat-vendors').textContent = '--';
+        }
+
+        function renderHostScanTable() {
+            const container = document.getElementById('host-scan-body');
+            const filterVal = document.getElementById('hd-filter').value.trim().toLowerCase();
+
+            const filtered = !filterVal ? hostScanData : hostScanData.filter(host =>
+                (host.ip || '').toLowerCase().includes(filterVal) ||
+                (host.mac || '').toLowerCase().includes(filterVal) ||
+                (host.hostname || '').toLowerCase().includes(filterVal) ||
+                (host.vendor || '').toLowerCase().includes(filterVal) ||
+                (host.friendly_name || '').toLowerCase().includes(filterVal) ||
+                (host.model || '').toLowerCase().includes(filterVal)
+            );
+
+            container.innerHTML = '';
+
+            if (filtered.length === 0) {
+                container.innerHTML = '<div class="host-empty">Nessun host trovato</div>';
+                return;
+            }
+
+            filtered.forEach(host => {
+                const row = document.createElement('div');
+                row.className = 'host-row';
+
+                const iconKey = classifyHostIcon(host);
+                const vendorName = (host.vendor && host.vendor !== "Unknown Vendor") ? host.vendor : "Unknown Vendor";
+                const hasFriendly = !!(host.friendly_name && host.friendly_name.trim());
+                const hasHostname = host.hostname && host.hostname !== "N/A";
+                // friendly_name comes from the device's own UPnP description
+                // (its self-reported name, e.g. "Fire TV di Stefano") - the
+                // most trustworthy source when present, ahead of the DNS/mDNS
+                // hostname and far ahead of a bare vendor guess.
+                const primaryName = hasFriendly ? host.friendly_name : (hasHostname ? host.hostname : vendorName);
+
+                const subBits = [];
+                if (hasFriendly) {
+                    const modelBits = [host.manufacturer, host.model].filter(Boolean).join(' ');
+                    subBits.push(modelBits || vendorName);
+                } else if (hasHostname) {
+                    subBits.push(vendorName);
+                }
+                if (host.mac && host.mac !== "N/A") subBits.push(host.mac);
+
+                let badgesHtml = '';
+                if (host.services && host.services.length > 0) {
+                    badgesHtml = `<div class="host-badges">${host.services.map(s => {
+                        const label = friendlyServiceLabel(s);
+                        const title = s.source === 'mdns'
+                            ? `${s.name && s.name !== 'N/A' ? s.name : s.type} : ${s.port}`
+                            : (s.server && s.server !== 'N/A' ? s.server : (s.location || ''));
+                        return `<span class="host-badge" title="${escapeHtml(title)}">${escapeHtml(label)}</span>`;
+                    }).join('')}</div>`;
                 }
 
-                scanData.forEach(host => {
-                    const tr = document.createElement('tr');
-                    
-                    let displayName = host.hostname;
-                    if (displayName === "N/A" || !displayName) {
-                        displayName = "<span style='color:#666; font-style:italic;'>Unknown</span>";
-                    } else {
-                        displayName = `<span style='color:#fff;'>${displayName}</span>`;
-                    }
-                    
-                    tr.innerHTML = `
-                        <td style="color:var(--accent); font-weight:bold; font-family:monospace;">${host.ip}</td>
-                        <td style="font-family:monospace; color:#aaa;">${host.mac}</td>
-                        <td>${displayName}</td>
-                        <td>
-                            <button style="padding:4px 8px; font-size:0.7rem; margin:0;" 
-                                    onclick="document.getElementById('ps-ip').value='${host.ip}'; showToast('IP ${host.ip} copiato nel Port Scanner!');">
-                                USE IP
-                            </button>
-                        </td>
-                    `;
-                    tbody.appendChild(tr);
+                row.innerHTML = `
+                    <div class="host-icon">${HOST_DEVICE_ICONS[iconKey]}</div>
+                    <div class="host-info">
+                        <div class="host-name">${escapeHtml(primaryName)}</div>
+                        <div class="host-sub">${escapeHtml(subBits.join(' · '))}</div>
+                        ${badgesHtml}
+                    </div>
+                    <div class="host-ip">
+                        <div class="host-ip-addr">${escapeHtml(host.ip)}</div>
+                        <button class="secondary host-use-btn"
+                                onclick="document.getElementById('ps-ip').value='${host.ip}'; showToast('IP ${host.ip} copiato nel Port Scanner!');">
+                            USE
+                        </button>
+                    </div>
+                `;
+                container.appendChild(row);
+            });
+        }
+
+        function updateHostScanStats() {
+            const total = hostScanData.length;
+            const withServices = hostScanData.filter(h => h.services && h.services.length > 0).length;
+            const vendors = new Set(
+                hostScanData.map(h => h.vendor).filter(v => v && v !== "Unknown Vendor" && v !== "Randomized MAC")
+            ).size;
+
+            document.getElementById('hd-stat-hosts').textContent = total;
+            document.getElementById('hd-stat-services').textContent = withServices;
+            document.getElementById('hd-stat-vendors').textContent = vendors;
+            document.getElementById('hd-stat-time').textContent = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+        }
+
+        async function startHostScan() {
+            const container = document.getElementById('host-scan-body');
+            const includeMdns = document.getElementById('hd-include-mdns').checked;
+            const includeSsdp = document.getElementById('hd-include-ssdp').checked;
+
+            container.innerHTML = '<div class="host-empty" style="color:var(--accent); font-style:normal;">Subnet scan in progress (this may take a while)...</div>';
+
+            try {
+                const res = await sendCommand(CMD.HOST_DISCOVERY, {
+                    include_mdns: includeMdns,
+                    include_ssdp: includeSsdp
                 });
-                
+
+                hostScanData = res.data || [];
+                renderHostScanTable();
+                updateHostScanStats();
+
                 showToast("Subnet Sweep Completato!");
-                log(`Trovati ${scanData.length} host nella rete.`, "success");
-                
+                log(`Trovati ${hostScanData.length} host nella rete.`, "success");
+
             } catch (err) {
-                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--danger);">Errore durante la scansione</td></tr>';
+                container.innerHTML = '<div class="host-empty" style="color:var(--danger); font-style:normal;">Errore durante la scansione</div>';
                 showToast("Errore Host Discovery");
                 log("Errore chiamata API Host Discovery: " + err, "error");
             }

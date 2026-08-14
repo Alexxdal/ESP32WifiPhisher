@@ -12,6 +12,7 @@
 #include "networking.h"
 #include "dns.h"
 #include "mdns.h"
+#include "utils.h"
 /* Raw ip operation */
 #include "lwip/raw.h"
 #include "lwip/tcp.h"
@@ -142,7 +143,7 @@ char* subnet_scan(void)
     if (result_array == NULL) return NULL;
 
     const uint32_t BATCH_SIZE = 4;
-    const uint32_t WAIT_MS = 150;
+    const uint32_t WAIT_MS = 100;
     const uint32_t NUM_PASSES = 2;
 
     if (broadcast_host <= network_host + 1) {
@@ -193,6 +194,7 @@ char* subnet_scan(void)
                             eth_ret->addr[0], eth_ret->addr[1], eth_ret->addr[2],
                             eth_ret->addr[3], eth_ret->addr[4], eth_ret->addr[5]);
                     cJSON_AddStringToObject(result_obj, "mac", mac_str);
+                    cJSON_AddStringToObject(result_obj, "vendor", resolve_mac_oui(eth_ret->addr));
 
                     char hostname[64] = {0};
                     if (have_dns_server) {

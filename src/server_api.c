@@ -1196,29 +1196,287 @@ static esp_err_t api_get_wifi_last_credentials(ws_frame_req_t *req)
 }
 
 
+/**
+ * @brief Extract a short, human-readable label from an SSDP USN/NT header.
+ *        e.g. "uuid:xxx::urn:schemas-upnp-org:device:MediaRenderer:1" -> "MediaRenderer"
+ *             "uuid:xxx::urn:schemas-upnp-org:service:AVTransport:1"  -> "AVTransport"
+ *             "uuid:xxx::upnp:rootdevice"                             -> "Root Device"
+ *             "uuid:xxx" (bare)                                       -> "UPnP Device"
+ */
+static void extract_ssdp_type(const char *usn, char *out, size_t out_sz)
+{
+    if (!out || out_sz == 0) return;
+    out[0] = '\0';
+    if (!usn) {
+        strlcpy(out, "UPnP Device", out_sz);
+        return;
+    }
+
+    const char *marker = strstr(usn, ":device:");
+    size_t skip = strlen(":device:");
+    if (marker == NULL) {
+        marker = strstr(usn, ":service:");
+        skip = strlen(":service:");
+    }
+
+    if (marker != NULL) {
+        marker += skip;
+        const char *end = strchr(marker, ':');
+        size_t len = end ? (size_t)(end - marker) : strlen(marker);
+        if (len >= out_sz) len = out_sz - 1;
+        memcpy(out, marker, len);
+        out[len] = '\0';
+        return;
+    }
+
+    if (strstr(usn, "rootdevice") != NULL) {
+        strlcpy(out, "Root Device", out_sz);
+        return;
+    }
+
+    strlcpy(out, "UPnP Device", out_sz);
+}
+
+
+/**
+ * @brief Rank how descriptive an SSDP type label is, so that when the same
+ *        physical device answers with several USN lines (root device, then
+ *        embedded devices/services) we keep the most useful one instead of
+ *        whichever happened to arrive first.
+ */
+static int ssdp_type_priority(const char *usn)
+{
+    if (!usn) return 0;
+    if (strstr(usn, ":device:") != NULL) return 3;
+    if (strstr(usn, ":service:") != NULL) return 2;
+    if (strstr(usn, "rootdevice") != NULL) return 1;
+    return 0;
+}
+
+
+/**
+ * @brief Merge an mDNS or SSDP discovery result (parsed JSON array of objects
+ *        containing at least an "ip" field) into the host list produced by
+ *        subnet_scan(), attaching a "services" array to the matching host.
+ *        Hosts that answered mDNS/SSDP but were missed by the ARP sweep are
+ *        appended as new entries.
+ */
+static void merge_discovery_results(cJSON *hosts, cJSON *extra, const char *source)
+{
+    if (!hosts || !extra) return;
+
+    cJSON *item;
+    cJSON_ArrayForEach(item, extra) {
+        cJSON *j_ip = cJSON_GetObjectItemCaseSensitive(item, "ip");
+        if (!cJSON_IsString(j_ip) || j_ip->valuestring[0] == '\0') continue;
+
+        cJSON *host = NULL;
+        cJSON *h;
+        cJSON_ArrayForEach(h, hosts) {
+            cJSON *h_ip = cJSON_GetObjectItemCaseSensitive(h, "ip");
+            if (cJSON_IsString(h_ip) && strcmp(h_ip->valuestring, j_ip->valuestring) == 0) {
+                host = h;
+                break;
+            }
+        }
+
+        if (host == NULL) {
+            /* Answered mDNS/SSDP but the ARP sweep missed it - keep it anyway */
+            host = cJSON_CreateObject();
+            cJSON_AddStringToObject(host, "ip", j_ip->valuestring);
+            cJSON_AddStringToObject(host, "mac", "N/A");
+            cJSON_AddStringToObject(host, "vendor", "Unknown Vendor");
+            cJSON *j_hostname0 = cJSON_GetObjectItemCaseSensitive(item, "hostname");
+            cJSON_AddStringToObject(host, "hostname",
+                (cJSON_IsString(j_hostname0) && j_hostname0->valuestring[0]) ? j_hostname0->valuestring : "N/A");
+            cJSON_AddItemToArray(hosts, host);
+        }
+
+        cJSON *services = cJSON_GetObjectItemCaseSensitive(host, "services");
+        if (services == NULL) {
+            services = cJSON_AddArrayToObject(host, "services");
+        }
+
+        if (strcmp(source, "ssdp") == 0) {
+            /* A single physical UPnP device (a router, a TV...) advertises
+             * itself through SEVERAL distinct USN lines - one for its root
+             * device, plus one more per embedded device/service, each
+             * carrying a DIFFERENT uuid (e.g. a router's IGD root, its
+             * WANDevice and its WANConnectionDevice are three different
+             * uuids). Deduping only by uuid let all of those through as
+             * separate badges that all basically just said "it's a router"
+             * in different words. Collapse to a single ssdp entry per HOST
+             * instead - the real identity now comes from
+             * ssdp_fetch_device_info() (see api_start_host_scan), which
+             * reads the device's own friendlyName from its description
+             * document rather than guessing from raw UPnP taxonomy. This
+             * badge just keeps the most specific type label seen across
+             * every USN line for that host, as a fallback for devices
+             * where the description fetch fails or is skipped. */
+            cJSON *j_usn = cJSON_GetObjectItemCaseSensitive(item, "usn");
+            const char *usn_str = cJSON_IsString(j_usn) ? j_usn->valuestring : "";
+
+            char type_label[40];
+            extract_ssdp_type(usn_str, type_label, sizeof(type_label));
+            int priority = ssdp_type_priority(usn_str);
+
+            cJSON *j_location = cJSON_GetObjectItemCaseSensitive(item, "location");
+            const char *location_str = cJSON_IsString(j_location) ? j_location->valuestring : "N/A";
+            cJSON *j_server = cJSON_GetObjectItemCaseSensitive(item, "server");
+            const char *server_str = cJSON_IsString(j_server) ? j_server->valuestring : "N/A";
+
+            cJSON *existing = NULL;
+            cJSON *svc;
+            cJSON_ArrayForEach(svc, services) {
+                cJSON *svc_source = cJSON_GetObjectItemCaseSensitive(svc, "source");
+                if (cJSON_IsString(svc_source) && strcmp(svc_source->valuestring, "ssdp") == 0) {
+                    existing = svc;
+                    break;
+                }
+            }
+
+            if (existing != NULL) {
+                cJSON *j_prio = cJSON_GetObjectItemCaseSensitive(existing, "priority");
+                int existing_priority = cJSON_IsNumber(j_prio) ? j_prio->valueint : 0;
+                if (priority > existing_priority) {
+                    cJSON *j_type = cJSON_GetObjectItemCaseSensitive(existing, "type");
+                    if (cJSON_IsString(j_type)) cJSON_SetValuestring(j_type, type_label);
+                    if (j_prio) cJSON_SetNumberValue(j_prio, priority);
+                }
+                cJSON *j_exist_loc = cJSON_GetObjectItemCaseSensitive(existing, "location");
+                if (j_exist_loc && cJSON_IsString(j_exist_loc) &&
+                    strcmp(j_exist_loc->valuestring, "N/A") == 0 && strcmp(location_str, "N/A") != 0) {
+                    cJSON_SetValuestring(j_exist_loc, location_str);
+                }
+                continue;
+            }
+
+            cJSON *svc_obj = cJSON_CreateObject();
+            cJSON_AddStringToObject(svc_obj, "source", "ssdp");
+            cJSON_AddStringToObject(svc_obj, "type", type_label);
+            cJSON_AddNumberToObject(svc_obj, "priority", priority);
+            cJSON_AddStringToObject(svc_obj, "server", server_str);
+            cJSON_AddStringToObject(svc_obj, "location", location_str);
+            cJSON_AddItemToArray(services, svc_obj);
+        }
+        else /* mdns */
+        {
+            cJSON *svc_obj = cJSON_CreateObject();
+            cJSON_AddStringToObject(svc_obj, "source", "mdns");
+            cJSON *j_service = cJSON_GetObjectItemCaseSensitive(item, "service");
+            cJSON_AddStringToObject(svc_obj, "type", cJSON_IsString(j_service) ? j_service->valuestring : "N/A");
+            cJSON *j_port = cJSON_GetObjectItemCaseSensitive(item, "port");
+            cJSON_AddNumberToObject(svc_obj, "port", cJSON_IsNumber(j_port) ? j_port->valueint : 0);
+            cJSON *j_instance = cJSON_GetObjectItemCaseSensitive(item, "instance_name");
+            cJSON_AddStringToObject(svc_obj, "name", cJSON_IsString(j_instance) ? j_instance->valuestring : "N/A");
+            cJSON_AddItemToArray(services, svc_obj);
+
+            /* Prefer the friendlier mDNS hostname if ARP couldn't resolve one */
+            cJSON *h_hostname = cJSON_GetObjectItemCaseSensitive(host, "hostname");
+            cJSON *j_hostname = cJSON_GetObjectItemCaseSensitive(item, "hostname");
+            if (h_hostname && cJSON_IsString(h_hostname) && strcmp(h_hostname->valuestring, "N/A") == 0 &&
+                cJSON_IsString(j_hostname) && j_hostname->valuestring[0]) {
+                cJSON_SetValuestring(h_hostname, j_hostname->valuestring);
+            }
+        }
+    }
+}
+
+
 static esp_err_t api_start_host_scan(ws_frame_req_t *req)
 {
-    char *scan_results_str = subnet_scan();
+    /* Optional payload: {"include_mdns": true, "include_ssdp": true}.
+     * Both default to false if no payload is sent, so a plain ARP sweep
+     * stays fast unless the frontend explicitly opts in. */
+    bool include_mdns = false;
+    bool include_ssdp = false;
 
+    if (req->payload && req->len > 0) {
+        cJSON *opts = cJSON_Parse(req->payload);
+        if (opts) {
+            cJSON *j_mdns = cJSON_GetObjectItemCaseSensitive(opts, "include_mdns");
+            cJSON *j_ssdp = cJSON_GetObjectItemCaseSensitive(opts, "include_ssdp");
+            if (cJSON_IsBool(j_mdns)) include_mdns = cJSON_IsTrue(j_mdns);
+            if (cJSON_IsBool(j_ssdp)) include_ssdp = cJSON_IsTrue(j_ssdp);
+            cJSON_Delete(opts);
+        }
+    }
+
+    char *scan_results_str = subnet_scan();
     if (scan_results_str == NULL) {
         api_send_status_frame(req, "error", "Failed to scan or insufficient memory");
         return ESP_FAIL;
+    }
+
+    cJSON *hosts = cJSON_Parse(scan_results_str);
+    free(scan_results_str);
+    if (hosts == NULL) {
+        api_send_status_frame(req, "error", "Failed to parse ARP sweep results");
+        return ESP_FAIL;
+    }
+
+    if (include_mdns) {
+        char *mdns_str = mdns_discover();
+        if (mdns_str) {
+            cJSON *mdns_array = cJSON_Parse(mdns_str);
+            if (mdns_array) {
+                merge_discovery_results(hosts, mdns_array, "mdns");
+                cJSON_Delete(mdns_array);
+            }
+            free(mdns_str);
+        }
+    }
+
+    if (include_ssdp) {
+        char *ssdp_str = ssdp_discover();
+        if (ssdp_str) {
+            cJSON *ssdp_array = cJSON_Parse(ssdp_str);
+            if (ssdp_array) {
+                merge_discovery_results(hosts, ssdp_array, "ssdp");
+                cJSON_Delete(ssdp_array);
+            }
+            free(ssdp_str);
+        }
+
+        /* One extra small HTTP GET per UPnP host, reading its own device
+         * description document - this is what actually resolves a human
+         * name ("Vodafone Power Station WiFi 6", "Fire TV di Stefano")
+         * instead of generic UPnP taxonomy like "InternetGatewayDevice".
+         * Bounded to one fetch per host (only hosts that answered SSDP),
+         * so typically just a handful of extra round-trips on a home LAN. */
+        cJSON *h;
+        cJSON_ArrayForEach(h, hosts) {
+            cJSON *services = cJSON_GetObjectItemCaseSensitive(h, "services");
+            if (!services) continue;
+
+            cJSON *svc;
+            cJSON_ArrayForEach(svc, services) {
+                cJSON *svc_source = cJSON_GetObjectItemCaseSensitive(svc, "source");
+                if (!cJSON_IsString(svc_source) || strcmp(svc_source->valuestring, "ssdp") != 0) continue;
+
+                cJSON *j_loc = cJSON_GetObjectItemCaseSensitive(svc, "location");
+                if (!cJSON_IsString(j_loc) || strcmp(j_loc->valuestring, "N/A") == 0) break;
+
+                char friendly[64], manufacturer[48], model[48];
+                if (ssdp_fetch_device_info(j_loc->valuestring, friendly, sizeof(friendly),
+                                            manufacturer, sizeof(manufacturer), model, sizeof(model))) {
+                    cJSON_AddStringToObject(h, "friendly_name", friendly);
+                    if (manufacturer[0]) cJSON_AddStringToObject(h, "manufacturer", manufacturer);
+                    if (model[0]) cJSON_AddStringToObject(h, "model", model);
+                }
+                break; /* only one ssdp entry per host now, no need to keep looking */
+            }
+        }
     }
 
     cJSON *root = cJSON_CreateObject();
     cJSON_AddNumberToObject(root, "req_id", req->req_id);
     cJSON_AddStringToObject(root, "type", "host_scan_results");
     cJSON_AddStringToObject(root, "status", "ok");
-    
-    cJSON *scan_array = cJSON_Parse(scan_results_str);
-    if (scan_array) {
-        cJSON_AddItemToObject(root, "data", scan_array);
-    }
-    
+    cJSON_AddItemToObject(root, "data", hosts);
+
     char *json_response = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
-    free(scan_results_str);
-
     if (!json_response) {
         return ESP_FAIL;
     }
