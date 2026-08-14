@@ -11,9 +11,14 @@
 
 /**
  * @brief List of APs using native ESP-IDF struct
- * 
+ *
  */
+#if defined(CONFIG_IDF_TARGET_ESP32S2)
+/* S2 Has only 320kb of ram */
+#define MAX_AP      20
+#else
 #define MAX_AP      35
+#endif
 typedef struct {
     wifi_ap_record_t record; // La struct nativa di ESP-IDF
     uint32_t packets_rx;     // Pacchetti ricevuti dall'AP
@@ -34,7 +39,12 @@ typedef struct {
  * @brief Struct containing Client info
  * 
  */
+#if defined(CONFIG_IDF_TARGET_ESP32S2)
+/* S2 Has only 320kb of ram */
+#define MAX_CLIENTS 35
+#else
 #define MAX_CLIENTS 50
+#endif
 typedef struct {
     int8_t rssi;
     uint8_t channel;
@@ -75,9 +85,13 @@ typedef struct {
 
 /**
  * @brief Struct containing captured HANDSHAKE and PMKID for aircrack
- * 
+ *
  */
+#if defined(CONFIG_IDF_TARGET_ESP32S2)
+#define MAX_HANDSHAKE_NUM 5
+#else
 #define MAX_HANDSHAKE_NUM 10
+#endif
 typedef struct {
     uint8_t ssid[33];
     uint8_t bssid[6];
