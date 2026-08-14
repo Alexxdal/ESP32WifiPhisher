@@ -14,14 +14,6 @@
 static EmbeddedCli *cli = NULL;
 static TaskHandle_t console_task_handle = NULL;
 
-void task_summary(EmbeddedCli *cli, char *args, void *context) {
-    task_manager_print_summary();
-}
-
-void reboot(EmbeddedCli *cli, char *args, void *context) {
-    esp_restart();
-}
-
 typedef struct {
     char ssid[WIFI_CONSOLE_SSID_MAX_LEN + 1];
     char password[WIFI_CONSOLE_PASS_MAX_LEN + 1];
@@ -37,7 +29,7 @@ static void wifi_connect_task(void *arg)
     vTaskDelete(NULL);
 }
 
-
+//################################ COMMANDS ####################################################################################################
 void wifi_connect_console(EmbeddedCli *cli, char *args, void *context)
 {
     uint16_t token_count = embeddedCliGetTokenCount(args);
@@ -70,6 +62,17 @@ void wifi_connect_console(EmbeddedCli *cli, char *args, void *context)
         free(params);
     }
 }
+
+
+void task_summary(EmbeddedCli *cli, char *args, void *context) {
+    task_manager_print_summary();
+}
+
+
+void reboot(EmbeddedCli *cli, char *args, void *context) {
+    esp_restart();
+}
+//##############################################################################################################################################
 
 
 static void writeCharToCli(EmbeddedCli *embeddedCli, char c) {

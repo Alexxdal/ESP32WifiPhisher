@@ -28,7 +28,7 @@
 static const char *TAG = "SNIFFER";
 
 /* Tasks Priority and queue len */
-#define PACKET_PARSING_TASK_PRIO            10
+#define PACKET_PARSING_TASK_PRIO            7
 #define PACKET_QUEUE_LEN                    50
 #define CHANNEL_HOPPING_TASK_PRIO           3
 /* Sniffer task status bits */
@@ -61,6 +61,8 @@ static client_list_t clients = {0};
 static handshake_info_list_t captured_handshakes = {0};
 static probe_request_list_t captured_probes = {0};
 static aps_info_t detected_aps = {0};
+
+static uint8_t own_ap_bssid[6] = {0};
 
 /* Filters for promiscous mode */
 static int filter_type_main = 0;
@@ -101,6 +103,8 @@ esp_err_t wifi_sniffer_init(void)
 
     roc_evt = xEventGroupCreate();
     if(roc_evt == NULL) return ESP_ERR_NO_MEM;
+
+    esp_wifi_get_mac(WIFI_IF_AP, own_ap_bssid);
 
     return ESP_OK;
 }
@@ -473,9 +477,16 @@ static void wifi_sniffer_capture_aps(struct libwifi_frame *frame, sniffer_packet
         return; 
     }
 
-    if (ret == 0) 
+    if (ret == 0)
     {
         const uint8_t *bssid_mac = (uint8_t *)frame->header.mgmt_ordered.addr3;
+
+        /* Never track our own softAP as a detected AP */
+        if (memcmp(bssid_mac, own_ap_bssid, 6) == 0) {
+            libwifi_free_bss(&bss);
+            return;
+        }
+
         int8_t rssi = sniffer_pkt->rssi;
         uint16_t length = sniffer_pkt->length;
         int64_t now = esp_timer_get_time();
@@ -568,26 +579,30 @@ static void wifi_sniffer_capture_handshakes(struct libwifi_frame *frame, sniffer
 
     if (xSemaphoreTake(handshake_semaphore, pdMS_TO_TICKS(portMAX_DELAY)) == pdTRUE) 
     {
+        handshake_info_t *entry = NULL;
+        for (int i = 0; i < captured_handshakes.count; i++) {
+            if (memcmp(captured_handshakes.handshake[i].bssid, bssid, 6) == 0) {
+                entry = &captured_handshakes.handshake[i];
+                break;
+            }
+        }
+
+        if (entry != NULL && entry->handshake_captured) {
+            xSemaphoreGive(handshake_semaphore);
+            libwifi_free_wpa_data(&wpa_data);
+            return;
+        }
+
         /* --- HANDLE M1 (AP -> Station) --- */
         if (msg_type == HANDSHAKE_M1)
         {
-            /* Search for existing entry for this BSSID + STA pair */
-            handshake_info_t *entry = NULL;
-            for (int i = 0; i < captured_handshakes.count; i++) {
-                if (memcmp(captured_handshakes.handshake[i].bssid, bssid, 6) == 0 &&
-                    memcmp(captured_handshakes.handshake[i].mac_sta, dest_mac, 6) == 0) {
-                    entry = &captured_handshakes.handshake[i];
-                    break;
-                }
-            }
-
-            /* If not found, create a new entry */
+            /* If not found, create a new entry for this AP */
             if (entry == NULL && captured_handshakes.count < MAX_HANDSHAKE_NUM) {
                 entry = &captured_handshakes.handshake[captured_handshakes.count];
                 memset(entry, 0, sizeof(handshake_info_t));
                 memcpy(entry->bssid, bssid, 6);
-                memcpy(entry->mac_sta, dest_mac, 6);
-                //Get SSID from detected APs list
+                
+                // Get SSID from detected APs list
                 if (xSemaphoreTake(aps_semaphore, pdMS_TO_TICKS(portMAX_DELAY)) == pdTRUE) {
                     for (int ap_entry_id = 0; ap_entry_id < detected_aps.count; ap_entry_id++) {
                         if (memcmp(detected_aps.ap[ap_entry_id].record.bssid, bssid, 6) == 0) {
@@ -601,12 +616,10 @@ static void wifi_sniffer_capture_handshakes(struct libwifi_frame *frame, sniffer
             }
 
             if (entry != NULL) {
+                memcpy(entry->mac_sta, dest_mac, 6);
                 /* Store ANonce and Key Version */
                 memcpy(entry->anonce, wpa_data.key_info.nonce, 32);
                 entry->key_decriptor_version = wpa_data.key_info.information & 0x0003;
-                
-                /* CRITICAL: Update State for Validation */
-                /* We overwrite previous data because a new M1 means a new session started */
                 entry->last_m1_timestamp = current_time;
                 entry->replay_counter = wpa_data.key_info.replay_counter;
                 
@@ -624,6 +637,7 @@ static void wifi_sniffer_capture_handshakes(struct libwifi_frame *frame, sniffer
                         }
                     }
                 }
+
                 uint16_t raw_len = 0;
                 uint8_t *raw_ptr = find_eapol_frame(sniffer_pkt->payload, sniffer_pkt->length, &raw_len);
                 if (raw_ptr && raw_len <= sizeof(entry->eapol_m1)) {
@@ -635,18 +649,8 @@ static void wifi_sniffer_capture_handshakes(struct libwifi_frame *frame, sniffer
         /* --- HANDLE M2 (Station -> AP) --- */
         else if (msg_type == HANDSHAKE_M2)
         {
-            /* Search for the entry created by M1 */
-            handshake_info_t *entry = NULL;
-            for (int i = 0; i < captured_handshakes.count; i++) {
-                /* Note: In M2, src_mac is the Station */
-                if (memcmp(captured_handshakes.handshake[i].bssid, bssid, 6) == 0 &&
-                    memcmp(captured_handshakes.handshake[i].mac_sta, src_mac, 6) == 0) {
-                    entry = &captured_handshakes.handshake[i];
-                    break;
-                }
-            }
-
-            if (entry != NULL) 
+            /* Ci assicuriamo che M2 provenga dall'ultima station tracciata */
+            if (entry != NULL && memcmp(entry->mac_sta, src_mac, 6) == 0) 
             {
                 if (entry->replay_counter != wpa_data.key_info.replay_counter) {
                     ESP_LOGD(TAG, "M2 discarded: Replay Counter mismatch (M1:%llu != M2:%llu)", 
@@ -672,17 +676,7 @@ static void wifi_sniffer_capture_handshakes(struct libwifi_frame *frame, sniffer
         /* --- HANDLE M3 (AP -> STATION) --- */
         else if (msg_type == HANDSHAKE_M3) 
         {
-            /* Search for existing entry for this BSSID + STA pair */
-            handshake_info_t *entry = NULL;
-            for (int i = 0; i < captured_handshakes.count; i++) {
-                if (memcmp(captured_handshakes.handshake[i].bssid, bssid, 6) == 0 &&
-                    memcmp(captured_handshakes.handshake[i].mac_sta, dest_mac, 6) == 0) {
-                    entry = &captured_handshakes.handshake[i];
-                    break;
-                }
-            }
-
-            if (entry != NULL) 
+            if (entry != NULL && memcmp(entry->mac_sta, dest_mac, 6) == 0) 
             {
                 if (wpa_data.key_info.replay_counter <= entry->replay_counter) {
                     ESP_LOGD(TAG, "M3 discarded: Invalid Replay Counter");
@@ -698,8 +692,6 @@ static void wifi_sniffer_capture_handshakes(struct libwifi_frame *frame, sniffer
                         memcpy(entry->eapol_m3, raw_ptr, raw_len);
                         entry->eapol_m3_len = raw_len;
                     }
-                    /* TRUCCO PRO: L'M3 contiene sempre l'ANonce definitivo della sessione. 
-                       Sovrascriviamo quello dell'M1 per correggere eventuali desincronizzazioni! */
                     memcpy(entry->anonce, wpa_data.key_info.nonce, 32);
                 }
             }
@@ -707,17 +699,7 @@ static void wifi_sniffer_capture_handshakes(struct libwifi_frame *frame, sniffer
         /* --- HANDLE M4 (STATION -> AP) --- */
         else if (msg_type == HANDSHAKE_M4) 
         {
-            /* Search for existing entry for this BSSID + STA pair */
-            handshake_info_t *entry = NULL;
-            for (int i = 0; i < captured_handshakes.count; i++) {
-                if (memcmp(captured_handshakes.handshake[i].bssid, bssid, 6) == 0 &&
-                    memcmp(captured_handshakes.handshake[i].mac_sta, src_mac, 6) == 0) {
-                    entry = &captured_handshakes.handshake[i];
-                    break;
-                }
-            }
-
-            if (entry != NULL) 
+            if (entry != NULL && memcmp(entry->mac_sta, src_mac, 6) == 0) 
             {
                 if (wpa_data.key_info.replay_counter <= entry->replay_counter) {
                     ESP_LOGD(TAG, "M4 discarded: Invalid Replay Counter");
@@ -732,6 +714,7 @@ static void wifi_sniffer_capture_handshakes(struct libwifi_frame *frame, sniffer
                         memcpy(entry->eapol_m4, raw_ptr, raw_len);
                         entry->eapol_m4_len = raw_len;
                     }
+                    
                     entry->handshake_captured = true;
                     ESP_LOGI(TAG, "Full Handshake Captured! AP: "MACSTR" Client: "MACSTR"", MAC2STR(bssid), MAC2STR(src_mac));
                     ws_log(TAG, "Full Handshake Captured! AP: "MACSTR" Client: "MACSTR"", MAC2STR(bssid), MAC2STR(src_mac));
