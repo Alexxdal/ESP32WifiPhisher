@@ -60,6 +60,12 @@ static u8_t receive_raw_callback(void *arg, struct raw_pcb *pcb, struct pbuf *p,
 
 esp_err_t scanner_init(void)
 {
+    #ifdef DEBUG
+    esp_log_level_set(TAG, ESP_LOG_DEBUG);
+    #else
+    esp_log_level_set(TAG, ESP_LOG_ERROR);
+    #endif
+
     scanner_event_group = xEventGroupCreate();
     if (scanner_event_group == NULL) {
         return ESP_ERR_NO_MEM;
@@ -278,10 +284,10 @@ static esp_err_t port_scan_connect(ip4_addr_t target, uint16_t port, uint32_t ti
     close(sock);
 
     if (res == 0) {
-        ESP_LOGD("SCAN_CONN", "Porta %d: APERTA", port);
+        ESP_LOGD(TAG, "Porta %d: APERTA", port);
         return PORT_OPEN;
     } else {
-        ESP_LOGD("SCAN_CONN", "Porta %d: CHIUSA o FILTRATA", port);
+        ESP_LOGD(TAG, "Porta %d: CHIUSA o FILTRATA", port);
         return PORT_CLOSED; 
     }
 }
@@ -321,15 +327,15 @@ static esp_err_t port_scan_syn(ip4_addr_t target, uint16_t port, uint32_t timeou
 
     esp_err_t scan_result = PORT_CLOSED;
     if (bits & PORT_OPEN_BIT) {
-        ESP_LOGD("SCAN", "Porta %d: APERTA", port);
+        ESP_LOGD(TAG, "Porta %d: APERTA", port);
         scan_result = PORT_OPEN;
     } 
     else if (bits & PORT_CLOSED_BIT) {
-        ESP_LOGD("SCAN", "Porta %d: CHIUSA", port);
+        ESP_LOGD(TAG, "Porta %d: CHIUSA", port);
         scan_result = PORT_CLOSED;
     } 
     else {
-        ESP_LOGD("SCAN", "Porta %d: FILTRATA / TIMEOUT", port);
+        ESP_LOGD(TAG, "Porta %d: FILTRATA / TIMEOUT", port);
         scan_result = PORT_FILTERED;
     }
 

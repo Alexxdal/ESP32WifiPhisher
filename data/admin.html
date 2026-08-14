@@ -2792,6 +2792,8 @@
             btnStart.disabled = true; btnStart.style.opacity = "0.5"; btnStart.style.cursor = "not-allowed";
             btnStop.disabled = false; btnStop.style.opacity = "1"; btnStop.style.cursor = "pointer";
             
+            let closedCount = 0; // Contatore per le porte chiuse
+
             // Loop Sequenziale per ogni porta
             for(let i = 0; i < ports.length; i++) {
                 if(!isPortScanRunning) {
@@ -2803,7 +2805,7 @@
                 const port = ports[i];
                 
                 // Cerca il nome del servizio nel dizionario
-                const serviceName = "(" + PORT_SERVICES[port] + ")" || "";
+                const serviceName = PORT_SERVICES[port] ? `(${PORT_SERVICES[port]})` : "";
                 
                 // Div temporaneo di attesa
                 const waitDiv = document.createElement('div');
@@ -2820,17 +2822,20 @@
                         method: method 
                     });
                     
-                    // 0=PORT_OPEN, 1=PORT_CLOSED, 2=PORT_FILTERED, 3=PORT_ERROR
+                    // Se la porta è CHIUSA, nascondi l'output e salta al prossimo giro
+                    if (res.status_code === 1) { 
+                        waitDiv.remove();
+                        closedCount++;
+                        continue; 
+                    }
+
+                    // 0=PORT_OPEN, 2=PORT_FILTERED, 3=PORT_ERROR
                     let statusColor = '#ffab40';
                     let statusText = 'UNKNOWN';
                     
                     if (res.status_code === 0) { 
                         statusColor = '#00e676'; 
                         statusText = 'OPEN'; 
-                    }
-                    else if (res.status_code === 1) { 
-                        statusColor = '#ff5252'; 
-                        statusText = 'CLOSED'; 
                     }
                     else if (res.status_code === 2) { 
                         statusColor = '#ffab40'; 
@@ -2841,7 +2846,6 @@
                         statusText = 'ERROR'; 
                     }
 
-                    // Aggiunto (service_name) alla fine
                     waitDiv.innerHTML = `Port <span style="color:white; font-weight:bold; display:inline-block; width:45px;">${port}</span> <span style="color:${statusColor}; font-weight:bold; width:150px; display:inline-block;">[${statusText}]</span> <span style="color:#888; font-style:italic;">${serviceName}</span>`;
                     
                 } catch(e) {
@@ -2850,7 +2854,13 @@
             }
             
             if(isPortScanRunning) {
-                term.innerHTML += `<div style="color:var(--accent); margin-top:10px;">Scan completed.</div>`;
+                let summary = `<div style="color:var(--accent); margin-top:10px;">Scan completed.`;
+                if (closedCount > 0) {
+                    summary += ` <span style="color:#888; font-style:italic;">(${closedCount} closed ports hidden)</span>`;
+                }
+                summary += `</div>`;
+                
+                term.innerHTML += summary;
                 term.scrollTop = term.scrollHeight;
             }
             
