@@ -17,6 +17,7 @@
 #include "evil_twin.h"
 #include "karma_attack.h"
 #include "deauther.h"
+#include "TaskManager.h"
 
 #if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3)
     #include "esp_wifi_usb.h"
@@ -1039,6 +1040,7 @@ static void packet_parsing_task(void *param)
         xEventGroupClearBits(sniffer_evt, SNIFFER_EVT_TASK_RUNNING);
         xEventGroupSetBits(sniffer_evt, SNIFFER_EVT_TASK_EXITED);
     }
+    task_manager_unregister_current_task();
     vTaskDelete(NULL);
 }
 
@@ -1070,11 +1072,13 @@ static void wifi_sniffer_resource_cleanup(void)
             );
 
             if ((bits & SNIFFER_EVT_TASK_EXITED) == 0) {
-                vTaskDelete(packet_parsing_task_handle);
+                /* Il task non ha confermato l'uscita entro il timeout: va
+                 * fermato "a freddo". */
+                task_manager_delete_task_by_handle(packet_parsing_task_handle);
             }
         } else {
             vTaskDelay(pdMS_TO_TICKS(50));
-            vTaskDelete(packet_parsing_task_handle);
+            task_manager_delete_task_by_handle(packet_parsing_task_handle);
         }
 
         packet_parsing_task_handle = NULL;
@@ -1107,8 +1111,8 @@ esp_err_t wifi_start_sniffing(void)
     /* Create packet parsing task */
     if (packet_parsing_task_handle == NULL) {
         packet_parsing_task_running = true;
-        if (xTaskCreate(packet_parsing_task, "packet_parsing_task", 8192, NULL,
-                        PACKET_PARSING_TASK_PRIO, &packet_parsing_task_handle) != pdPASS) {
+        if (task_manager_create_task(packet_parsing_task, "packet_parsing_task", 8192, NULL,
+                        PACKET_PARSING_TASK_PRIO, &packet_parsing_task_handle) != ESP_OK) {
             packet_parsing_task_running = false;
             goto fail;
         }
@@ -1259,7 +1263,7 @@ esp_err_t wifi_sniffer_start_channel_hopping(uint8_t channel)
 
     if (channel_hopping_task_handle == NULL)
     {
-        xTaskCreate(wifi_sniffer_channel_hopping_task, "channel_hopping_task", 4096, (void*)(uintptr_t)channel, CHANNEL_HOPPING_TASK_PRIO, &channel_hopping_task_handle);
+        task_manager_create_task(wifi_sniffer_channel_hopping_task, "channel_hopping_task", 4096, (void*)(uintptr_t)channel, CHANNEL_HOPPING_TASK_PRIO, &channel_hopping_task_handle);
     }
     return ESP_OK;
 }
@@ -1282,7 +1286,9 @@ esp_err_t wifi_sniffer_stop_channel_hopping(void)
 
     if (channel_hopping_task_handle != NULL)
     {
-        vTaskDelete(channel_hopping_task_handle);
+        /* Nessun meccanismo di stop cooperativo per questo task (loop
+         * infinito), va fermato "a freddo". */
+        task_manager_delete_task_by_handle(channel_hopping_task_handle);
         channel_hopping_task_handle = NULL;
     }
     vTaskDelay(pdMS_TO_TICKS(10));

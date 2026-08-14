@@ -11,6 +11,7 @@
 #include "lwip/sockets.h"
 #include "esp_random.h"
 #include "dns.h"
+#include "TaskManager.h"
 
 #define DNS_PORT 53
 #define DNS_TIMEOUT_MS 500
@@ -144,6 +145,7 @@ cleanup_no_socket:
     if (dns_server_stopped_sem != NULL) {
         xSemaphoreGive(dns_server_stopped_sem);
     }
+    task_manager_unregister_current_task();
     vTaskDelete(NULL);
 }
 
@@ -161,7 +163,7 @@ void dns_server_start(void)
         xSemaphoreTake(dns_server_stopped_sem, 0); // clear stale signal, if any
     }
     dns_server_running = true;
-    xTaskCreate(dns_server_task, "dns_server_task", 4096, NULL, 5, &dns_server_task_handle);
+    task_manager_create_task(dns_server_task, "dns_server_task", 4096, NULL, 5, &dns_server_task_handle);
 }
 
 

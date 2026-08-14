@@ -12,6 +12,7 @@
 #include "sniffer.h"
 #include "console.h"
 #include "scanner.h"
+#include "TaskManager.h"
 
 #if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3)
     #include "esp_wifi_usb.h"
@@ -41,6 +42,11 @@ void app_main()
 
     /* Deinit WDT (Error can be ignored) */
     esp_task_wdt_deinit();
+
+    if (task_manager_init() != ESP_OK) 
+    {
+        fatal_error_handler();
+    }
 
     /* Initialize NVS */
     ret = nvs_flash_init();

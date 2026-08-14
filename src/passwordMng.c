@@ -7,6 +7,7 @@
 #include "passwordMng.h"
 #include "libpcap.h"
 #include "sniffer.h"
+#include "TaskManager.h"
 
 
 static const char *TAG = "PASSWORD_MANAGER";
@@ -94,7 +95,7 @@ esp_err_t password_manager_init(void)
         return ESP_FAIL;
     }
 
-    xTaskCreate(password_manager_task, "password_manager_task", 4096, NULL, 5, NULL);
+    task_manager_create_task(password_manager_task, "password_manager_task", 4096, NULL, 5, NULL);
     return ESP_OK;
 }
 

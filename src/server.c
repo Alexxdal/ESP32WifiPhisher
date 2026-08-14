@@ -9,6 +9,7 @@
 #include "evil_twin.h"
 #include "server.h"
 #include "server_api.h"
+#include "TaskManager.h"
 
 
 static const char *TAG = "WEBSERVER";
@@ -391,7 +392,7 @@ void http_server_start(void)
 		ESP_LOGE(TAG, "Failed to create websocket frame queue!");
 		return;
 	}
-	xTaskCreate(ws_frame_process_task, "ws_frame_process_task", 8096, NULL, 5, &ws_frame_process_task_handle);
+	task_manager_create_task(ws_frame_process_task, "ws_frame_process_task", 8096, NULL, 5, &ws_frame_process_task_handle);
 
 	/* Handler for CORS preflight requests */
 	httpd_uri_t cors_preflight_uri = {
@@ -433,7 +434,7 @@ void http_server_start(void)
 void http_server_stop(void)
 {
 	if (ws_frame_process_task_handle != NULL) {
-        vTaskDelete(ws_frame_process_task_handle);
+        task_manager_delete_task_by_handle(ws_frame_process_task_handle);
         ws_frame_process_task_handle = NULL;
     }
 

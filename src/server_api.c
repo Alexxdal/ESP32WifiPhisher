@@ -18,6 +18,7 @@
 #include "sniffer.h"
 #include "networking.h"
 #include "scanner.h"
+#include "TaskManager.h"
 #include <libwifi.h>
 
 static const char *TAG = "SERVER_API";
@@ -56,6 +57,7 @@ static void shutdown_task(void *pvParameter)
     /* Only hardware wakeup (Reset button) */
     //esp_deep_sleep_start();
 
+    task_manager_unregister_current_task();
     vTaskDelete(NULL);
 }
 
@@ -283,18 +285,16 @@ static esp_err_t api_get_recon_data_clients(ws_frame_req_t *req)
 
     esp_err_t alloc_err = ESP_OK;
     if (!recon_clients) {
-        
         ESP_LOGE(TAG, "No Heap memory for recon structs!");
         alloc_err = ESP_ERR_NO_MEM;
     }
 
     if (!recon_probes) {
-        
         ESP_LOGE(TAG, "No Heap memory for recon structs!");
         alloc_err = ESP_ERR_NO_MEM;
     }
 
-    if(alloc_err != ESP_OK) {
+    if (alloc_err != ESP_OK) {
         if (recon_clients) free(recon_clients);
         if (recon_probes) free(recon_probes);
         return alloc_err;
@@ -684,7 +684,7 @@ static esp_err_t api_check_input_password(ws_frame_req_t *req)
 
     if (correct) {
         api_send_status_frame(req, "ok", "Password Correct");
-        xTaskCreate(shutdown_task, "shutdown_task", 4096, NULL, 5, NULL);
+        task_manager_create_task(shutdown_task, "shutdown_task", 4096, NULL, 5, NULL);
     } else {
         api_send_status_frame(req, "bad", "Password Incorrect");
     }

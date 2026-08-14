@@ -8,6 +8,7 @@
 #include "dns.h"
 #include "wifi_attacks.h"
 #include "server_api.h"
+#include "TaskManager.h"
 
 
 #define EVIL_TWIN_TASK_PRIO 5
@@ -198,6 +199,7 @@ static void evil_twin_task(void *pvParameters)
     if(evil_twin_evt != NULL) {
         xEventGroupSetBits(evil_twin_evt, EVILTWIN_EXIT_BIT);
     }
+    task_manager_unregister_current_task();
     vTaskDelete(NULL);
 }
 
@@ -223,7 +225,7 @@ void evil_twin_start_attack(const target_info_t *targe_info)
     /* Start EvilTwin Task */
     target_set(targe_info, TARGET_INFO_EVIL_TWIN);
     evil_twin_running = true;
-    xTaskCreate(evil_twin_task, "evil_twin_task", 4096, NULL, EVIL_TWIN_TASK_PRIO, &evil_twin_task_handle);
+    task_manager_create_task(evil_twin_task, "evil_twin_task", 4096, NULL, EVIL_TWIN_TASK_PRIO, &evil_twin_task_handle);
 
     evil_twin_status.current_status = EVIL_TWIN_ATTACK_STATUS_ACTIVE;
     ESP_LOGI(TAG, "Evil-Twin attack started.");

@@ -10,6 +10,7 @@
 #include "utils.h"
 #include "wifi_attacks.h"
 #include "wifiMng.h"
+#include "TaskManager.h"
 
 
 #define DEAUTHER_TASK_PRIO 5
@@ -372,6 +373,7 @@ static void deauther_task(void *pvParameters)
     if(deauther_evt != NULL) {
         xEventGroupSetBits(deauther_evt, DEAUTHER_EXIT_BIT);
     }
+    task_manager_unregister_current_task();
     vTaskDelete(NULL);
 }
 
@@ -403,7 +405,7 @@ void deauther_start(const target_info_t *deauth_target, deauther_attack_type_t a
         wifi_switch_ap_channel_csa(deauth_target->channel);
     }
 
-    xTaskCreate(deauther_task, "deauther_task", 4096, NULL, DEAUTHER_TASK_PRIO, &deauther_task_handle);
+    task_manager_create_task(deauther_task, "deauther_task", 4096, NULL, DEAUTHER_TASK_PRIO, &deauther_task_handle);
     ESP_LOGI(TAG, "Deauth Attack Started.");
 }
 
