@@ -30,4 +30,34 @@ char* subnet_scan(void);
 
 esp_err_t port_scan(ip4_addr_t target, uint16_t port, uint32_t timeout_ms, port_scan_method_t method);
 
+
+/**
+ * @brief Discover mDNS/Bonjour services on the local subnet (printers, Chromecast,
+ *        AirPlay, SMB shares, generic hosts, ecc.) by querying a fixed list of
+ *        common service types and collecting the responses.
+ *
+ * @note Requires mdns_init() to have been called once at startup (see main.c),
+ *       after the STA/AP netif is up. This function only queries, it does not
+ *       advertise the device itself.
+ *
+ * @return Newly heap-allocated JSON array string (caller must free()), or NULL
+ *         on allocation failure. Returns "[]" if nothing responded.
+ */
+char* mdns_discover(void);
+
+
+/**
+ * @brief Discover UPnP/SSDP devices on the local subnet (routers, smart TVs,
+ *        NAS, media servers, IoT hubs, ecc.) by sending an M-SEARCH multicast
+ *        request and collecting the unicast replies for a fixed listen window.
+ *
+ * @note SSDP responses to M-SEARCH are unicast back to the sender per spec,
+ *       so no IGMP multicast group join is required to receive them - only
+ *       to send the initial request, which sendto() handles on its own.
+ *
+ * @return Newly heap-allocated JSON array string (caller must free()), or NULL
+ *         on socket failure. Returns "[]" if nothing responded.
+ */
+char* ssdp_discover(void);
+
 #endif /* _SCANNER_H */

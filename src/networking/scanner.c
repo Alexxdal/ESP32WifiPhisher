@@ -11,6 +11,7 @@
 #include "cJSON.h"
 #include "networking.h"
 #include "dns.h"
+#include "mdns.h"
 /* Raw ip operation */
 #include "lwip/raw.h"
 #include "lwip/tcp.h"
@@ -83,6 +84,10 @@ esp_err_t scanner_init(void)
     if (g_raw_pcb == NULL) {
         vEventGroupDelete(scanner_event_group);
         return ESP_ERR_NO_MEM;
+    }
+
+    if(mdns_init() != ESP_OK) {
+        ESP_LOGW(TAG, "mDNS init failed, mdns_discover() won't work");
     }
 
     return ESP_OK;
