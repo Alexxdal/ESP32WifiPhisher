@@ -780,7 +780,7 @@ EmbeddedCliConfig *embeddedCliDefaultConfig(void) {
     defaultConfig.cliBufferSize = 0;
     defaultConfig.maxBindingCount = 8;
     defaultConfig.enableAutoComplete = true;
-    defaultConfig.invitation = "> ";
+    defaultConfig.invitation = "console > ";
     return &defaultConfig;
 }
 

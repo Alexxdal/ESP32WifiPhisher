@@ -117,7 +117,10 @@ void app_main()
     };
     ESP_ERROR_CHECK(esp_task_wdt_init(&wdt_conf));
 
-    //console_init();
+    if(console_init() != ESP_OK)
+    {
+        fatal_error_handler();
+    }
 
     if(scanner_init() != ESP_OK) 
     {

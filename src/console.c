@@ -7,7 +7,7 @@
 #define UART_PORT_NUM UART_NUM_0
 
 static EmbeddedCli *cli = NULL;
-
+static TaskHandle_t console_task_handle = NULL;
 
 void onLed(EmbeddedCli *cli, char *args, void *context) {
     const char *arg1 = embeddedCliGetToken(args, 1);
@@ -55,7 +55,6 @@ esp_err_t console_init(void)
     uart_param_config(UART_PORT_NUM, &uart_config);
     uart_driver_install(UART_PORT_NUM, 256, 0, 0, NULL, 0);
 
-
     EmbeddedCliConfig *config = embeddedCliDefaultConfig();
     config->maxBindingCount = 16;
     cli = embeddedCliNew(config);
@@ -73,7 +72,7 @@ esp_err_t console_init(void)
         .binding = onLed
     };
     embeddedCliAddBinding(cli, led_binding);
-    xTaskCreate(uart_read_task, "cli_task", 4096, NULL, 5, NULL);
+    xTaskCreate(uart_read_task, "cli_task", 4096, NULL, 5, &console_task_handle);
 
     return ESP_OK;
 }
