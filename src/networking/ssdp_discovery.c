@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include <string.h>
 #include <strings.h>
 #include <esp_log.h>
@@ -131,4 +132,209 @@ char* ssdp_discover(void)
     char *out = cJSON_PrintUnformatted(result_array);
     cJSON_Delete(result_array);
     return out;
+}
+
+
+/**
+ * @brief Split a "http://host[:port]/path" URL (as found in an SSDP LOCATION
+ *        header) into its parts. LAN UPnP LOCATION URLs always use a raw IP
+ *        for the host, never a DNS name, so this deliberately does not try
+ *        to resolve hostnames.
+ */
+static bool parse_http_url(const char *url, char *host, size_t host_sz, uint16_t *port, char *path, size_t path_sz)
+{
+    if (strncmp(url, "http://", 7) != 0) return false;
+    const char *p = url + 7;
+    if (*p == '\0') return false;
+
+    const char *path_start = strchr(p, '/');
+    const char *host_end = path_start ? path_start : (p + strlen(p));
+
+    const char *colon = memchr(p, ':', (size_t)(host_end - p));
+    size_t hlen = colon ? (size_t)(colon - p) : (size_t)(host_end - p);
+    if (hlen == 0 || hlen >= host_sz) return false;
+    memcpy(host, p, hlen);
+    host[hlen] = '\0';
+
+    *port = colon ? (uint16_t)atoi(colon + 1) : 80;
+    if (*port == 0) *port = 80;
+
+    strlcpy(path, path_start ? path_start : "/", path_sz);
+    return true;
+}
+
+
+/**
+ * @brief Decode the handful of XML entities that show up in real-world
+ *        friendlyName/manufacturer/modelName values (e.g. "Alex's Router").
+ *        In-place, shrinks the string as needed.
+ */
+static void xml_decode_entities(char *s)
+{
+    static const struct { const char *entity; char ch; } map[] = {
+        { "&amp;", '&' }, { "&lt;", '<' }, { "&gt;", '>' },
+        { "&quot;", '"' }, { "&apos;", '\'' }
+    };
+    char *read = s, *write = s;
+    while (*read) {
+        bool matched = false;
+        for (size_t i = 0; i < sizeof(map) / sizeof(map[0]); i++) {
+            size_t elen = strlen(map[i].entity);
+            if (strncmp(read, map[i].entity, elen) == 0) {
+                *write++ = map[i].ch;
+                read += elen;
+                matched = true;
+                break;
+            }
+        }
+        if (!matched) {
+            *write++ = *read++;
+        }
+    }
+    *write = '\0';
+}
+
+
+/**
+ * @brief Grab the text content of the first <tag>...</tag> occurrence in an
+ *        XML document. Deliberately not a real XML parser (no namespaces,
+ *        no attribute handling, no nesting awareness) - just enough to pull
+ *        flat leaf values out of a UPnP device description document.
+ */
+static void extract_xml_tag(const char *xml, const char *tag, char *out, size_t out_sz)
+{
+    out[0] = '\0';
+    char open_tag[40];
+    snprintf(open_tag, sizeof(open_tag), "<%s>", tag);
+    const char *start = strstr(xml, open_tag);
+    if (!start) return;
+    start += strlen(open_tag);
+
+    char close_tag[40];
+    snprintf(close_tag, sizeof(close_tag), "</%s>", tag);
+    const char *end = strstr(start, close_tag);
+    if (!end || end < start) return;
+
+    size_t len = (size_t)(end - start);
+    if (len >= out_sz) len = out_sz - 1;
+    memcpy(out, start, len);
+    out[len] = '\0';
+    xml_decode_entities(out);
+}
+
+
+/**
+ * @brief Non-blocking connect() with a wall-clock timeout, mirroring the
+ *        same pattern used by port_scan_connect() in scanner.c.
+ */
+static int connect_with_timeout(int sock, struct sockaddr_in *dest, int timeout_ms)
+{
+    int orig_flags = fcntl(sock, F_GETFL, 0);
+    fcntl(sock, F_SETFL, orig_flags | O_NONBLOCK);
+
+    int res = connect(sock, (struct sockaddr *)dest, sizeof(*dest));
+    if (res < 0 && errno == EINPROGRESS) {
+        fd_set fdset;
+        FD_ZERO(&fdset);
+        FD_SET(sock, &fdset);
+        struct timeval tv;
+        tv.tv_sec = timeout_ms / 1000;
+        tv.tv_usec = (timeout_ms % 1000) * 1000;
+        res = select(sock + 1, NULL, &fdset, NULL, &tv);
+        if (res == 1) {
+            int so_error = 0;
+            socklen_t len = sizeof(so_error);
+            getsockopt(sock, SOL_SOCKET, SO_ERROR, &so_error, &len);
+            res = (so_error == 0) ? 0 : -1;
+        } else {
+            res = -1;
+        }
+    }
+
+    fcntl(sock, F_SETFL, orig_flags); /* back to blocking for send()/recv() */
+    return res;
+}
+
+
+bool ssdp_fetch_device_info(const char *location, char *friendly_name, size_t fn_sz,
+                             char *manufacturer, size_t mf_sz, char *model, size_t model_sz)
+{
+    friendly_name[0] = '\0';
+    manufacturer[0] = '\0';
+    model[0] = '\0';
+
+    if (!location || strcmp(location, "N/A") == 0) return false;
+
+    char host[64];
+    char path[128];
+    uint16_t port;
+    if (!parse_http_url(location, host, sizeof(host), &port, path, sizeof(path))) {
+        return false;
+    }
+
+    struct sockaddr_in dest = {0};
+    dest.sin_family = AF_INET;
+    dest.sin_port = htons(port);
+    if (inet_pton(AF_INET, host, &dest.sin_addr) != 1) {
+        return false; /* LOCATION host wasn't a raw IP - not expected on a LAN */
+    }
+
+    int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (sock < 0) return false;
+
+    struct timeval tv = { .tv_sec = 1, .tv_usec = 200000 };
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+
+    if (connect_with_timeout(sock, &dest, 800) != 0) {
+        close(sock);
+        return false;
+    }
+
+    char req[320];
+    int req_len = snprintf(req, sizeof(req),
+        "GET %s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\nUser-Agent: ESP32WifiPhisher\r\n\r\n",
+        path, host);
+    /* snprintf() returns the length that *would* have been written even if
+     * truncated - clamp before send() so a pathological long path/host
+     * can't turn into an out-of-bounds read on the stack buffer. */
+    if (req_len <= 0) {
+        close(sock);
+        return false;
+    }
+    if ((size_t)req_len >= sizeof(req)) {
+        req_len = sizeof(req) - 1;
+    }
+    if (send(sock, req, req_len, 0) < 0) {
+        close(sock);
+        return false;
+    }
+
+    const size_t buf_sz = 3072;
+    char *rx_buf = malloc(buf_sz);
+    if (!rx_buf) {
+        close(sock);
+        return false;
+    }
+
+    size_t total = 0;
+    int len;
+    while (total < buf_sz - 1 &&
+           (len = recv(sock, rx_buf + total, buf_sz - 1 - total, 0)) > 0) {
+        total += (size_t)len;
+    }
+    close(sock);
+    rx_buf[total] = '\0';
+
+    /* Skip past the HTTP response headers to the XML body */
+    char *body = strstr(rx_buf, "\r\n\r\n");
+    body = body ? body + 4 : rx_buf;
+
+    extract_xml_tag(body, "friendlyName", friendly_name, fn_sz);
+    extract_xml_tag(body, "manufacturer", manufacturer, mf_sz);
+    extract_xml_tag(body, "modelName", model, model_sz);
+
+    free(rx_buf);
+
+    return friendly_name[0] != '\0';
 }
