@@ -732,8 +732,8 @@ static void wifi_sniffer_capture_handshakes(struct libwifi_frame *frame, sniffer
                         entry->eapol_m4_len = raw_len;
                     }
                     entry->handshake_captured = true;
-                    ESP_LOGI(TAG, "Full Handshake Captured! AP: "MACSTR" Client: "MACSTR"", MAC2STR(bssid), MAC2STR(dest_mac));
-                    ws_log(TAG, "Full Handshake Captured! AP: "MACSTR" Client: "MACSTR"", MAC2STR(bssid), MAC2STR(dest_mac));
+                    ESP_LOGI(TAG, "Full Handshake Captured! AP: "MACSTR" Client: "MACSTR"", MAC2STR(bssid), MAC2STR(src_mac));
+                    ws_log(TAG, "Full Handshake Captured! AP: "MACSTR" Client: "MACSTR"", MAC2STR(bssid), MAC2STR(src_mac));
                 }
             }
         }
