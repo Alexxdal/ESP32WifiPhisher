@@ -95,7 +95,7 @@ esp_err_t password_manager_init(void)
         return ESP_FAIL;
     }
 
-    task_manager_create_task(password_manager_task, "password_manager_task", 4096, NULL, 5, NULL);
+    task_manager_create_task(password_manager_task, "password_manager_task", 2048, NULL, 5, NULL);
     return ESP_OK;
 }
 

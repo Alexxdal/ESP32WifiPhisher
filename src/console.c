@@ -7,6 +7,7 @@
 #define UART_PORT_NUM UART_NUM_0
 #include "TaskManager.h"
 #include "wifiMng.h"
+#include "scanner.h"
 
 #define WIFI_CONSOLE_SSID_MAX_LEN 32
 #define WIFI_CONSOLE_PASS_MAX_LEN 64
@@ -60,6 +61,50 @@ void wifi_connect_console(EmbeddedCli *cli, char *args, void *context)
     if (task_manager_create_task(wifi_connect_task, "wifi_connect_tsk", 4096, params, 5, NULL) != ESP_OK) {
         embeddedCliPrint(cli, "connection already in progress, or registry/memory full");
         free(params);
+    }
+}
+
+
+void port_scan_console(EmbeddedCli *cli, char *args, void *context)
+{
+    uint16_t token_count = embeddedCliGetTokenCount(args);
+    const char *target = embeddedCliGetToken(args, 1);
+    const char *port = (token_count >= 2) ? embeddedCliGetToken(args, 2) : NULL;
+
+    if (target == NULL || token_count > 2) {
+        embeddedCliPrint(cli, "usage: port_scan <target> [port]");
+        return;
+    }
+
+    if (port == NULL) {
+        embeddedCliPrint(cli, "usage: port_scan <target> [port]");
+        return;
+    }
+
+    ip4_addr_t target_ip;
+    ip4addr_aton(target, &target_ip);
+    uint16_t port_int = atoi(port);
+
+    int scan_res = port_scan(target_ip, port_int, 0, TCP_SYN_SCAN);
+    char buff[32];
+    switch (scan_res)
+    {
+    case PORT_CLOSED:
+        snprintf(buff, sizeof(buff), "PORT %d [CLOSED]", port_int);
+        embeddedCliPrint(cli, buff);
+        break;
+    case PORT_FILTERED:
+        snprintf(buff, sizeof(buff), "PORT %d [FILTERED]", port_int);
+        embeddedCliPrint(cli, buff);
+        break;
+    case PORT_OPEN:
+        snprintf(buff, sizeof(buff), "PORT %d [OPEN]", port_int);
+        embeddedCliPrint(cli, buff);
+        break;
+    default:
+        snprintf(buff, sizeof(buff), "PORT %d [ERROR]", port_int);
+        embeddedCliPrint(cli, buff);
+        break;
     }
 }
 
@@ -141,6 +186,15 @@ esp_err_t console_init(void)
         .binding = wifi_connect_console
     };
     embeddedCliAddBinding(cli, wifi_connect_cmd);
+
+    CliCommandBinding port_scan_cmd = {
+        .name = "port_scan",
+        .help = "Run a port scan: port_scan <target> [port]",
+        .tokenizeArgs = true,
+        .context = NULL,
+        .binding = port_scan_console
+    };
+    embeddedCliAddBinding(cli, port_scan_cmd);
 
     esp_err_t task_err = task_manager_create_task(uart_read_task, "console_read_task", 4096, NULL, 5, &console_task_handle);
     return task_err;
