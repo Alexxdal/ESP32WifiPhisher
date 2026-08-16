@@ -21,6 +21,7 @@
 #include "TaskManager.h"
 #include <libwifi.h>
 
+
 static const char *TAG = "SERVER_API";
 
 typedef struct {
@@ -121,6 +122,7 @@ static esp_err_t api_get_status(ws_frame_req_t *req)
     // System
     cJSON_AddStringToObject(root, "uptime", uptime_str);
     cJSON_AddNumberToObject(root, "ram", ram_usage);
+    cJSON_AddBoolToObject(root, "usb_wifi", wifi_usb_present());
     
     bool is_et_running = (evil_twin_attack_get_status() != EVIL_TWIN_ATTACK_STATUS_IDLE);
     bool is_deauth_running = deauther_is_running();

@@ -229,6 +229,7 @@ esp_err_t esp_wifi_usb_start(void)
         g_wifi_usb_rx_task_should_run = false;
         return ESP_ERR_NO_MEM;
     }
+    ESP_LOGI(TAG, "Initialized RTL8188U wifi dongle");
     return ESP_OK;
 }
 

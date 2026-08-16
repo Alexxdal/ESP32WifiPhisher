@@ -672,7 +672,13 @@
                         <div class="progress-fill" id="ram-bar" style="width: 0%"></div>
                     </div>
                 </div>
-                <div class="status-badge"><span data-i18n="sd">SD</span> <span class="status-value" id="status-sd">--</span></div>
+                <!--  <div class="status-badge"><span data-i18n="sd">SD</span> <span class="status-value" id="status-sd">--</span></div> -->
+                <div class="status-badge" id="badge-usb" style="display: none; align-items: center; gap: 4px; color: var(--accent); border-color: var(--accent); background: rgba(0, 230, 118, 0.1);">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M15 7v4h1v2h-3V5h2l-3-4-3 4h2v8H8v-2.07c.7-.37 1.2-1.08 1.2-1.93 0-1.21-.99-2.2-2.2-2.2-1.21 0-2.2.99-2.2 2.2 0 .85.5 1.56 1.2 1.93V13c0 1.11.89 2 2 2h3v3.05c-.71.37-1.2 1.08-1.2 1.95 0 1.22.99 2.2 2.2 2.2 1.21 0 2.2-.98 2.2-2.2 0-.87-.49-1.58-1.2-1.95V15h3c1.11 0 2-.89 2-2v-2h1V7h-4z"/>
+                    </svg>
+                    <span style="font-weight: bold; font-size: 0.75rem;">USB WIFI</span>
+                </div>
             </div>
         </div>
 
@@ -2055,10 +2061,14 @@
                 document.getElementById('stat-message').innerText = msg;
                 document.getElementById('stat-message').style.color = color;
 
-                const sdEl = document.getElementById('status-sd');
+                /*const sdEl = document.getElementById('status-sd');
                 if (data.sd !== undefined) {
                     sdEl.innerText = data.sd ? "REC" : "ERR";
                     sdEl.style.color = data.sd ? "var(--accent)" : "var(--danger)";
+                }*/
+                const usbBadge = document.getElementById('badge-usb');
+                if (data.usb_wifi !== undefined) {
+                    usbBadge.style.display = data.usb_wifi ? "flex" : "none";
                 }
 
                 // --- AGGIORNAMENTO NETWORK STATUS (IP, GW, MASK) ---
