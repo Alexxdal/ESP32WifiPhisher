@@ -1109,6 +1109,13 @@
                     <option value="single" data-i18n="opt_single_target">Single Target (Selected SSID)</option>
                     <option value="broadcast" data-i18n="opt_all_networks">All Networks (Broadcast/Hopping)</option>
                 </select>
+                <div id="deauth-broadcast-channel-container" style="display: none; margin-top: 15px;">
+                    <label>ATTACK CHANNEL</label>
+                    <select id="deauth-broadcast-channel" onchange="updateDeauthUI()">
+                        <option value="0">All Channels (Hopping)</option>
+                        <!-- Le altre opzioni verranno generate via JS -->
+                    </select>
+                </div>
 
                 <div id="deauth-info-box" style="margin-top: 15px; margin-bottom: 20px; border: 1px dashed var(--danger); padding: 15px; border-radius: 4px; background:rgba(255, 82, 82, 0.05);">
                     <label style="margin-top:0; color:var(--danger);" data-i18n="current_target">CURRENT TARGET</label>
@@ -2254,13 +2261,24 @@
             const ssidEl = document.getElementById('deauth-target-ssid');
             const bssidEl = document.getElementById('deauth-target-bssid');
             const chEl = document.getElementById('deauth-target-ch');
+            const broadcastChContainer = document.getElementById('deauth-broadcast-channel-container');
+            const broadcastChSelect = document.getElementById('deauth-broadcast-channel');
 
             if (mode === 'broadcast') {
+                broadcastChContainer.style.display = 'block'; // Mostra il selettore
                 ssidEl.innerText = "ALL NETWORKS (BROADCAST)";
                 ssidEl.style.color = "#ffab40";
                 bssidEl.innerText = "FF:FF:FF:FF:FF:FF";
-                chEl.innerText = "HOPPING";
+                
+                // Legge il canale dal nuovo menu
+                const selectedCh = broadcastChSelect.value;
+                if (selectedCh === "0") {
+                    chEl.innerText = "HOPPING (ALL)";
+                } else {
+                    chEl.innerText = selectedCh;
+                }
             } else {
+                broadcastChContainer.style.display = 'none'; // Nasconde il selettore
                 ssidEl.style.color = "white";
                 if (currentTarget) {
                     ssidEl.innerText = currentTarget.ssid;
@@ -2383,8 +2401,10 @@
             let targetBssid = "", targetChannel = 0, targetSsid = "";
 
             if (mode === 'broadcast') {
-                targetBssid = "FF:FF:FF:FF:FF:FF"; targetChannel = 0;
-                log(`Starting BROADCAST Attack (Type: ${attackName})...`, "warning");
+                targetBssid = "FF:FF:FF:FF:FF:FF"; 
+                targetChannel = parseInt(document.getElementById('deauth-broadcast-channel').value);
+                const chText = targetChannel === 0 ? "HOPPING" : `CH ${targetChannel}`;
+                log(`Starting BROADCAST Attack (Type: ${attackName}, ${chText})...`, "warning");
             } else {
                 if (!currentTarget) { showToast("ERROR: No Target Selected!"); return; }
                 targetBssid = currentTarget.bssid; targetChannel = currentTarget.channel; targetSsid = currentTarget.ssid;
@@ -2719,6 +2739,30 @@
             sel.appendChild(grp5);
         }
 
+        function populateDeauthChannels() {
+            const sel = document.getElementById('deauth-broadcast-channel');
+            if(!sel) return;
+            
+            let grp24 = document.createElement('optgroup');
+            grp24.label = "2.4 GHz";
+            for(let i=1; i<=14; i++) {
+                let opt = document.createElement('option');
+                opt.value = i; opt.innerText = "CH " + i;
+                grp24.appendChild(opt);
+            }
+            sel.appendChild(grp24);
+
+            let grp5 = document.createElement('optgroup');
+            grp5.label = "5 GHz";
+            const ch5 = [36, 40, 44, 48, 52, 56, 60, 64, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144, 149, 153, 157, 161, 165];
+            ch5.forEach(c => {
+                let opt = document.createElement('option');
+                opt.value = c; opt.innerText = "CH " + c;
+                grp5.appendChild(opt);
+            });
+            sel.appendChild(grp5);
+        }
+        
         function startRecon() {
             const chanVal = parseInt(document.getElementById('recon-chan').value);
             const hopping = (chanVal === 0);
@@ -3221,6 +3265,7 @@
             updateAttackTypeDesc();
             populateChannels();
             populateReconChannels();
+            populateDeauthChannels();
             log("System UI Initialized.");
             // Ritardo di 800ms per permettere all'ESP32 di chiudere il socket HTTP
             // prima di dover gestire l'handshake del WebSocket.
