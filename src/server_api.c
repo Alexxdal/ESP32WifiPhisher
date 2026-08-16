@@ -981,169 +981,248 @@ static esp_err_t api_download_handshake(ws_frame_req_t *req)
         api_send_status_frame(req, "error", "Invalid JSON payload");
         return ESP_FAIL;
     }
-
+ 
     cJSON *j_bssid = cJSON_GetObjectItemCaseSensitive(json, "bssid");
     if (!cJSON_IsString(j_bssid)) {
         cJSON_Delete(json);
         api_send_status_frame(req, "error", "Missing BSSID string");
         return ESP_OK;
     }
-
+ 
     uint8_t target_bssid[6];
     sscanf(j_bssid->valuestring, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
            &target_bssid[0], &target_bssid[1], &target_bssid[2],
            &target_bssid[3], &target_bssid[4], &target_bssid[5]);
     cJSON_Delete(json);
-
+ 
     handshake_info_t hs;
-    if (wifi_sniffer_get_handshake_for_target(target_bssid, NULL, &hs) != ESP_OK || 
+    if (wifi_sniffer_get_handshake_for_target(target_bssid, NULL, &hs) != ESP_OK ||
        (!hs.handshake_captured && !hs.pmkid_captured)) {
         api_send_status_frame(req, "error", "Handshake data not found for this AP");
         return ESP_OK;
     }
-
+ 
     size_t ssid_len = strlen((char*)hs.ssid);
     size_t pcap_hdr_sz = 24;
     size_t pkt_hdr_sz = 16;
     size_t rt_hdr_sz = 8;
-    size_t beacon_sz = rt_hdr_sz + 24 + 12 + 2 + ssid_len;
-    size_t m1_sz = rt_hdr_sz + 26 + 8 + hs.eapol_m1_len; 
-    size_t m2_sz = rt_hdr_sz + 26 + 8 + hs.eapol_m2_len;
-    size_t m3_sz = rt_hdr_sz + 26 + 8 + hs.eapol_m3_len;
-    size_t m4_sz = rt_hdr_sz + 26 + 8 + hs.eapol_m4_len;
-
-    // Se c'è solo il PMKID escludiamo M2 dal PCAP
-    size_t total_sz = pcap_hdr_sz + (2 * pkt_hdr_sz) + beacon_sz + m1_sz;
+ 
+    // --- SEC MIXED MODE (WPA1 + WPA2) ---
+    const uint8_t sec_ie[] = {
+        // WPA1 IE (TKIP)
+        0xdd, 0x16, 0x00, 0x50, 0xf2, 0x01, 0x01, 0x00,
+        0x00, 0x50, 0xf2, 0x02, 0x01, 0x00, 0x00, 0x50,
+        0xf2, 0x02, 0x01, 0x00, 0x00, 0x50, 0xf2, 0x02,
+        // WPA2 RSN IE (CCMP)
+        0x30, 0x14, 0x01, 0x00, 0x00, 0x0f, 0xac, 0x04,
+        0x01, 0x00, 0x00, 0x0f, 0xac, 0x04, 0x01, 0x00,
+        0x00, 0x0f, 0xac, 0x02, 0x00, 0x00
+    };
+    size_t sec_ie_len = sizeof(sec_ie);
+ 
+    const uint8_t rates_ie[] = { 0x01, 0x08, 0x82, 0x84, 0x8b, 0x96, 0x24, 0x30, 0x48, 0x6c };
+    const uint8_t ds_ie[] = { 0x03, 0x01, 0x01 }; // Ch 1 fallback
+    const uint8_t wildcard_ssid_ie[] = { 0x00, 0x00 }; // Tag SSID, len 0 -> probe request undirected
+ 
+    // --- PROBE REQUEST (undirected, STA -> broadcast) ---
+    size_t probereq_sz = rt_hdr_sz + 24 + sizeof(wildcard_ssid_ie) + sizeof(rates_ie);
+ 
+    size_t beacon_sz = rt_hdr_sz + 24 + 12 + 2 + ssid_len + sizeof(rates_ie) + sizeof(ds_ie) + sec_ie_len;
+    size_t auth_sz   = rt_hdr_sz + 24 + 6;
+    size_t assoc_sz  = rt_hdr_sz + 24 + 4 + 2 + ssid_len + sizeof(rates_ie) + sec_ie_len;
+ 
+    bool m1_llc = (hs.eapol_m1_len >= 8 && hs.eapol_m1[0] == 0xaa && hs.eapol_m1[1] == 0xaa);
+    bool m2_llc = (hs.eapol_m2_len >= 8 && hs.eapol_m2[0] == 0xaa && hs.eapol_m2[1] == 0xaa);
+    bool m3_llc = (hs.eapol_m3_len >= 8 && hs.eapol_m3[0] == 0xaa && hs.eapol_m3[1] == 0xaa);
+    bool m4_llc = (hs.eapol_m4_len >= 8 && hs.eapol_m4[0] == 0xaa && hs.eapol_m4[1] == 0xaa);
+ 
+    size_t m1_sz = rt_hdr_sz + 26 + (m1_llc ? 0 : 8) + hs.eapol_m1_len;
+    size_t m2_sz = rt_hdr_sz + 26 + (m2_llc ? 0 : 8) + hs.eapol_m2_len;
+    size_t m3_sz = rt_hdr_sz + 26 + (m3_llc ? 0 : 8) + hs.eapol_m3_len;
+    size_t m4_sz = rt_hdr_sz + 26 + (m4_llc ? 0 : 8) + hs.eapol_m4_len;
+    size_t total_sz = pcap_hdr_sz + (5 * pkt_hdr_sz) + probereq_sz + beacon_sz + auth_sz + assoc_sz + m1_sz;
     if (hs.handshake_captured) {
         total_sz += pkt_hdr_sz + m2_sz + pkt_hdr_sz + m3_sz + pkt_hdr_sz + m4_sz;
     }
-
+ 
     uint8_t *pcap = calloc(1, total_sz);
     if (!pcap) return ESP_ERR_NO_MEM;
-
+ 
     size_t offset = 0;
-    
-    // Global Header: Link-Layer 127 = Radiotap (0x7F) -> Obbligatorio per Aircrack
+ 
+    // Global Header
     const uint8_t pcap_hdr[] = {
-        0xd4, 0xc3, 0xb2, 0xa1, 0x02, 0x00, 0x04, 0x00, 
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-        0xff, 0xff, 0x00, 0x00, 0x7f, 0x00, 0x00, 0x00 
+        0xd4, 0xc3, 0xb2, 0xa1, 0x02, 0x00, 0x04, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0xff, 0xff, 0x00, 0x00, 0x7f, 0x00, 0x00, 0x00
     };
     memcpy(pcap + offset, pcap_hdr, 24); offset += 24;
-
+ 
     uint32_t ts_sec = 1700000000;
     uint32_t ts_usec = 0;
-
+ 
     #define WRITE_PKT_HDR(len) do { \
         memcpy(pcap + offset, &ts_sec, 4); offset += 4; \
         memcpy(pcap + offset, &ts_usec, 4); offset += 4; \
         uint32_t l = len; \
         memcpy(pcap + offset, &l, 4); offset += 4; \
         memcpy(pcap + offset, &l, 4); offset += 4; \
-        ts_usec += 500000; /* Incremento di 10 millisecondi */ \
+        ts_usec += 10000; \
     } while(0)
-
+ 
     uint8_t rt_hdr[8] = {0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00};
-
-    // 1. BEACON (Fornisce l'SSID ad Aircrack)
+    uint8_t llc[8] = {0xaa, 0xaa, 0x03, 0x00, 0x00, 0x00, 0x88, 0x8e};
+ 
+    // 0. PROBE REQUEST (undirected, broadcast) - STA in scansione, prima ancora del beacon
+    WRITE_PKT_HDR(probereq_sz);
+    memcpy(pcap + offset, rt_hdr, 8); offset += 8;
+    uint8_t probereq_mac_hdr[24] = {
+        0x40, 0x00, 0x00, 0x00, // Type/Subtype: Probe Request, Duration 0
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, // Addr1 (DA): broadcast
+        hs.mac_sta[0], hs.mac_sta[1], hs.mac_sta[2], hs.mac_sta[3], hs.mac_sta[4], hs.mac_sta[5], // Addr2 (SA/TA)
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, // Addr3 (BSSID): broadcast -> undirected
+        0x00, 0x00 // Seq 0
+    };
+    memcpy(pcap + offset, probereq_mac_hdr, 24); offset += 24;
+    memcpy(pcap + offset, wildcard_ssid_ie, sizeof(wildcard_ssid_ie)); offset += sizeof(wildcard_ssid_ie);
+    memcpy(pcap + offset, rates_ie, sizeof(rates_ie)); offset += sizeof(rates_ie);
+ 
+    // 1. BEACON
     WRITE_PKT_HDR(beacon_sz);
     memcpy(pcap + offset, rt_hdr, 8); offset += 8;
     uint8_t beacon_mac_hdr[24] = {
         0x80, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
         hs.bssid[0], hs.bssid[1], hs.bssid[2], hs.bssid[3], hs.bssid[4], hs.bssid[5],
         hs.bssid[0], hs.bssid[1], hs.bssid[2], hs.bssid[3], hs.bssid[4], hs.bssid[5],
-        0x00, 0x00
+        0x10, 0x00 // Seq 1
     };
     memcpy(pcap + offset, beacon_mac_hdr, 24); offset += 24;
     uint8_t beacon_fixed[12] = {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00, 0x64,0x00, 0x11,0x04};
     memcpy(pcap + offset, beacon_fixed, 12); offset += 12;
+ 
     pcap[offset++] = 0x00; pcap[offset++] = ssid_len;
     memcpy(pcap + offset, hs.ssid, ssid_len); offset += ssid_len;
-
-    // 2. M1 (Dal Router al Telefono)
+    memcpy(pcap + offset, rates_ie, sizeof(rates_ie)); offset += sizeof(rates_ie);
+    memcpy(pcap + offset, ds_ie, sizeof(ds_ie)); offset += sizeof(ds_ie);
+    memcpy(pcap + offset, sec_ie, sec_ie_len); offset += sec_ie_len;
+ 
+    // 2. FAKE AUTHENTICATION (STA -> AP)
+    WRITE_PKT_HDR(auth_sz);
+    memcpy(pcap + offset, rt_hdr, 8); offset += 8;
+    uint8_t auth_mac_hdr[24] = {
+        0xb0, 0x00, 0x00, 0x00,
+        hs.bssid[0], hs.bssid[1], hs.bssid[2], hs.bssid[3], hs.bssid[4], hs.bssid[5],
+        hs.mac_sta[0], hs.mac_sta[1], hs.mac_sta[2], hs.mac_sta[3], hs.mac_sta[4], hs.mac_sta[5],
+        hs.bssid[0], hs.bssid[1], hs.bssid[2], hs.bssid[3], hs.bssid[4], hs.bssid[5],
+        0x20, 0x00 // Seq 2
+    };
+    memcpy(pcap + offset, auth_mac_hdr, 24); offset += 24;
+    uint8_t auth_fixed[6] = {0x00, 0x00, 0x01, 0x00, 0x00, 0x00}; // Open System, Seq 1, Status 0
+    memcpy(pcap + offset, auth_fixed, 6); offset += 6;
+ 
+    // 3. FAKE ASSOC REQUEST (STA -> AP)
+    WRITE_PKT_HDR(assoc_sz);
+    memcpy(pcap + offset, rt_hdr, 8); offset += 8;
+    uint8_t assoc_mac_hdr[24] = {
+        0x00, 0x00, 0x00, 0x00, // Assoc Req Frame
+        hs.bssid[0], hs.bssid[1], hs.bssid[2], hs.bssid[3], hs.bssid[4], hs.bssid[5],
+        hs.mac_sta[0], hs.mac_sta[1], hs.mac_sta[2], hs.mac_sta[3], hs.mac_sta[4], hs.mac_sta[5],
+        hs.bssid[0], hs.bssid[1], hs.bssid[2], hs.bssid[3], hs.bssid[4], hs.bssid[5],
+        0x30, 0x00 // Seq 3
+    };
+    memcpy(pcap + offset, assoc_mac_hdr, 24); offset += 24;
+    uint8_t assoc_fixed[4] = {0x11, 0x04, 0x0a, 0x00}; // Capability, Listen Interval
+    memcpy(pcap + offset, assoc_fixed, 4); offset += 4;
+    pcap[offset++] = 0x00; pcap[offset++] = ssid_len;
+    memcpy(pcap + offset, hs.ssid, ssid_len); offset += ssid_len;
+    memcpy(pcap + offset, rates_ie, sizeof(rates_ie)); offset += sizeof(rates_ie);
+    memcpy(pcap + offset, sec_ie, sec_ie_len); offset += sec_ie_len;
+ 
+    // 4. M1 (AP -> STA)
     WRITE_PKT_HDR(m1_sz);
     memcpy(pcap + offset, rt_hdr, 8); offset += 8;
     uint8_t m1_mac_hdr[26] = {
         0x88, 0x02, 0x00, 0x00,
-        hs.mac_sta[0], hs.mac_sta[1], hs.mac_sta[2], hs.mac_sta[3], hs.mac_sta[4], hs.mac_sta[5], // Dest=STA
-        hs.bssid[0], hs.bssid[1], hs.bssid[2], hs.bssid[3], hs.bssid[4], hs.bssid[5], // Src=BSSID
-        hs.bssid[0], hs.bssid[1], hs.bssid[2], hs.bssid[3], hs.bssid[4], hs.bssid[5], // BSSID
-        0x00, 0x00, 0x00, 0x00 //Fragmentation/Sequence Number
+        hs.mac_sta[0], hs.mac_sta[1], hs.mac_sta[2], hs.mac_sta[3], hs.mac_sta[4], hs.mac_sta[5],
+        hs.bssid[0], hs.bssid[1], hs.bssid[2], hs.bssid[3], hs.bssid[4], hs.bssid[5],
+        hs.bssid[0], hs.bssid[1], hs.bssid[2], hs.bssid[3], hs.bssid[4], hs.bssid[5],
+        0x40, 0x00, 0x00, 0x00 // Seq 4
     };
     memcpy(pcap + offset, m1_mac_hdr, 26); offset += 26;
-    uint8_t llc[8] = {0xaa, 0xaa, 0x03, 0x00, 0x00, 0x00, 0x88, 0x8e};
-    memcpy(pcap + offset, llc, 8); offset += 8;
+    if (!m1_llc) { memcpy(pcap + offset, llc, 8); offset += 8; }
     memcpy(pcap + offset, hs.eapol_m1, hs.eapol_m1_len); offset += hs.eapol_m1_len;
-
-    // 3. M2 (Dal Telefono al Router) - Solo se catturato interamente
+ 
+    // 5. M2 (STA -> AP)
     if (hs.handshake_captured) {
         WRITE_PKT_HDR(m2_sz);
         memcpy(pcap + offset, rt_hdr, 8); offset += 8;
         uint8_t m2_mac_hdr[26] = {
             0x88, 0x01, 0x00, 0x00,
-            hs.bssid[0], hs.bssid[1], hs.bssid[2], hs.bssid[3], hs.bssid[4], hs.bssid[5], // Dest=BSSID
-            hs.mac_sta[0], hs.mac_sta[1], hs.mac_sta[2], hs.mac_sta[3], hs.mac_sta[4], hs.mac_sta[5], // Src=STA
-            hs.bssid[0], hs.bssid[1], hs.bssid[2], hs.bssid[3], hs.bssid[4], hs.bssid[5], // BSSID
-            0x00, 0x00, 0x00, 0x00
+            hs.bssid[0], hs.bssid[1], hs.bssid[2], hs.bssid[3], hs.bssid[4], hs.bssid[5],
+            hs.mac_sta[0], hs.mac_sta[1], hs.mac_sta[2], hs.mac_sta[3], hs.mac_sta[4], hs.mac_sta[5],
+            hs.bssid[0], hs.bssid[1], hs.bssid[2], hs.bssid[3], hs.bssid[4], hs.bssid[5],
+            0x50, 0x00, 0x00, 0x00 // Seq 5
         };
         memcpy(pcap + offset, m2_mac_hdr, 26); offset += 26;
-        memcpy(pcap + offset, llc, 8); offset += 8;
+        if (!m2_llc) { memcpy(pcap + offset, llc, 8); offset += 8; }
         memcpy(pcap + offset, hs.eapol_m2, hs.eapol_m2_len); offset += hs.eapol_m2_len;
     }
-
-    // 3. M3 (Dal Router al Telefono) - Solo se catturato interamente
+ 
+    // 6. M3 (AP -> STA)
     if (hs.handshake_captured) {
         WRITE_PKT_HDR(m3_sz);
         memcpy(pcap + offset, rt_hdr, 8); offset += 8;
         uint8_t m3_mac_hdr[26] = {
             0x88, 0x02, 0x00, 0x00,
-            hs.mac_sta[0], hs.mac_sta[1], hs.mac_sta[2], hs.mac_sta[3], hs.mac_sta[4], hs.mac_sta[5], // Dest=STA
-            hs.bssid[0], hs.bssid[1], hs.bssid[2], hs.bssid[3], hs.bssid[4], hs.bssid[5], // Src=BSSID
-            hs.bssid[0], hs.bssid[1], hs.bssid[2], hs.bssid[3], hs.bssid[4], hs.bssid[5], // BSSID
-            0x00, 0x00, 0x00, 0x00 //Fragmentation/Sequence Number
+            hs.mac_sta[0], hs.mac_sta[1], hs.mac_sta[2], hs.mac_sta[3], hs.mac_sta[4], hs.mac_sta[5],
+            hs.bssid[0], hs.bssid[1], hs.bssid[2], hs.bssid[3], hs.bssid[4], hs.bssid[5],
+            hs.bssid[0], hs.bssid[1], hs.bssid[2], hs.bssid[3], hs.bssid[4], hs.bssid[5],
+            0x60, 0x00, 0x00, 0x00 // Seq 6
         };
         memcpy(pcap + offset, m3_mac_hdr, 26); offset += 26;
-        memcpy(pcap + offset, llc, 8); offset += 8;
+        if (!m3_llc) { memcpy(pcap + offset, llc, 8); offset += 8; }
         memcpy(pcap + offset, hs.eapol_m3, hs.eapol_m3_len); offset += hs.eapol_m3_len;
     }
-
-    // 4. M4 (Dal Telefono al Router) - Solo se catturato interamente
+ 
+    // 7. M4 (STA -> AP)
     if (hs.handshake_captured) {
         WRITE_PKT_HDR(m4_sz);
         memcpy(pcap + offset, rt_hdr, 8); offset += 8;
         uint8_t m4_mac_hdr[26] = {
             0x88, 0x01, 0x00, 0x00,
-            hs.bssid[0], hs.bssid[1], hs.bssid[2], hs.bssid[3], hs.bssid[4], hs.bssid[5], // Dest=BSSID
-            hs.mac_sta[0], hs.mac_sta[1], hs.mac_sta[2], hs.mac_sta[3], hs.mac_sta[4], hs.mac_sta[5], // Src=STA
-            hs.bssid[0], hs.bssid[1], hs.bssid[2], hs.bssid[3], hs.bssid[4], hs.bssid[5], // BSSID
-            0x00, 0x00, 0x00, 0x00
+            hs.bssid[0], hs.bssid[1], hs.bssid[2], hs.bssid[3], hs.bssid[4], hs.bssid[5],
+            hs.mac_sta[0], hs.mac_sta[1], hs.mac_sta[2], hs.mac_sta[3], hs.mac_sta[4], hs.mac_sta[5],
+            hs.bssid[0], hs.bssid[1], hs.bssid[2], hs.bssid[3], hs.bssid[4], hs.bssid[5],
+            0x70, 0x00, 0x00, 0x00 // Seq 7
         };
         memcpy(pcap + offset, m4_mac_hdr, 26); offset += 26;
-        memcpy(pcap + offset, llc, 8); offset += 8;
+        if (!m4_llc) { memcpy(pcap + offset, llc, 8); offset += 8; }
         memcpy(pcap + offset, hs.eapol_m4, hs.eapol_m4_len); offset += hs.eapol_m4_len;
     }
-
-    // BASE64
+ 
+    #undef WRITE_PKT_HDR
+ 
+    // BASE64 Encoding
     size_t b64_len = 0;
     mbedtls_base64_encode(NULL, 0, &b64_len, pcap, total_sz);
     char *b64_buf = malloc(b64_len + 1);
     if (b64_buf) {
         mbedtls_base64_encode((uint8_t*)b64_buf, b64_len, &b64_len, pcap, total_sz);
         b64_buf[b64_len] = 0;
-        
+ 
         cJSON *root = cJSON_CreateObject();
         cJSON_AddNumberToObject(root, "req_id", req->req_id);
         cJSON_AddStringToObject(root, "type", "pcap_file");
-        
+ 
         char out_filename[64];
         snprintf(out_filename, sizeof(out_filename), "handshake_%s.pcap", hs.ssid);
         cJSON_AddStringToObject(root, "filename", out_filename);
         cJSON_AddStringToObject(root, "payload", b64_buf);
-        
+ 
         char *json_resp = cJSON_PrintUnformatted(root);
         cJSON_Delete(root);
         free(b64_buf);
-        
+ 
         if (json_resp) {
             ws_frame_req_t cmd;
             cmd.hd = req->hd; cmd.fd = req->fd;
