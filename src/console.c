@@ -8,6 +8,7 @@
 #include "TaskManager.h"
 #include "wifiMng.h"
 #include "scanner.h"
+#include "sniffer.h"
 
 #define WIFI_CONSOLE_SSID_MAX_LEN 32
 #define WIFI_CONSOLE_PASS_MAX_LEN 64
@@ -26,6 +27,47 @@ static void wifi_connect_task(void *arg)
     wifi_connect_console_args_t *params = (wifi_connect_console_args_t *)arg;
     wifi_connect(params->ssid, params->password);
     free(params);
+    task_manager_unregister_current_task();
+    vTaskDelete(NULL);
+}
+
+
+static void wifi_scan_task(void *arg)
+{
+    EmbeddedCli *cli_ptr = (EmbeddedCli *)arg;
+    embeddedCliPrint(cli_ptr, "Scanning for WiFi networks... please wait.");
+    
+    // Esegue la scansione e popola la struttura interna detected_aps
+    if (wifi_sniffer_scan_fill_aps() == ESP_OK) {
+        
+        aps_info_t aps_info;
+        // Recupera i risultati in modo thread-safe
+        if (wifi_sniffer_get_aps(&aps_info) == ESP_OK) {
+            
+            char line[128];
+            snprintf(line, sizeof(line), "Found %d access points in memory:", aps_info.count);
+            embeddedCliPrint(cli_ptr, line);
+            embeddedCliPrint(cli_ptr, "CH | RSSI | BSSID             | SSID");
+            embeddedCliPrint(cli_ptr, "---|------|-------------------|--------------------------------");
+            
+            // Itera sull'array dei risultati
+            for (int i = 0; i < aps_info.count; i++) {
+                wifi_ap_record_t *ap = &aps_info.ap[i].record;
+                snprintf(line, sizeof(line), "%2d | %4d | %02X:%02X:%02X:%02X:%02X:%02X | %s", 
+                         ap->primary, 
+                         ap->rssi, 
+                         ap->bssid[0], ap->bssid[1], ap->bssid[2], 
+                         ap->bssid[3], ap->bssid[4], ap->bssid[5],
+                         ap->ssid[0] == '\0' ? "<hidden>" : (char *)ap->ssid);
+                embeddedCliPrint(cli_ptr, line);
+            }
+        } else {
+            embeddedCliPrint(cli_ptr, "Failed to retrieve APs list from memory.");
+        }
+    } else {
+        embeddedCliPrint(cli_ptr, "WiFi scan failed.");
+    }
+    
     task_manager_unregister_current_task();
     vTaskDelete(NULL);
 }
@@ -61,6 +103,18 @@ void wifi_connect_console(EmbeddedCli *cli, char *args, void *context)
     if (task_manager_create_task(wifi_connect_task, "wifi_connect_tsk", 4096, params, 5, NULL) != ESP_OK) {
         embeddedCliPrint(cli, "connection already in progress, or registry/memory full");
         free(params);
+    }
+}
+
+
+void wifi_scan_console(EmbeddedCli *cli, char *args, void *context)
+{
+    if (task_manager_is_running("wifi_scan_tsk")) {
+        embeddedCliPrint(cli, "A WiFi scan is already in progress. Please wait...");
+        return;
+    }
+    if (task_manager_create_task(wifi_scan_task, "wifi_scan_tsk", 8192, cli, 5, NULL) != ESP_OK) {
+        embeddedCliPrint(cli, "Failed to start scan task (registry or memory full)");
     }
 }
 
@@ -195,6 +249,15 @@ esp_err_t console_init(void)
         .binding = port_scan_console
     };
     embeddedCliAddBinding(cli, port_scan_cmd);
+
+    CliCommandBinding wifi_scan_cmd = {
+        .name = "wifi_scan",
+        .help = "Scan for nearby WiFi networks",
+        .tokenizeArgs = false,
+        .context = NULL,
+        .binding = wifi_scan_console
+    };
+    embeddedCliAddBinding(cli, wifi_scan_cmd);
 
     esp_err_t task_err = task_manager_create_task(uart_read_task, "console_read_task", 4096, NULL, 5, &console_task_handle);
     return task_err;
