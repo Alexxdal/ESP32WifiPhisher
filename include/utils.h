@@ -72,7 +72,7 @@ void print_handshake(handshake_info_t *handshake);
 
 
 /**
- * @brief Get the Next Channel
+ * @brief Get the Next Wifi Channel
  * 
  * @param current_channel 
  * @return uint8_t 

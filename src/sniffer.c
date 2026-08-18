@@ -1592,8 +1592,8 @@ static void wifi_sniffer_channel_hopping_task(void *param)
 
     uint8_t target_channel = (uint8_t)(uintptr_t)param;
     uint8_t current_channel = 1;
-    const uint32_t ROC_DURATION_MS = 20;
-    const uint32_t AP_REST_TIME_MS = 80;
+    const uint32_t ROC_DURATION_MS = 50;
+    const uint32_t AP_REST_TIME_MS = 100;
     #if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3)
     const uint32_t NEXT_CHANNEL_DELAY_MS = 300;
     #endif
@@ -1638,8 +1638,7 @@ static void wifi_sniffer_channel_hopping_task(void *param)
         }
 
         if (target_channel == 0) {
-            current_channel++;
-            if (current_channel > 13) current_channel = 1;
+            current_channel = getNextChannel(current_channel);
         }
     }
 

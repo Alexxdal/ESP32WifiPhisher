@@ -83,6 +83,28 @@ void print_handshake(handshake_info_t *handshake)
 
 uint8_t getNextChannel(uint8_t current_channel)
 {
+#ifdef CONFIG_SOC_WIFI_SUPPORT_5G
+    const uint8_t ch5g[] = {36, 40, 44, 48, 52, 56, 60, 64, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144, 149, 153, 157, 161, 165};
+    const int num_ch5g = sizeof(ch5g) / sizeof(ch5g[0]);
+    if (current_channel < 14) {
+        return current_channel + 1;
+    } 
+    else if (current_channel == 14) {
+        return ch5g[0]; 
+    } 
+    else {
+        for (int i = 0; i < num_ch5g; i++) {
+            if (current_channel == ch5g[i]) {
+                if (i + 1 < num_ch5g) {
+                    return ch5g[i + 1];
+                } else {
+                    return 1;
+                }
+            }
+        }
+        return 1;
+    }
+#else
     if( current_channel >= 14 )
     {
         return 1;
@@ -91,6 +113,7 @@ uint8_t getNextChannel(uint8_t current_channel)
     {
         return current_channel + 1;
     }
+#endif
 }
 
 

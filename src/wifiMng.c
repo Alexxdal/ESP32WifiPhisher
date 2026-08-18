@@ -150,19 +150,18 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t e
 }
 
 
-static esp_err_t set_wifi_region() {
+static esp_err_t set_wifi_region(void) {
     wifi_country_t country = {
-        .cc = "CN",      // Codice paese (EU per Europa)
-        .schan = 1,      // Canale iniziale
-        .nchan = 14,     // Numero di canali (1-13 per EU)
-        .policy = WIFI_COUNTRY_POLICY_AUTO,
-        #if CONFIG_SOC_WIFI_SUPPORT_5G
-        .wifi_5g_channel_mask = 0
-        #endif
+        .cc = "01",          // "world safe mode"
+        .schan = 1,
+        .nchan = 13,
+        .max_tx_power = 20,
+        .policy = WIFI_COUNTRY_POLICY_MANUAL,
+#if CONFIG_SOC_WIFI_SUPPORT_5G
+        .wifi_5g_channel_mask = 0x1FFFFFFE, // 5GHz (36-177)
+#endif
     };
-
-    esp_err_t err = esp_wifi_set_country(&country);
-    return err;
+    return esp_wifi_set_country(&country);
 }
 
 
