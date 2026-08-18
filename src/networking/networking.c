@@ -4,6 +4,7 @@
 #include <esp_event.h>
 #include <libwifi.h>
 #include "networking.h"
+#include "scanner.h"
 
 
 static const char *TAG = "NETWORKING";
@@ -51,6 +52,7 @@ esp_netif_ip_info_t *networking_get_ip_info(void)
 esp_err_t networking_init(void) 
 {
     ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, ESP_EVENT_ANY_ID, &ip_event_handler, NULL, NULL));
+    ESP_ERROR_CHECK(scanner_init());
     ESP_LOGI(TAG, "Networking module initialized");
     return ESP_OK;
 }
