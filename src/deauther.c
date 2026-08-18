@@ -266,6 +266,7 @@ void deauther_send_frames(const target_info_t *target, deauther_attack_type_t at
         for (int i = 0; i < aps.count; i++) 
         {
             if(!deauther_running) break;
+            
             uint8_t ch = aps.ap[i].record.primary;
             int8_t rssi = aps.ap[i].record.rssi;
             /* Skip if rssi is too low */
@@ -387,16 +388,29 @@ static void deauther_task(void *pvParameters)
 }
 
 
-void deauther_start(const target_info_t *deauth_target, deauther_attack_type_t attack_type)
+esp_err_t deauther_start(const target_info_t *deauth_target, deauther_attack_type_t attack_type)
 {
     if(deauth_target == NULL) {
         ESP_LOGE(TAG, "deauth_target is null.");
-        return;
+        return ESP_ERR_INVALID_STATE;
     }
 
+    /* Check for attacks that needs SSID */
+    switch (attack_type)
+    {
+        case DEAUTHER_ATTACK_CSA_SPOOFING:
+        case DEAUTHER_ATTACK_BEACON_SPAM:
+            if(strlen((const char*)deauth_target->ssid) == 0){
+                return ESP_ERR_INVALID_ARG;
+            }
+            break;
+        default:
+            break;
+    }
+    
     if( deauther_task_handle != NULL ) {   
         ESP_LOGE(TAG, "Deauther task already started.");
-        return;
+        return ESP_ERR_INVALID_STATE;
     }
 
     if (deauther_evt == NULL) {
@@ -419,6 +433,8 @@ void deauther_start(const target_info_t *deauth_target, deauther_attack_type_t a
 
     task_manager_create_task(deauther_task, "deauther_task", 4096, NULL, DEAUTHER_TASK_PRIO, &deauther_task_handle);
     ESP_LOGI(TAG, "Deauth Attack Started.");
+
+    return ESP_OK;
 }
 
 

@@ -865,9 +865,17 @@ static esp_err_t api_deauther_start(ws_frame_req_t *req)
     cJSON_Delete(json);
 
     ESP_LOGI(TAG, "Starting Deauth: Type=%d, Broadcast=%d", attack_type, attack_mode);
-    deauther_start(&target_info, attack_type);
+    esp_err_t deauth_start_err = deauther_start(&target_info, attack_type);
 
-    api_send_status_frame(req, "ok", "Deauth Attack Started");
+    if(deauth_start_err == ESP_OK) {
+        api_send_status_frame(req, "ok", "Deauth Attack Started");
+    } 
+    else if(deauth_start_err == ESP_ERR_INVALID_ARG) {
+        api_send_status_frame(req, "bad", "Cant start this attack on Hidded SSID.");
+    } else {
+        api_send_status_frame(req, "bad", "Failed to start Deauth Attack");
+    }
+    
     return ESP_OK;
 }
 
@@ -1232,6 +1240,8 @@ static esp_err_t api_download_handshake(ws_frame_req_t *req)
         }
     }
     free(pcap);
+    
+    api_send_status_frame(req, "ok", "PCAP Downloaded");
     return ESP_OK;
 }
 

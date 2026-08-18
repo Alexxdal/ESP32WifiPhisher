@@ -28,7 +28,7 @@
 static const char *TAG = "SNIFFER";
 
 /* Tasks Priority and queue len */
-#define PACKET_PARSING_TASK_PRIO            7
+#define PACKET_PARSING_TASK_PRIO            10
 #define PACKET_QUEUE_LEN                    50
 #define CHANNEL_HOPPING_TASK_PRIO           3
 /* Sniffer task status bits */

@@ -61,7 +61,7 @@ void deauther_send_frames(const target_info_t *target, deauther_attack_type_t at
  * @param deauth_target deauth attack target
  * 
  */
-void deauther_start(const target_info_t *deauth_target, deauther_attack_type_t attack_type);
+esp_err_t deauther_start(const target_info_t *deauth_target, deauther_attack_type_t attack_type);
 
 
 /**
