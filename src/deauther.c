@@ -395,22 +395,24 @@ esp_err_t deauther_start(const target_info_t *deauth_target, deauther_attack_typ
         return ESP_ERR_INVALID_STATE;
     }
 
-    /* Check for attacks that needs SSID */
+    if( deauther_task_handle != NULL ) {   
+        ESP_LOGE(TAG, "Deauther task already started.");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    bool broadcast_target = isMacBroadcast(deauth_target->bssid);
+
+    /* Check for attacks that needs SSID only for single target attack */
     switch (attack_type)
     {
         case DEAUTHER_ATTACK_CSA_SPOOFING:
         case DEAUTHER_ATTACK_BEACON_SPAM:
-            if(strlen((const char*)deauth_target->ssid) == 0){
+            if(strlen((const char*)deauth_target->ssid) == 0 && !broadcast_target){
                 return ESP_ERR_INVALID_ARG;
             }
             break;
         default:
             break;
-    }
-    
-    if( deauther_task_handle != NULL ) {   
-        ESP_LOGE(TAG, "Deauther task already started.");
-        return ESP_ERR_INVALID_STATE;
     }
 
     if (deauther_evt == NULL) {
@@ -426,10 +428,6 @@ esp_err_t deauther_start(const target_info_t *deauth_target, deauther_attack_typ
     if(deauth_target->channel != 0){
         wifi_switch_ap_channel_csa(deauth_target->channel);
     }
-    // bool broadcast_target = isMacBroadcast(deauth_target->bssid);
-    // if(!broadcast_target) {
-    //     wifi_switch_ap_channel_csa(deauth_target->channel);
-    // }
 
     task_manager_create_task(deauther_task, "deauther_task", 4096, NULL, DEAUTHER_TASK_PRIO, &deauther_task_handle);
     ESP_LOGI(TAG, "Deauth Attack Started.");
