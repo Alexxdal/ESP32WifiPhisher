@@ -34,6 +34,9 @@ static const char *TAG = "SNIFFER";
 /* Sniffer task status bits */
 #define SNIFFER_EVT_TASK_RUNNING            (1 << 0)
 #define SNIFFER_EVT_TASK_EXITED             (1 << 1)
+/* Channel hopping task status bits */
+#define CH_HOP_EVT_TASK_RUNNING             (1 << 0)
+#define CH_HOP_EVT_TASK_EXITED              (1 << 1)
 
 /* Queue and semaphore */
 static QueueHandle_t packet_queue = NULL;
@@ -47,12 +50,14 @@ static EventGroupHandle_t sniffer_evt = NULL;
 static TaskHandle_t packet_parsing_task_handle = NULL;
 static TaskHandle_t channel_hopping_task_handle = NULL;
 static volatile bool packet_parsing_task_running = false;
+static volatile bool channel_hopping_task_running = false;
 
 /* Group Bits */
 #define SCAN_DONE_BIT (1<<0)
 #define ROC_DONE_BIT (1<<0)
 static EventGroupHandle_t scan_evt = NULL;
 static EventGroupHandle_t roc_evt = NULL;
+static EventGroupHandle_t ch_hop_evt = NULL;
 static esp_event_handler_instance_t scan_done_event_instance = NULL;
 static esp_event_handler_instance_t roc_done_event_instance = NULL;
 
@@ -103,6 +108,9 @@ esp_err_t wifi_sniffer_init(void)
 
     roc_evt = xEventGroupCreate();
     if(roc_evt == NULL) return ESP_ERR_NO_MEM;
+
+    ch_hop_evt = xEventGroupCreate();
+    if(ch_hop_evt == NULL) return ESP_ERR_NO_MEM;
 
     esp_wifi_get_mac(WIFI_IF_AP, own_ap_bssid);
 
@@ -370,8 +378,8 @@ static void wifi_sniffer_capture_probes(struct libwifi_frame *frame, sniffer_pac
                 captured_probes.probes[captured_probes.num_probes].rssi = sniffer_pkt->rssi;
                 captured_probes.probes[captured_probes.num_probes].channel = sniffer_pkt->channel;
                 captured_probes.num_probes++;
-                ws_log(TAG, "New Probe: %s from "MACSTR, probe_req_info.ssid, MAC2STR(src_mac));
-                ESP_LOGI(TAG, "New Probe: %s from "MACSTR, probe_req_info.ssid, MAC2STR(src_mac));
+                ws_log(TAG, "New Probe Req: %s from "MACSTR, probe_req_info.ssid, MAC2STR(src_mac));
+                ESP_LOGI(TAG, "New Probe Req: %s from "MACSTR, probe_req_info.ssid, MAC2STR(src_mac));
             }
             xSemaphoreGive(probes_semaphore);
         }
@@ -526,9 +534,10 @@ static void wifi_sniffer_capture_aps(struct libwifi_frame *frame, sniffer_packet
                 ap_ext_t *new_ap = &detected_aps.ap[detected_aps.count];
                 memset(new_ap, 0, sizeof(ap_ext_t));
                 memcpy(new_ap->record.bssid, bssid_mac, 6);
-                char tmp[32];
+                
+                char tmp[33] = {0};
                 if (strnlen((char*)bss.ssid, 32) > 0) {
-                    strncpy(tmp, (char *)new_ap->record.ssid, 32);
+                    strncpy(tmp, (char *)bss.ssid, 32);
                     strncpy((char *)new_ap->record.ssid, bss.ssid, 32);
                 }
                 else {
@@ -1037,6 +1046,7 @@ static void wifi_sniffer_resource_cleanup(void)
         ESP_ERROR_CHECK(esp_wifi_set_promiscuous(false));
     }
 
+    /* Clean Packet Parsing Task */
     if (packet_parsing_task_handle != NULL) {
         packet_parsing_task_running = false;
 
@@ -1055,8 +1065,6 @@ static void wifi_sniffer_resource_cleanup(void)
             );
 
             if ((bits & SNIFFER_EVT_TASK_EXITED) == 0) {
-                /* Il task non ha confermato l'uscita entro il timeout: va
-                 * fermato "a freddo". */
                 task_manager_delete_task_by_handle(packet_parsing_task_handle);
             }
         } else {
@@ -1244,11 +1252,18 @@ esp_err_t wifi_sniffer_start_channel_hopping(uint8_t channel)
         ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, WIFI_EVENT_SCAN_DONE, &wifi_event_scan_done_handler, NULL, &scan_done_event_instance));
     }
 
-    if (channel_hopping_task_handle == NULL)
-    {
-        task_manager_create_task(wifi_sniffer_channel_hopping_task, "channel_hopping_task", 4096, (void*)(uintptr_t)channel, CHANNEL_HOPPING_TASK_PRIO, &channel_hopping_task_handle);
+    if (channel_hopping_task_handle == NULL) {
+        channel_hopping_task_running = true;
+        if (task_manager_create_task(wifi_sniffer_channel_hopping_task, "channel_hopping_task", 4096, (void*)(uintptr_t)channel, CHANNEL_HOPPING_TASK_PRIO, &channel_hopping_task_handle) != ESP_OK) {
+            channel_hopping_task_running = false;
+            goto fail;
+        }
     }
     return ESP_OK;
+
+fail:
+    wifi_sniffer_stop_channel_hopping();
+    return ESP_ERR_NO_MEM;
 }
 
 
@@ -1256,6 +1271,30 @@ esp_err_t wifi_sniffer_stop_channel_hopping(void)
 {
     esp_wifi_scan_stop();
     vTaskDelay(pdMS_TO_TICKS(10));
+
+    /* Clean Channel hopping task */
+    if (channel_hopping_task_handle != NULL) {
+        channel_hopping_task_running = false;
+
+        if(ch_hop_evt != NULL) {
+            EventBits_t bits = xEventGroupWaitBits(
+                ch_hop_evt,
+                CH_HOP_EVT_TASK_EXITED,
+                pdTRUE,
+                pdFALSE,
+                pdMS_TO_TICKS(2000)
+            );
+
+            if ((bits & CH_HOP_EVT_TASK_EXITED) == 0) {
+                task_manager_delete_task_by_handle(channel_hopping_task_handle);
+            }
+        } else {
+            vTaskDelay(pdMS_TO_TICKS(50));
+            task_manager_delete_task_by_handle(channel_hopping_task_handle);
+        }
+
+        channel_hopping_task_handle = NULL;
+    }
 
     if(roc_done_event_instance != NULL) {
         ESP_ERROR_CHECK(esp_event_handler_instance_unregister(WIFI_EVENT, WIFI_EVENT_ROC_DONE, roc_done_event_instance));
@@ -1267,14 +1306,6 @@ esp_err_t wifi_sniffer_stop_channel_hopping(void)
     }
     vTaskDelay(pdMS_TO_TICKS(10));
 
-    if (channel_hopping_task_handle != NULL)
-    {
-        /* Nessun meccanismo di stop cooperativo per questo task (loop
-         * infinito), va fermato "a freddo". */
-        task_manager_delete_task_by_handle(channel_hopping_task_handle);
-        channel_hopping_task_handle = NULL;
-    }
-    vTaskDelay(pdMS_TO_TICKS(10));
     return ESP_OK;
 }
 
@@ -1554,6 +1585,11 @@ esp_err_t wifi_sniffer_scan_fill_aps_fast(void)
 
 static void wifi_sniffer_channel_hopping_task(void *param)
 {
+    if (ch_hop_evt) {
+        xEventGroupClearBits(ch_hop_evt, CH_HOP_EVT_TASK_EXITED);
+        xEventGroupSetBits(ch_hop_evt, CH_HOP_EVT_TASK_RUNNING);
+    }
+
     uint8_t target_channel = (uint8_t)(uintptr_t)param;
     uint8_t current_channel = 1;
     const uint32_t ROC_DURATION_MS = 20;
@@ -1562,7 +1598,7 @@ static void wifi_sniffer_channel_hopping_task(void *param)
     const uint32_t NEXT_CHANNEL_DELAY_MS = 300;
     #endif
 
-    while (1)
+    while (channel_hopping_task_running)
     {
         if (roc_evt != NULL) xEventGroupClearBits(roc_evt, ROC_DONE_BIT);
 
@@ -1606,6 +1642,13 @@ static void wifi_sniffer_channel_hopping_task(void *param)
             if (current_channel > 13) current_channel = 1;
         }
     }
+
+    if (ch_hop_evt) {
+        xEventGroupClearBits(ch_hop_evt, CH_HOP_EVT_TASK_RUNNING);
+        xEventGroupSetBits(ch_hop_evt, CH_HOP_EVT_TASK_EXITED);
+    }
+    task_manager_unregister_current_task();
+    vTaskDelete(NULL);
 }
 
 

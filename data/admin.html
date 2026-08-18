@@ -2593,7 +2593,9 @@
                 lastClientsData = res.clients;
 
                 const cliBody = document.getElementById('recon-cli-body');
+                const karmaBody = document.getElementById('karma-scan-body');
                 cliBody.innerHTML = '';
+                let karmaHtml = ''; // Variabile per accumulare l'HTML della tabella Karma
                 
                 lastClientsData.sort((a, b) => {
                     const bssidCompare = a.bssid.localeCompare(b.bssid);
@@ -2612,12 +2614,41 @@
                             <td style="color:#00e676; font-weight:bold;">${associatedApName}</td>
                             <td style="color:#fff;">${cli.ch}</td>
                             <td style="color:${cli.rssi > -70 ? '#00e676' : (cli.rssi > -85 ? '#ffab40' : '#ff5252')}">${cli.rssi}</td>
-                            <td style="color:#fff;">${Array.isArray(cli.probes) ? cli.probes.join(', ') : ''}</td>
+                            <td style="color:#fff;">${Array.isArray(cli.probes) ? cli.probes.map(escapeHtml).join(', ') : ''}</td>
                             <td>${cli.pkts}</td>
                             <td style="color:#aaa;">${formatBigNumber(cli.bytes)}</td>
                         </tr>
                     `;
+
+                    // --- Popolamento automatico lista Karma Probes ---
+                    if (Array.isArray(cli.probes) && cli.probes.length > 0) {
+                        cli.probes.forEach(probeSsid => {
+                            if (!probeSsid) return;
+                            const safeSsid = probeSsid.replace(/'/g, "\\'");
+                            
+                            karmaHtml += `
+                                <tr>
+                                    <td style="font-family:monospace; color:#aaa;">${macUpper}</td>
+                                    <td style="font-weight:bold; color:white;">${escapeHtml(probeSsid)}</td>
+                                    <td>${cli.rssi}</td>
+                                    <td>${cli.ch}</td>
+                                    <td>
+                                        <button class="danger" style="padding:4px 8px; font-size:0.7rem;"
+                                            onclick="launchKarmaAttack('${safeSsid}', ${cli.ch})">ATTACK</button>
+                                    </td>
+                                </tr>
+                            `;
+                        });
+                    }
                 });
+
+                if (karmaBody) {
+                    if (karmaHtml !== '') {
+                        karmaBody.innerHTML = karmaHtml;
+                    } else if (!karmaInterval) {
+                        karmaBody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 20px; color:#666;" data-i18n="click_scan_probes">No probes detected yet. Start Recon or Karma scan...</td></tr>';
+                    }
+                }
                 
                 updateTargetMonitors();
             } catch(e) { console.warn("CLI Fetch Error:", e); }
