@@ -34,6 +34,26 @@ typedef struct {
 } aps_info_t;
 
 
+/**
+ * @brief Light AP record: only the fields attack code actually reads
+ * 
+ */
+typedef struct {
+    uint8_t  bssid[6];
+    uint8_t  ssid[33];
+    uint8_t  primary;           /* channel */
+    int8_t   rssi;
+    wifi_auth_mode_t   authmode;
+    wifi_cipher_type_t group_cipher;
+    wifi_cipher_type_t pairwise_cipher;
+} ap_ext_light_t;
+
+typedef struct {
+    uint8_t count;
+    ap_ext_light_t ap[MAX_AP];
+} aps_info_light_t;
+
+
 
 /**
  * @brief Struct containing Client info
@@ -61,6 +81,22 @@ typedef struct {
     uint8_t count;
     client_t client[MAX_CLIENTS];
 } client_list_t;
+
+
+/**
+ * @brief Light client record: only mac/bssid/rssi, which is all attack
+ * code needs.
+ */
+typedef struct {
+    uint8_t mac[6];
+    uint8_t bssid[6];
+    int8_t  rssi;
+} client_light_t;
+
+typedef struct {
+    uint8_t count;
+    client_light_t client[MAX_CLIENTS];
+} client_list_light_t;
 
 
 
@@ -233,8 +269,15 @@ esp_err_t wifi_sniffer_get_clients(client_list_t *out);
 
 
 /**
+ * @brief Same data as wifi_sniffer_get_clients(), but copies only
+ * mac/bssid/rssi per entry.
+ */
+esp_err_t wifi_sniffer_get_clients_light(client_list_light_t *out);
+
+
+/**
  * @brief Return the number of captured clients/STA
- * 
+ *
  */
 uint8_t wifi_sniffer_get_clients_count(void);
 
@@ -252,8 +295,15 @@ esp_err_t wifi_sniffer_get_aps(aps_info_t *out);
 
 
 /**
+ * @brief Same data as wifi_sniffer_get_aps(), but copies only
+ * bssid/ssid/channel/rssi/authmode/ciphers per entry.
+ */
+esp_err_t wifi_sniffer_get_aps_light(aps_info_light_t *out);
+
+
+/**
  * @brief Return the number of detected APs
- * 
+ *
  */
 uint8_t wifi_sniffer_get_aps_count(void);
 

@@ -1392,9 +1392,28 @@ esp_err_t wifi_sniffer_get_clients(client_list_t *out)
 {
     if(out == NULL || clients_semaphore == NULL) return ESP_ERR_INVALID_ARG;
 
-    if (xSemaphoreTake(clients_semaphore, pdMS_TO_TICKS(100)) == pdTRUE) 
+    if (xSemaphoreTake(clients_semaphore, pdMS_TO_TICKS(100)) == pdTRUE)
     {
         memcpy(out, &clients, sizeof(client_list_t));
+        xSemaphoreGive(clients_semaphore);
+        return ESP_OK;
+    }
+    return ESP_FAIL;
+}
+
+
+esp_err_t wifi_sniffer_get_clients_light(client_list_light_t *out)
+{
+    if(out == NULL || clients_semaphore == NULL) return ESP_ERR_INVALID_ARG;
+
+    if (xSemaphoreTake(clients_semaphore, pdMS_TO_TICKS(100)) == pdTRUE)
+    {
+        out->count = clients.count;
+        for (int i = 0; i < clients.count; i++) {
+            memcpy(out->client[i].mac, clients.client[i].mac, sizeof(out->client[i].mac));
+            memcpy(out->client[i].bssid, clients.client[i].bssid, sizeof(out->client[i].bssid));
+            out->client[i].rssi = clients.client[i].rssi;
+        }
         xSemaphoreGive(clients_semaphore);
         return ESP_OK;
     }
@@ -1419,10 +1438,33 @@ uint8_t wifi_sniffer_get_clients_count(void)
 esp_err_t wifi_sniffer_get_aps(aps_info_t *out)
 {
     if(out == NULL || aps_semaphore == NULL) return ESP_ERR_INVALID_ARG;
-    
-    if (xSemaphoreTake(aps_semaphore, pdMS_TO_TICKS(100)) == pdTRUE) 
+
+    if (xSemaphoreTake(aps_semaphore, pdMS_TO_TICKS(100)) == pdTRUE)
     {
         memcpy(out, &detected_aps, sizeof(aps_info_t));
+        xSemaphoreGive(aps_semaphore);
+        return ESP_OK;
+    }
+    return ESP_FAIL;
+}
+
+
+esp_err_t wifi_sniffer_get_aps_light(aps_info_light_t *out)
+{
+    if(out == NULL || aps_semaphore == NULL) return ESP_ERR_INVALID_ARG;
+
+    if (xSemaphoreTake(aps_semaphore, pdMS_TO_TICKS(100)) == pdTRUE)
+    {
+        out->count = detected_aps.count;
+        for (int i = 0; i < detected_aps.count; i++) {
+            memcpy(out->ap[i].bssid, detected_aps.ap[i].record.bssid, sizeof(out->ap[i].bssid));
+            memcpy(out->ap[i].ssid, detected_aps.ap[i].record.ssid, sizeof(out->ap[i].ssid));
+            out->ap[i].primary = detected_aps.ap[i].record.primary;
+            out->ap[i].rssi = detected_aps.ap[i].record.rssi;
+            out->ap[i].authmode = detected_aps.ap[i].record.authmode;
+            out->ap[i].group_cipher = detected_aps.ap[i].record.group_cipher;
+            out->ap[i].pairwise_cipher = detected_aps.ap[i].record.pairwise_cipher;
+        }
         xSemaphoreGive(aps_semaphore);
         return ESP_OK;
     }
@@ -1462,7 +1504,12 @@ esp_err_t wifi_sniffer_scan_fill_aps(void)
     uint16_t ap_count = 0;
     esp_wifi_scan_get_ap_num(&ap_count);
 
-    if (ap_count > 0) 
+    /* Bound the transient scratch buffer -- see SCAN_RESULT_CAP comment above. */
+    if (ap_count > MAX_AP) {
+        ap_count = MAX_AP;
+    }
+
+    if (ap_count > 0)
     {
         wifi_ap_record_t *ap_records = (wifi_ap_record_t *)calloc(ap_count, sizeof(wifi_ap_record_t));
         if (ap_records) 
@@ -1532,7 +1579,11 @@ esp_err_t wifi_sniffer_scan_fill_aps_fast(void)
     uint16_t ap_count = 0;
     esp_wifi_scan_get_ap_num(&ap_count);
 
-    if (ap_count > 0) 
+    if (ap_count > MAX_AP) {
+        ap_count = MAX_AP;
+    }
+
+    if (ap_count > 0)
     {
         wifi_ap_record_t *ap_records = (wifi_ap_record_t *)calloc(ap_count, sizeof(wifi_ap_record_t));
         if (ap_records) 
