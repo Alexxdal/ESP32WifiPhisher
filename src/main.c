@@ -11,8 +11,9 @@
 #include "networking.h"
 #include "sniffer.h"
 #include "console.h"
-#include "scanner.h"
 #include "TaskManager.h"
+#include "ble_sniffer.h"
+#include "cjson_pool.h"
 
 #if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3)
     #include "esp_wifi_usb.h"
@@ -57,7 +58,12 @@ void app_main()
     /* Deinit WDT (Error can be ignored) */
     esp_task_wdt_deinit();
 
-    if (task_manager_init() != ESP_OK) 
+    if (task_manager_init() != ESP_OK)
+    {
+        fatal_error_handler();
+    }
+
+    if (cjson_pool_init() != ESP_OK)
     {
         fatal_error_handler();
     }
@@ -130,7 +136,7 @@ void app_main()
         fatal_error_handler();
     }
 
-    if(scanner_init() != ESP_OK) 
+    if(ble_sniffer_init() != ESP_OK)
     {
         fatal_error_handler();
     }

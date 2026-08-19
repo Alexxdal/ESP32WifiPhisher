@@ -10,6 +10,7 @@
 #include "wifiMng.h"
 #include "scanner.h"
 #include "sniffer.h"
+#include "cjson_pool.h"
 
 #define WIFI_CONSOLE_SSID_MAX_LEN 32
 #define WIFI_CONSOLE_PASS_MAX_LEN 64
@@ -175,6 +176,7 @@ void meminfo(EmbeddedCli *cli, char *args, void *context)
     char buff[64];
 
     /* Internal RAM (DRAM): where task stacks and most heap allocations */
+    size_t total_internal   = heap_caps_get_total_size(MALLOC_CAP_INTERNAL);
     size_t free_internal    = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
     size_t min_free_internal = heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL);
     size_t largest_internal  = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL);
@@ -182,6 +184,13 @@ void meminfo(EmbeddedCli *cli, char *args, void *context)
     size_t free_default = heap_caps_get_free_size(MALLOC_CAP_DEFAULT);
 
     embeddedCliPrint(cli, "--- Memory info ---");
+
+    /* This is the pool the heap allocator owns AFTER .bss/.data/.noinit and
+     * early boot reservations -- i.e. the real budget shared by every
+     * malloc() for the rest of the device's life (WiFi/BT buffers, task
+     * stacks created after boot, cJSON, sockets, everything). */
+    snprintf(buff, sizeof(buff), "Internal heap TOTAL:  %u bytes", (unsigned int)total_internal);
+    embeddedCliPrint(cli, buff);
 
     snprintf(buff, sizeof(buff), "Internal free:        %u bytes", (unsigned int)free_internal);
     embeddedCliPrint(cli, buff);
@@ -193,6 +202,26 @@ void meminfo(EmbeddedCli *cli, char *args, void *context)
     embeddedCliPrint(cli, buff);
 
     snprintf(buff, sizeof(buff), "Default heap free:    %u bytes", (unsigned int)free_default);
+    embeddedCliPrint(cli, buff);
+}
+
+
+void cjson_pool_stats_cmd(EmbeddedCli *cli, char *args, void *context)
+{
+    char buff[80];
+    size_t free_blocks, total_blocks, min_free_ever, fallback_count;
+
+    cjson_pool_get_stats(&free_blocks, &total_blocks, &min_free_ever, &fallback_count);
+
+    embeddedCliPrint(cli, "--- cJSON pool stats ---");
+
+    snprintf(buff, sizeof(buff), "Blocks free now:    %u / %u", (unsigned int)free_blocks, (unsigned int)total_blocks);
+    embeddedCliPrint(cli, buff);
+
+    snprintf(buff, sizeof(buff), "Blocks min-ever:    %u / %u", (unsigned int)min_free_ever, (unsigned int)total_blocks);
+    embeddedCliPrint(cli, buff);
+
+    snprintf(buff, sizeof(buff), "Fallback to malloc: %u", (unsigned int)fallback_count);
     embeddedCliPrint(cli, buff);
 }
 
@@ -269,6 +298,15 @@ esp_err_t console_init(void)
         .binding = meminfo
     };
     embeddedCliAddBinding(cli, meminfo_cmd);
+
+    CliCommandBinding cjson_pool_stats_binding = {
+        .name = "cjson-pool-stats",
+        .help = "Print cJSON memory pool allocator stats",
+        .tokenizeArgs = true,
+        .context = NULL,
+        .binding = cjson_pool_stats_cmd
+    };
+    embeddedCliAddBinding(cli, cjson_pool_stats_binding);
 
     CliCommandBinding wifi_connect_cmd = {
         .name = "wifi_connect",

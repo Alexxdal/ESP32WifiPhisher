@@ -53,7 +53,7 @@ static void ws_send_work(void *arg)
     }
 
     if (r->need_free && r->payload) {
-        free(r->payload);
+        cJSON_free(r->payload);
     }
     free(r);
 }
@@ -86,13 +86,13 @@ static void ws_frame_process_task(void *pvParameter)
 					if (httpd_queue_work(ws_frame.hd, ws_send_work, heap_req) != ESP_OK) {
                         ESP_LOGE(TAG, "Failed to queue WS work, freeing memory");
                         if(heap_req->payload && heap_req->need_free) {
-                            free(heap_req->payload);
+                            cJSON_free(heap_req->payload);
                         }
 						free(heap_req);
                     }
                 } else {
 					ESP_LOGE(TAG, "Failed to alloc async req");
-                    if(ws_frame.payload && ws_frame.need_free) free(ws_frame.payload);
+                    if(ws_frame.payload && ws_frame.need_free) cJSON_free(ws_frame.payload);
                 }
 				break;
 			}

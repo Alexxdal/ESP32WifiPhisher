@@ -960,7 +960,7 @@ static void wifi_sniffer_packet_analyzer_handler(struct libwifi_frame *frame, sn
         req.frame_type = WS_TX_FRAME; 
         
         if(ws_send_broadcast_to_queue(&req) != ESP_OK) {
-            free(json); 
+            cJSON_free(json);
         }
     }
 }
@@ -1134,6 +1134,7 @@ esp_err_t wifi_start_sniffing(void)
     return ESP_OK;
 
 fail:
+    ESP_LOGE(TAG, "Failed to Start sniffer not enough memory.");
     wifi_sniffer_resource_cleanup();
     return ESP_ERR_NO_MEM;
 }

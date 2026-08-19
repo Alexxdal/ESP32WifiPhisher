@@ -85,7 +85,7 @@ static void api_send_status_frame(ws_frame_req_t *req, const char* status, const
     cmd.need_free = true;
 
     if (ws_send_command_to_queue(&cmd) != ESP_OK) {
-        free(payload);
+        cJSON_free(payload);
     }
 }
 
@@ -202,7 +202,7 @@ static esp_err_t api_get_status(ws_frame_req_t *req)
     cmd.need_free = true;
 
     if (ws_send_command_to_queue(&cmd) != ESP_OK) {
-        free(json_response);
+        cJSON_free(json_response);
         return ESP_FAIL;
     }
     
@@ -272,7 +272,7 @@ static esp_err_t api_get_recon_data_aps(ws_frame_req_t *req)
     cmd.need_free = true;
 
     if (ws_send_command_to_queue(&cmd) != ESP_OK) {
-        free(json_response);
+        cJSON_free(json_response);
         return ESP_FAIL;
     }
     
@@ -366,7 +366,7 @@ static esp_err_t api_get_recon_data_clients(ws_frame_req_t *req)
     cmd.need_free = true;
 
     if (ws_send_command_to_queue(&cmd) != ESP_OK) {
-        free(json_response);
+        cJSON_free(json_response);
         return ESP_FAIL;
     }
     
@@ -421,7 +421,7 @@ static esp_err_t api_admin_get_ap_settings(ws_frame_req_t *req)
     cmd.need_free = true;
 
     if (ws_send_command_to_queue(&cmd) != ESP_OK) {
-        free(json_response);
+        cJSON_free(json_response);
         return ESP_FAIL;
     }
 
@@ -564,7 +564,7 @@ static esp_err_t api_wifi_scan(ws_frame_req_t *req)
     cmd.need_free = true;
 
     if (ws_send_command_to_queue(&cmd) != ESP_OK) {
-        free(json);
+        cJSON_free(json);
         return ESP_FAIL;
     }
 
@@ -652,7 +652,7 @@ static esp_err_t api_get_evlitwin_target(ws_frame_req_t *req)
     cmd.need_free = true;
 
     if (ws_send_command_to_queue(&cmd) != ESP_OK) {
-        free(json_response);
+        cJSON_free(json_response);
         return ESP_FAIL;
     }
     return ESP_OK;
@@ -734,7 +734,7 @@ static esp_err_t api_get_passwords(ws_frame_req_t *req)
     cmd.need_free = true;
     
     if (ws_send_command_to_queue(&cmd) != ESP_OK) {
-        free(json_response);
+        cJSON_free(json_response);
         return ESP_FAIL;
     }
 
@@ -800,7 +800,7 @@ static esp_err_t api_get_karma_probes(ws_frame_req_t *req)
     cmd.need_free = true;
 
     if (ws_send_command_to_queue(&cmd) != ESP_OK) {
-        free(json);
+        cJSON_free(json);
         return ESP_FAIL;
     }
 
@@ -1287,7 +1287,7 @@ static esp_err_t api_get_wifi_last_credentials(ws_frame_req_t *req)
     cmd.need_free = true;
 
     if (ws_send_command_to_queue(&cmd) != ESP_OK) {
-        free(json_response);
+        cJSON_free(json_response);
         return ESP_FAIL;
     }
 
@@ -1508,7 +1508,7 @@ static esp_err_t api_start_host_scan(ws_frame_req_t *req)
     }
 
     cJSON *hosts = cJSON_Parse(scan_results_str);
-    free(scan_results_str);
+    cJSON_free(scan_results_str);
     if (hosts == NULL) {
         api_send_status_frame(req, "error", "Failed to parse ARP sweep results");
         return ESP_FAIL;
@@ -1522,7 +1522,7 @@ static esp_err_t api_start_host_scan(ws_frame_req_t *req)
                 merge_discovery_results(hosts, mdns_array, "mdns");
                 cJSON_Delete(mdns_array);
             }
-            free(mdns_str);
+            cJSON_free(mdns_str);
         }
     }
 
@@ -1534,7 +1534,7 @@ static esp_err_t api_start_host_scan(ws_frame_req_t *req)
                 merge_discovery_results(hosts, ssdp_array, "ssdp");
                 cJSON_Delete(ssdp_array);
             }
-            free(ssdp_str);
+            cJSON_free(ssdp_str);
         }
 
         /* One extra small HTTP GET per UPnP host, reading its own device
@@ -1588,7 +1588,7 @@ static esp_err_t api_start_host_scan(ws_frame_req_t *req)
     cmd.need_free = true;
 
     if (ws_send_command_to_queue(&cmd) != ESP_OK) {
-        free(json_response);
+        cJSON_free(json_response);
         return ESP_FAIL;
     }
 
@@ -1645,7 +1645,7 @@ static esp_err_t api_start_port_scan_single(ws_frame_req_t *req)
     cmd.need_free = true;
 
     if (ws_send_command_to_queue(&cmd) != ESP_OK) {
-        free(json_response);
+        cJSON_free(json_response);
         return ESP_FAIL;
     }
 
@@ -1751,6 +1751,6 @@ void ws_log(const char *level, const char *format, ...)
     cmd.need_free = true;
 
     if (ws_send_broadcast_to_queue(&cmd) != ESP_OK) {
-        free(payload);
+        cJSON_free(payload);
     }
 }
