@@ -2519,7 +2519,16 @@
             try {
                 const res = await sendCommand(CMD.GET_RECON_DATA_AP);
                 if (!res.aps) return;
-                lastApsData = res.aps;
+                // Il firmware manda ogni AP come array posizionale (meno byte
+                // sul filo, meno malloc su un device con poca RAM) invece che
+                // come oggetto con chiavi ripetute: [ssid, bssid, rssi, ch,
+                // pkts, bytes, sec, hs] -- vedi api_get_recon_data_aps() in
+                // server_api.c. Lo riportiamo subito a oggetti con le stesse
+                // chiavi di sempre cosi' il resto della UI non cambia.
+                lastApsData = res.aps.map(row => ({
+                    ssid: row[0], bssid: row[1], rssi: row[2], ch: row[3],
+                    pkts: row[4], bytes: row[5], sec: row[6], hs: row[7]
+                }));
 
                 // Aggiorniamo la mappa BSSID -> SSID e la mappa dei conteggi
                 const clientCountMap = {};
@@ -2590,7 +2599,13 @@
             try {
                 const res = await sendCommand(CMD.GET_RECON_DATA_CLI);
                 if (!res.clients) return;
-                lastClientsData = res.clients;
+                // Stesso formato compatto degli AP: [mac, bssid, ch, rssi,
+                // pkts, bytes, probes] -- vedi api_get_recon_data_clients()
+                // in server_api.c.
+                lastClientsData = res.clients.map(row => ({
+                    mac: row[0], bssid: row[1], ch: row[2], rssi: row[3],
+                    pkts: row[4], bytes: row[5], probes: row[6]
+                }));
 
                 const cliBody = document.getElementById('recon-cli-body');
                 const karmaBody = document.getElementById('karma-scan-body');

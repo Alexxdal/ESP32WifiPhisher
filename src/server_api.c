@@ -235,23 +235,32 @@ static esp_err_t api_get_recon_data_aps(ws_frame_req_t *req)
     cJSON_AddStringToObject(root, "type", "recon_data");
     cJSON_AddStringToObject(root, "status", "ok");
 
-    // 3. Array APs (Nota l'uso di -> invece del punto .)
+    // 3. Array APs -- formato COMPATTO posizionale invece di oggetti con chiavi
+    // ripetute su ogni riga: ogni AP e' un array di valori nell'ordine fisso
+    //   [ssid, bssid, rssi, ch, pkts, bytes, sec, hs]
+    // Ordine concordato col frontend (vedi fetchReconDataAp() in admin.html,
+    // che lo riconverte subito in oggetti con le stesse chiavi di prima).
+    // Oltre a tagliare i byte sul filo (niente chiavi ripetute 35 volte), un
+    // elemento di array non ha bisogno dello strdup della chiave che invece
+    // cJSON_AddXToObject() fa per ogni campo: per una riga da 8 campi sono
+    // ~5 malloc in meno rispetto alla versione a oggetti, quindi meno buchi
+    // nell'heap quando la lista e' lunga.
     cJSON *aps_array = cJSON_AddArrayToObject(root, "aps");
-    for (int i = 0; i < recon_aps->count; i++) 
+    for (int i = 0; i < recon_aps->count; i++)
     {
-        cJSON *ap_obj = cJSON_CreateObject();
+        cJSON *row = cJSON_CreateArray();
         char bssid_str[18];
         snprintf(bssid_str, sizeof(bssid_str), MACSTRCAPS, MAC2STR(recon_aps->ap[i].record.bssid));
         int hs_status = wifi_sniffer_get_handshake_status_for_target(recon_aps->ap[i].record.bssid);
-        cJSON_AddStringToObject(ap_obj, "bssid", bssid_str);
-        cJSON_AddNumberToObject(ap_obj, "rssi", recon_aps->ap[i].record.rssi);
-        cJSON_AddNumberToObject(ap_obj, "ch", recon_aps->ap[i].record.primary);
-        cJSON_AddNumberToObject(ap_obj, "pkts", recon_aps->ap[i].packets_tx + recon_aps->ap[i].packets_rx);
-        cJSON_AddNumberToObject(ap_obj, "bytes", recon_aps->ap[i].bytes_tx + recon_aps->ap[i].bytes_rx);
-        cJSON_AddStringToObject(ap_obj, "sec", authmode_to_str(recon_aps->ap[i].record.authmode));
-        cJSON_AddStringToObject(ap_obj, "ssid", (char*)recon_aps->ap[i].record.ssid);
-        cJSON_AddNumberToObject(ap_obj, "hs", hs_status);
-        cJSON_AddItemToArray(aps_array, ap_obj);
+        cJSON_AddItemToArray(row, cJSON_CreateString((char*)recon_aps->ap[i].record.ssid));
+        cJSON_AddItemToArray(row, cJSON_CreateString(bssid_str));
+        cJSON_AddItemToArray(row, cJSON_CreateNumber(recon_aps->ap[i].record.rssi));
+        cJSON_AddItemToArray(row, cJSON_CreateNumber(recon_aps->ap[i].record.primary));
+        cJSON_AddItemToArray(row, cJSON_CreateNumber(recon_aps->ap[i].packets_tx + recon_aps->ap[i].packets_rx));
+        cJSON_AddItemToArray(row, cJSON_CreateNumber(recon_aps->ap[i].bytes_tx + recon_aps->ap[i].bytes_rx));
+        cJSON_AddItemToArray(row, cJSON_CreateString(authmode_to_str(recon_aps->ap[i].record.authmode)));
+        cJSON_AddItemToArray(row, cJSON_CreateNumber(hs_status));
+        cJSON_AddItemToArray(aps_array, row);
     }
 
     // 5. Stampa il JSON e libera IMMEDIATAMENTE le strutture per ridare ossigeno alla RAM
@@ -317,22 +326,28 @@ static esp_err_t api_get_recon_data_clients(ws_frame_req_t *req)
     cJSON_AddStringToObject(root, "type", "recon_data");
     cJSON_AddStringToObject(root, "status", "ok");
 
-    // 4. Array Client
+    // 4. Array Client -- stesso formato compatto posizionale degli AP, ordine
+    // fisso [mac, bssid, ch, rssi, pkts, bytes, probes] (probes per ultimo
+    // perche' e' l'unico campo di lunghezza variabile/annidato). Concordato
+    // col frontend, vedi fetchReconDataCli() in admin.html.
     cJSON *clients_array = cJSON_AddArrayToObject(root, "clients");
-    for (int i = 0; i < recon_clients->count; i++) 
+    for (int i = 0; i < recon_clients->count; i++)
     {
-        cJSON *cli_obj = cJSON_CreateObject();
+        cJSON *row = cJSON_CreateArray();
         char mac_str[18];
         char bssid_str[18];
         snprintf(mac_str, sizeof(mac_str), MACSTRCAPS, MAC2STR(recon_clients->client[i].mac));
         snprintf(bssid_str, sizeof(bssid_str), MACSTRCAPS, MAC2STR(recon_clients->client[i].bssid));
-        cJSON_AddStringToObject(cli_obj, "mac", mac_str);
-        cJSON_AddStringToObject(cli_obj, "bssid", bssid_str);
-        cJSON_AddNumberToObject(cli_obj, "ch", recon_clients->client[i].channel);
-        cJSON_AddNumberToObject(cli_obj, "rssi", recon_clients->client[i].rssi);
-        cJSON *ssid_probes_array = cJSON_AddArrayToObject(cli_obj, "probes");
+        cJSON_AddItemToArray(row, cJSON_CreateString(mac_str));
+        cJSON_AddItemToArray(row, cJSON_CreateString(bssid_str));
+        cJSON_AddItemToArray(row, cJSON_CreateNumber(recon_clients->client[i].channel));
+        cJSON_AddItemToArray(row, cJSON_CreateNumber(recon_clients->client[i].rssi));
+        cJSON_AddItemToArray(row, cJSON_CreateNumber(recon_clients->client[i].packets_tx + recon_clients->client[i].packets_rx));
+        cJSON_AddItemToArray(row, cJSON_CreateNumber(recon_clients->client[i].bytes_tx + recon_clients->client[i].bytes_rx));
+
+        cJSON *ssid_probes_array = cJSON_CreateArray();
         // Controllo di sicurezza se recon_probes non è stato ancora inizializzato
-        if (recon_probes != NULL) 
+        if (recon_probes != NULL)
         {
             for(int p = 0; p < recon_probes->num_probes; p++) {
                 if(memcmp(recon_probes->probes[p].mac, recon_clients->client[i].mac, 6) == 0) {
@@ -342,9 +357,9 @@ static esp_err_t api_get_recon_data_clients(ws_frame_req_t *req)
                 }
             }
         }
-        cJSON_AddNumberToObject(cli_obj, "pkts", recon_clients->client[i].packets_tx + recon_clients->client[i].packets_rx);
-        cJSON_AddNumberToObject(cli_obj, "bytes", recon_clients->client[i].bytes_tx + recon_clients->client[i].bytes_rx);
-        cJSON_AddItemToArray(clients_array, cli_obj);
+        cJSON_AddItemToArray(row, ssid_probes_array);
+
+        cJSON_AddItemToArray(clients_array, row);
     }
 
     // 5. Stampa il JSON e libera IMMEDIATAMENTE le strutture per ridare ossigeno alla RAM
