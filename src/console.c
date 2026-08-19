@@ -1,4 +1,5 @@
 #include <driver/uart.h>
+#include "esp_heap_caps.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "console.h"
@@ -163,8 +164,36 @@ void port_scan_console(EmbeddedCli *cli, char *args, void *context)
 }
 
 
-void task_summary(EmbeddedCli *cli, char *args, void *context) {
+void task_summary(EmbeddedCli *cli, char *args, void *context) 
+{
     task_manager_print_summary();
+}
+
+
+void meminfo(EmbeddedCli *cli, char *args, void *context)
+{
+    char buff[64];
+
+    /* Internal RAM (DRAM): where task stacks and most heap allocations */
+    size_t free_internal    = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
+    size_t min_free_internal = heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL);
+    size_t largest_internal  = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL);
+    /* Combined heap across all capabilities (internal + PSRAM if present). */
+    size_t free_default = heap_caps_get_free_size(MALLOC_CAP_DEFAULT);
+
+    embeddedCliPrint(cli, "--- Memory info ---");
+
+    snprintf(buff, sizeof(buff), "Internal free:        %u bytes", (unsigned int)free_internal);
+    embeddedCliPrint(cli, buff);
+
+    snprintf(buff, sizeof(buff), "Internal min-ever:    %u bytes", (unsigned int)min_free_internal);
+    embeddedCliPrint(cli, buff);
+
+    snprintf(buff, sizeof(buff), "Internal largest blk: %u bytes", (unsigned int)largest_internal);
+    embeddedCliPrint(cli, buff);
+
+    snprintf(buff, sizeof(buff), "Default heap free:    %u bytes", (unsigned int)free_default);
+    embeddedCliPrint(cli, buff);
 }
 
 
@@ -231,6 +260,15 @@ esp_err_t console_init(void)
         .binding = task_summary
     };
     embeddedCliAddBinding(cli, task_summary_cmd);
+
+    CliCommandBinding meminfo_cmd = {
+        .name = "meminfo",
+        .help = "Print RAM memory usage",
+        .tokenizeArgs = true,
+        .context = NULL,
+        .binding = meminfo
+    };
+    embeddedCliAddBinding(cli, meminfo_cmd);
 
     CliCommandBinding wifi_connect_cmd = {
         .name = "wifi_connect",
