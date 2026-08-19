@@ -15,12 +15,21 @@
  */
 #if defined(CONFIG_IDF_TARGET_ESP32S2)
 /* S2 Has only 320kb of ram */
-#define MAX_AP      20
+#define MAX_AP      15
 #else
 #define MAX_AP      35
 #endif
 typedef struct {
-    wifi_ap_record_t record; // La struct nativa di ESP-IDF
+    uint8_t bssid[6];                     /**< MAC address of AP */
+    uint8_t ssid[33];                     /**< SSID of AP */
+    uint8_t primary;                      /**< Channel of AP */
+    int8_t  rssi;                         /**< Signal strength of AP. Note that in some rare cases where signal strength is very strong, RSSI values can be slightly positive */
+    uint8_t wps;                          /**< Identify if WPS is supported or not */
+    wifi_auth_mode_t authmode;            /**< Auth mode of AP */
+    wifi_cipher_type_t pairwise_cipher;   /**< Pairwise cipher of AP */
+    wifi_cipher_type_t group_cipher;      /**< Group cipher of AP */
+    wifi_bandwidth_t bandwidth;           /**< Bandwidth of AP */
+    /* Statistics */
     uint32_t packets_rx;     // Pacchetti ricevuti dall'AP
     uint32_t packets_tx;     // Pacchetti inviati dall'AP
     uint32_t bytes_rx;
@@ -61,9 +70,9 @@ typedef struct {
  */
 #if defined(CONFIG_IDF_TARGET_ESP32S2)
 /* S2 Has only 320kb of ram */
-#define MAX_CLIENTS 35
+#define MAX_CLIENTS 20
 #else
-#define MAX_CLIENTS 50
+#define MAX_CLIENTS 45
 #endif
 typedef struct {
     int8_t rssi;
@@ -124,9 +133,9 @@ typedef struct {
  *
  */
 #if defined(CONFIG_IDF_TARGET_ESP32S2)
-#define MAX_HANDSHAKE_NUM 5
+#define MAX_HANDSHAKE_NUM 3
 #else
-#define MAX_HANDSHAKE_NUM 10
+#define MAX_HANDSHAKE_NUM 5
 #endif
 typedef struct {
     uint8_t ssid[33];

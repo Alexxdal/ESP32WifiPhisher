@@ -236,29 +236,20 @@ static esp_err_t api_get_recon_data_aps(ws_frame_req_t *req)
     cJSON_AddStringToObject(root, "status", "ok");
 
     // 3. Array APs -- formato COMPATTO posizionale invece di oggetti con chiavi
-    // ripetute su ogni riga: ogni AP e' un array di valori nell'ordine fisso
-    //   [ssid, bssid, rssi, ch, pkts, bytes, sec, hs]
-    // Ordine concordato col frontend (vedi fetchReconDataAp() in admin.html,
-    // che lo riconverte subito in oggetti con le stesse chiavi di prima).
-    // Oltre a tagliare i byte sul filo (niente chiavi ripetute 35 volte), un
-    // elemento di array non ha bisogno dello strdup della chiave che invece
-    // cJSON_AddXToObject() fa per ogni campo: per una riga da 8 campi sono
-    // ~5 malloc in meno rispetto alla versione a oggetti, quindi meno buchi
-    // nell'heap quando la lista e' lunga.
     cJSON *aps_array = cJSON_AddArrayToObject(root, "aps");
     for (int i = 0; i < recon_aps->count; i++)
     {
         cJSON *row = cJSON_CreateArray();
         char bssid_str[18];
-        snprintf(bssid_str, sizeof(bssid_str), MACSTRCAPS, MAC2STR(recon_aps->ap[i].record.bssid));
-        int hs_status = wifi_sniffer_get_handshake_status_for_target(recon_aps->ap[i].record.bssid);
-        cJSON_AddItemToArray(row, cJSON_CreateString((char*)recon_aps->ap[i].record.ssid));
+        snprintf(bssid_str, sizeof(bssid_str), MACSTRCAPS, MAC2STR(recon_aps->ap[i].bssid));
+        int hs_status = wifi_sniffer_get_handshake_status_for_target(recon_aps->ap[i].bssid);
+        cJSON_AddItemToArray(row, cJSON_CreateString((char*)recon_aps->ap[i].ssid));
         cJSON_AddItemToArray(row, cJSON_CreateString(bssid_str));
-        cJSON_AddItemToArray(row, cJSON_CreateNumber(recon_aps->ap[i].record.rssi));
-        cJSON_AddItemToArray(row, cJSON_CreateNumber(recon_aps->ap[i].record.primary));
+        cJSON_AddItemToArray(row, cJSON_CreateNumber(recon_aps->ap[i].rssi));
+        cJSON_AddItemToArray(row, cJSON_CreateNumber(recon_aps->ap[i].primary));
         cJSON_AddItemToArray(row, cJSON_CreateNumber(recon_aps->ap[i].packets_tx + recon_aps->ap[i].packets_rx));
         cJSON_AddItemToArray(row, cJSON_CreateNumber(recon_aps->ap[i].bytes_tx + recon_aps->ap[i].bytes_rx));
-        cJSON_AddItemToArray(row, cJSON_CreateString(authmode_to_str(recon_aps->ap[i].record.authmode)));
+        cJSON_AddItemToArray(row, cJSON_CreateString(authmode_to_str(recon_aps->ap[i].authmode)));
         cJSON_AddItemToArray(row, cJSON_CreateNumber(hs_status));
         cJSON_AddItemToArray(aps_array, row);
     }
@@ -536,10 +527,10 @@ static esp_err_t api_wifi_scan(ws_frame_req_t *req)
     for (int i = 0; i < scan_results->count; i++) 
     {
         char ssid[33];
-        memcpy(ssid, scan_results->ap[i].record.ssid, sizeof(scan_results->ap[i].record.ssid));
+        memcpy(ssid, scan_results->ap[i].ssid, sizeof(scan_results->ap[i].ssid));
         ssid[32] = '\0';
         char bssid[18];
-        snprintf(bssid, sizeof(bssid), MACSTRCAPS, MAC2STR(scan_results->ap[i].record.bssid));
+        snprintf(bssid, sizeof(bssid), MACSTRCAPS, MAC2STR(scan_results->ap[i].bssid));
         
         cJSON *obj = cJSON_CreateObject();
         if (!obj) {
@@ -551,14 +542,14 @@ static esp_err_t api_wifi_scan(ws_frame_req_t *req)
         }
 
         cJSON_AddStringToObject(obj, "ssid", ssid);
-        cJSON_AddNumberToObject(obj, "signal", scan_results->ap[i].record.rssi);
-        cJSON_AddNumberToObject(obj, "channel", scan_results->ap[i].record.primary);
+        cJSON_AddNumberToObject(obj, "signal", scan_results->ap[i].rssi);
+        cJSON_AddNumberToObject(obj, "channel", scan_results->ap[i].primary);
         cJSON_AddStringToObject(obj, "bssid", bssid);
-        cJSON_AddStringToObject(obj, "authmode", authmode_to_str(scan_results->ap[i].record.authmode));
-        cJSON_AddNumberToObject(obj, "authmode_code", scan_results->ap[i].record.authmode);
-        cJSON_AddNumberToObject(obj, "pairwise_cipher", scan_results->ap[i].record.pairwise_cipher);
-        cJSON_AddNumberToObject(obj, "group_cipher", scan_results->ap[i].record.group_cipher);
-        cJSON_AddBoolToObject(obj, "wps", scan_results->ap[i].record.wps ? 1 : 0);
+        cJSON_AddStringToObject(obj, "authmode", authmode_to_str(scan_results->ap[i].authmode));
+        cJSON_AddNumberToObject(obj, "authmode_code", scan_results->ap[i].authmode);
+        cJSON_AddNumberToObject(obj, "pairwise_cipher", scan_results->ap[i].pairwise_cipher);
+        cJSON_AddNumberToObject(obj, "group_cipher", scan_results->ap[i].group_cipher);
+        cJSON_AddBoolToObject(obj, "wps", scan_results->ap[i].wps ? 1 : 0);
         cJSON_AddItemToArray(root, obj);
     }
     cJSON_AddItemToObject(response_obj, "data", root);

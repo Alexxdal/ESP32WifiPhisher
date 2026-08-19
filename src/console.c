@@ -42,20 +42,20 @@ static void wifi_scan_task(void *arg)
     // Esegue la scansione e popola la struttura interna detected_aps
     if (wifi_sniffer_scan_fill_aps() == ESP_OK) {
         
-        aps_info_t aps_info;
+        aps_info_light_t aps_info;
         // Recupera i risultati in modo thread-safe
-        if (wifi_sniffer_get_aps(&aps_info) == ESP_OK) {
+        if (wifi_sniffer_get_aps_light(&aps_info) == ESP_OK) {
             
             char line[128];
             snprintf(line, sizeof(line), "Found %d access points in memory:", aps_info.count);
             embeddedCliPrint(cli_ptr, line);
-            embeddedCliPrint(cli_ptr, "CH | RSSI | BSSID             | SSID");
-            embeddedCliPrint(cli_ptr, "---|------|-------------------|--------------------------------");
+            embeddedCliPrint(cli_ptr, "CH  | RSSI | BSSID             | SSID");
+            embeddedCliPrint(cli_ptr, "----|------|-------------------|--------------------------------");
             
             // Itera sull'array dei risultati
             for (int i = 0; i < aps_info.count; i++) {
-                wifi_ap_record_t *ap = &aps_info.ap[i].record;
-                snprintf(line, sizeof(line), "%2d | %4d | %02X:%02X:%02X:%02X:%02X:%02X | %s", 
+                ap_ext_light_t *ap = &aps_info.ap[i];
+                snprintf(line, sizeof(line), "%2d  | %4d | %02X:%02X:%02X:%02X:%02X:%02X | %s", 
                          ap->primary, 
                          ap->rssi, 
                          ap->bssid[0], ap->bssid[1], ap->bssid[2], 
@@ -115,7 +115,7 @@ void wifi_scan_console(EmbeddedCli *cli, char *args, void *context)
         embeddedCliPrint(cli, "A WiFi scan is already in progress. Please wait...");
         return;
     }
-    if (task_manager_create_task(wifi_scan_task, "wifi_scan_tsk", 8192, cli, 5, NULL) != ESP_OK) {
+    if (task_manager_create_task(wifi_scan_task, "wifi_scan_tsk", 4096, cli, 5, NULL) != ESP_OK) {
         embeddedCliPrint(cli, "Failed to start scan task (registry or memory full)");
     }
 }

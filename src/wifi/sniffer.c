@@ -118,7 +118,7 @@ esp_err_t wifi_sniffer_init(void)
 }
 
 
-static void enrich_ap_record_from_beacom(wifi_ap_record_t *record, struct libwifi_bss *bss)
+static void enrich_ap_record_from_beacom(ap_ext_t *record, struct libwifi_bss *bss)
 {
     // 1. Impostazione WPS nativa da libwifi
     record->wps = bss->wps;
@@ -202,9 +202,6 @@ static void enrich_ap_record_from_beacom(wifi_ap_record_t *record, struct libwif
             record->group_cipher = WIFI_CIPHER_TYPE_WEP40;
         }
     }
-    // 3. Configurazione Base PHY / Standard Wi-Fi
-    // Presumiamo 802.11g come fallback di base nella banda 2.4GHz
-    record->phy_11g = 1;
 }
 
 
@@ -294,16 +291,16 @@ __attribute__((unused)) static void wifi_sniffer_capture_beacon(struct libwifi_f
             
             /* 1. Controlla se l'AP è già presente nella lista */
             for (int i = 0; i < detected_aps.count; i++) {
-                if (memcmp(detected_aps.ap[i].record.bssid, bssid, 6) == 0) {
+                if (memcmp(detected_aps.ap[i].bssid, bssid, 6) == 0) {
                     // Aggiorna i dati con l'ultimo beacon ricevuto
-                    detected_aps.ap[i].record.rssi = sniffer_pkt->rssi;
-                    detected_aps.ap[i].record.primary = sniffer_pkt->channel;
+                    detected_aps.ap[i].rssi = sniffer_pkt->rssi;
+                    detected_aps.ap[i].primary = sniffer_pkt->channel;
                     detected_aps.ap[i].packets_rx++;
                     detected_aps.ap[i].last_seen_us = esp_timer_get_time();
 
                     // Se prima l'SSID era nascosto e ora è visibile, aggiornalo
-                    if (strlen(beacon_info.ssid) > 0 && strlen((char*)detected_aps.ap[i].record.ssid) == 0) {
-                        strncpy((char *)detected_aps.ap[i].record.ssid, beacon_info.ssid, 32);
+                    if (strlen(beacon_info.ssid) > 0 && strlen((char*)detected_aps.ap[i].ssid) == 0) {
+                        strncpy((char *)detected_aps.ap[i].ssid, beacon_info.ssid, 32);
                     }
                     
                     xSemaphoreGive(aps_semaphore);
@@ -319,13 +316,13 @@ __attribute__((unused)) static void wifi_sniffer_capture_beacon(struct libwifi_f
                 memset(new_ap, 0, sizeof(ap_ext_t));
                 
                 // Copia i dati base estratti da libwifi e dal pacchetto sniffer
-                memcpy(new_ap->record.bssid, bssid, 6);
+                memcpy(new_ap->bssid, bssid, 6);
                 if (strlen(beacon_info.ssid) > 0) {
-                    strncpy((char *)new_ap->record.ssid, beacon_info.ssid, 32);
+                    strncpy((char *)new_ap->ssid, beacon_info.ssid, 32);
                 }
                 
-                new_ap->record.rssi = sniffer_pkt->rssi;
-                new_ap->record.primary = sniffer_pkt->channel;
+                new_ap->rssi = sniffer_pkt->rssi;
+                new_ap->primary = sniffer_pkt->channel;
                 
                 // Imposta le statistiche iniziali
                 new_ap->packets_rx = 1;
@@ -334,9 +331,9 @@ __attribute__((unused)) static void wifi_sniffer_capture_beacon(struct libwifi_f
                 detected_aps.count++;
                 
                 ESP_LOGI(TAG, "New AP: %s (BSSID: %02x:%02x:%02x:%02x:%02x:%02x) CH: %d RSSI: %d", 
-                         strlen((char*)new_ap->record.ssid) > 0 ? (char*)new_ap->record.ssid : "Hidden SSID",
+                         strlen((char*)new_ap->ssid) > 0 ? (char*)new_ap->ssid : "Hidden SSID",
                          bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5],
-                         new_ap->record.primary, new_ap->record.rssi);
+                         new_ap->primary, new_ap->rssi);
             }
             xSemaphoreGive(aps_semaphore);
         }
@@ -361,6 +358,7 @@ static void wifi_sniffer_capture_probes(struct libwifi_frame *frame, sniffer_pac
 
         if (xSemaphoreTake(probes_semaphore, pdMS_TO_TICKS(10)) == pdTRUE) 
         {
+            const uint8_t *dst_mac = (uint8_t *)&frame->header.data.addr1;
             const uint8_t *src_mac = (uint8_t *)frame->header.mgmt_ordered.addr2;
             /* Check if this is a new probe request */
             for (int i = 0; i < captured_probes.num_probes; i++) {
@@ -381,6 +379,7 @@ static void wifi_sniffer_capture_probes(struct libwifi_frame *frame, sniffer_pac
                 ws_log(TAG, "New Probe Req: %s from "MACSTR, probe_req_info.ssid, MAC2STR(src_mac));
                 ESP_LOGI(TAG, "New Probe Req: %s from "MACSTR, probe_req_info.ssid, MAC2STR(src_mac));
             }
+            add_client_to_list(src_mac, dst_mac, sniffer_pkt->length, true, sniffer_pkt->rssi, sniffer_pkt->channel);
             xSemaphoreGive(probes_semaphore);
         }
     cleanup:
@@ -414,11 +413,11 @@ static void wifi_sniffer_capture_assoc_req(struct libwifi_frame *frame, sniffer_
         if (xSemaphoreTake(aps_semaphore, pdMS_TO_TICKS(10)) == pdTRUE) 
         {
             for(int i = 0; i < detected_aps.count; i++) {
-                if (memcmp(detected_aps.ap[i].record.bssid, bssid_mac, 6) == 0) 
+                if (memcmp(detected_aps.ap[i].bssid, bssid_mac, 6) == 0) 
                 {
-                    if(detected_aps.ap[i].record.ssid[0] == '\0') 
+                    if(detected_aps.ap[i].ssid[0] == '\0') 
                     {
-                        memcpy(detected_aps.ap[i].record.ssid, sta_info.ssid, 33);
+                        memcpy(detected_aps.ap[i].ssid, sta_info.ssid, 33);
                         ESP_LOGI(TAG, "Found hidden SSID for AP "MACSTR ": %s", MAC2STR(bssid_mac), sta_info.ssid);
                         ws_log(TAG, "Found hidden SSID for AP "MACSTR ": %s", MAC2STR(bssid_mac), sta_info.ssid);
                     }
@@ -506,23 +505,23 @@ static void wifi_sniffer_capture_aps(struct libwifi_frame *frame, sniffer_packet
             
             /* 1. Controlla se questo AP è già nella lista */
             for (int i = 0; i < detected_aps.count; i++) {
-                if (memcmp(detected_aps.ap[i].record.bssid, bssid_mac, 6) == 0)
+                if (memcmp(detected_aps.ap[i].bssid, bssid_mac, 6) == 0)
                 {
                     bool is_incoming_valid = (strnlen((char*)bss.ssid, 32) > 0);
                     
                     // Se il pacchetto in arrivo ha un SSID valido, aggiorna quello salvato
                     // Questo risolve automaticamente il passaggio da Hidden SSID> al nome reale
                     if (is_incoming_valid) {
-                        memset(detected_aps.ap[i].record.ssid, 0, 33);
-                        strncpy((char *)detected_aps.ap[i].record.ssid, bss.ssid, 32);
+                        memset(detected_aps.ap[i].ssid, 0, 33);
+                        strncpy((char *)detected_aps.ap[i].ssid, bss.ssid, 32);
                     } 
                     
-                    detected_aps.ap[i].record.rssi = rssi;
-                    detected_aps.ap[i].record.primary = ch;
+                    detected_aps.ap[i].rssi = rssi;
+                    detected_aps.ap[i].primary = ch;
                     detected_aps.ap[i].last_seen_us = now;
                     detected_aps.ap[i].packets_tx++;
                     detected_aps.ap[i].bytes_tx += length;
-                    enrich_ap_record_from_beacom(&detected_aps.ap[i].record, &bss);
+                    enrich_ap_record_from_beacom(&detected_aps.ap[i], &bss);
                     
                     found = true;
                     break;
@@ -533,23 +532,23 @@ static void wifi_sniffer_capture_aps(struct libwifi_frame *frame, sniffer_packet
             if (!found && detected_aps.count < MAX_AP) {
                 ap_ext_t *new_ap = &detected_aps.ap[detected_aps.count];
                 memset(new_ap, 0, sizeof(ap_ext_t));
-                memcpy(new_ap->record.bssid, bssid_mac, 6);
+                memcpy(new_ap->bssid, bssid_mac, 6);
                 
                 char tmp[33] = {0};
                 if (strnlen((char*)bss.ssid, 32) > 0) {
                     strncpy(tmp, (char *)bss.ssid, 32);
-                    strncpy((char *)new_ap->record.ssid, bss.ssid, 32);
+                    strncpy((char *)new_ap->ssid, bss.ssid, 32);
                 }
                 else {
                     strncpy(tmp, "[Hidden SSID]", 32);
                 }
 
-                new_ap->record.rssi = rssi;
-                new_ap->record.primary = ch;
+                new_ap->rssi = rssi;
+                new_ap->primary = ch;
                 new_ap->last_seen_us = now;
                 new_ap->packets_tx = 1;
                 new_ap->bytes_tx = length;
-                enrich_ap_record_from_beacom(&new_ap->record, &bss);
+                enrich_ap_record_from_beacom(new_ap, &bss);
                 detected_aps.count++;
 
                 ESP_LOGI(TAG, "New AP Added: %s (%02x:%02x:%02x:%02x:%02x:%02x)", 
@@ -614,8 +613,8 @@ static void wifi_sniffer_capture_handshakes(struct libwifi_frame *frame, sniffer
                 // Get SSID from detected APs list
                 if (xSemaphoreTake(aps_semaphore, pdMS_TO_TICKS(portMAX_DELAY)) == pdTRUE) {
                     for (int ap_entry_id = 0; ap_entry_id < detected_aps.count; ap_entry_id++) {
-                        if (memcmp(detected_aps.ap[ap_entry_id].record.bssid, bssid, 6) == 0) {
-                            strncpy((char *)entry->ssid, (char *)detected_aps.ap[ap_entry_id].record.ssid, 32);
+                        if (memcmp(detected_aps.ap[ap_entry_id].bssid, bssid, 6) == 0) {
+                            strncpy((char *)entry->ssid, (char *)detected_aps.ap[ap_entry_id].ssid, 32);
                             break;
                         }
                     }
@@ -1102,7 +1101,7 @@ esp_err_t wifi_start_sniffing(void)
     /* Create packet parsing task */
     if (packet_parsing_task_handle == NULL) {
         packet_parsing_task_running = true;
-        if (task_manager_create_task(packet_parsing_task, "packet_parsing_task", 8192, NULL,
+        if (task_manager_create_task(packet_parsing_task, "packet_parsing_task", 4096, NULL,
                         PACKET_PARSING_TASK_PRIO, &packet_parsing_task_handle) != ESP_OK) {
             packet_parsing_task_running = false;
             goto fail;
@@ -1458,13 +1457,13 @@ esp_err_t wifi_sniffer_get_aps_light(aps_info_light_t *out)
     {
         out->count = detected_aps.count;
         for (int i = 0; i < detected_aps.count; i++) {
-            memcpy(out->ap[i].bssid, detected_aps.ap[i].record.bssid, sizeof(out->ap[i].bssid));
-            memcpy(out->ap[i].ssid, detected_aps.ap[i].record.ssid, sizeof(out->ap[i].ssid));
-            out->ap[i].primary = detected_aps.ap[i].record.primary;
-            out->ap[i].rssi = detected_aps.ap[i].record.rssi;
-            out->ap[i].authmode = detected_aps.ap[i].record.authmode;
-            out->ap[i].group_cipher = detected_aps.ap[i].record.group_cipher;
-            out->ap[i].pairwise_cipher = detected_aps.ap[i].record.pairwise_cipher;
+            memcpy(out->ap[i].bssid, detected_aps.ap[i].bssid, sizeof(out->ap[i].bssid));
+            memcpy(out->ap[i].ssid, detected_aps.ap[i].ssid, sizeof(out->ap[i].ssid));
+            out->ap[i].primary = detected_aps.ap[i].primary;
+            out->ap[i].rssi = detected_aps.ap[i].rssi;
+            out->ap[i].authmode = detected_aps.ap[i].authmode;
+            out->ap[i].group_cipher = detected_aps.ap[i].group_cipher;
+            out->ap[i].pairwise_cipher = detected_aps.ap[i].pairwise_cipher;
         }
         xSemaphoreGive(aps_semaphore);
         return ESP_OK;
@@ -1505,58 +1504,67 @@ esp_err_t wifi_sniffer_scan_fill_aps(void)
     uint16_t ap_count = 0;
     esp_wifi_scan_get_ap_num(&ap_count);
 
-    /* Bound the transient scratch buffer -- see SCAN_RESULT_CAP comment above. */
     if (ap_count > MAX_AP) {
         ap_count = MAX_AP;
     }
 
-    if (ap_count > 0)
-    {
-        wifi_ap_record_t *ap_records = (wifi_ap_record_t *)calloc(ap_count, sizeof(wifi_ap_record_t));
-        if (ap_records) 
-        {
-            if (esp_wifi_scan_get_ap_records(&ap_count, ap_records) == ESP_OK) 
-            {
-                if (xSemaphoreTake(aps_semaphore, pdMS_TO_TICKS(100)) == pdTRUE) 
-                {
-                    for (int scanned_ap_i = 0; scanned_ap_i < ap_count; scanned_ap_i++) 
-                    {
-                        if (ap_records[scanned_ap_i].rssi < AP_SCAN_MIN_RSSI) continue; 
-                        bool found = false;
-                        for (int record_ap_i = 0; record_ap_i < detected_aps.count; record_ap_i++) 
-                        {
-                            // 2. Confronta il BSSID (Attenzione al .record.bssid)
-                            if (memcmp(detected_aps.ap[record_ap_i].record.bssid, ap_records[scanned_ap_i].bssid, 6) == 0) 
-                            {
-                                uint8_t ssid[33] = {0};
-                                if( strnlen((char*)detected_aps.ap[record_ap_i].record.ssid, 33) > 0 ) {
-                                    memcpy(ssid, detected_aps.ap[record_ap_i].record.ssid, 33);
-                                }
-                                if(memcmp(&detected_aps.ap[record_ap_i].record, &ap_records[scanned_ap_i], sizeof(wifi_ap_record_t)) != 0) {
-                                    memcpy(&detected_aps.ap[record_ap_i].record, &ap_records[scanned_ap_i], sizeof(wifi_ap_record_t));
-                                }
-                                memcpy(detected_aps.ap[record_ap_i].record.ssid, ssid, 33);
+    if (ap_count == 0) {
+        esp_wifi_clear_ap_list();
+        return ESP_OK;
+    }
 
-                                detected_aps.ap[record_ap_i].last_seen_us = esp_timer_get_time();
-                                found = true;
-                                break;
-                            }
+    wifi_ap_record_t ap_record = { 0 };
+    for(uint8_t record = 0; record < ap_count; record++) 
+    {
+        memset(&ap_record, 0, sizeof(wifi_ap_record_t));
+        if(esp_wifi_scan_get_ap_record(&ap_record) == ESP_OK)
+        {
+            if (ap_record.rssi < AP_SCAN_MIN_RSSI) continue;
+
+            if (xSemaphoreTake(aps_semaphore, pdMS_TO_TICKS(100)) == pdTRUE) 
+            {
+                bool found = false;
+                for(uint8_t memory_ap = 0; memory_ap < detected_aps.count; memory_ap++)
+                {
+                    if (memcmp(detected_aps.ap[memory_ap].bssid, ap_record.bssid, 6) == 0) 
+                    {
+                        if( strnlen((char*)ap_record.ssid, 33) > 0 ) {
+                            memcpy(detected_aps.ap[memory_ap].ssid, ap_record.ssid, 33);
                         }
-                        // 4. AP Nuovo: Inseriamo il record nella prima posizione libera
-                        if (!found && detected_aps.count < MAX_AP) 
-                        {
-                            memset(&detected_aps.ap[detected_aps.count], 0, sizeof(ap_ext_t));
-                            memcpy(&detected_aps.ap[detected_aps.count].record, &ap_records[scanned_ap_i], sizeof(wifi_ap_record_t));
-                            detected_aps.ap[detected_aps.count].last_seen_us = esp_timer_get_time();
-                            detected_aps.count++;
-                        }
+                        detected_aps.ap[memory_ap].primary = ap_record.primary;
+                        detected_aps.ap[memory_ap].rssi = ap_record.rssi;
+                        detected_aps.ap[memory_ap].wps = ap_record.wps;
+                        detected_aps.ap[memory_ap].authmode = ap_record.authmode;
+                        detected_aps.ap[memory_ap].pairwise_cipher = ap_record.pairwise_cipher;
+                        detected_aps.ap[memory_ap].group_cipher = ap_record.group_cipher;
+                        detected_aps.ap[memory_ap].bandwidth = ap_record.bandwidth;
+                        detected_aps.ap[memory_ap].last_seen_us = esp_timer_get_time();
+                        found = true;
+                        break;
                     }
-                    xSemaphoreGive(aps_semaphore);
                 }
+                /* Add new AP */
+                if (!found && detected_aps.count < MAX_AP) 
+                {
+                    uint8_t new_idx = detected_aps.count;
+                    memset(&detected_aps.ap[new_idx], 0, sizeof(ap_ext_t));
+                    memcpy(detected_aps.ap[new_idx].bssid, ap_record.bssid, 6);
+                    memcpy(detected_aps.ap[new_idx].ssid, ap_record.ssid, 33);
+                    detected_aps.ap[new_idx].primary = ap_record.primary;
+                    detected_aps.ap[new_idx].rssi = ap_record.rssi;
+                    detected_aps.ap[new_idx].wps = ap_record.wps;
+                    detected_aps.ap[new_idx].authmode = ap_record.authmode;
+                    detected_aps.ap[new_idx].pairwise_cipher = ap_record.pairwise_cipher;
+                    detected_aps.ap[new_idx].group_cipher = ap_record.group_cipher;
+                    detected_aps.ap[new_idx].bandwidth = ap_record.bandwidth;
+                    detected_aps.ap[new_idx].last_seen_us = esp_timer_get_time();
+                    detected_aps.count++;
+                }
+                xSemaphoreGive(aps_semaphore);
             }
-            free(ap_records);
         }
     }
+    esp_wifi_clear_ap_list();
     return ESP_OK;
 }
 
@@ -1584,53 +1592,63 @@ esp_err_t wifi_sniffer_scan_fill_aps_fast(void)
         ap_count = MAX_AP;
     }
 
-    if (ap_count > 0)
-    {
-        wifi_ap_record_t *ap_records = (wifi_ap_record_t *)calloc(ap_count, sizeof(wifi_ap_record_t));
-        if (ap_records) 
-        {
-            if (esp_wifi_scan_get_ap_records(&ap_count, ap_records) == ESP_OK) 
-            {
-                if (xSemaphoreTake(aps_semaphore, pdMS_TO_TICKS(100)) == pdTRUE) 
-                {
-                    for (int scanned_ap_i = 0; scanned_ap_i < ap_count; scanned_ap_i++) 
-                    {
-                        if (ap_records[scanned_ap_i].rssi < AP_SCAN_MIN_RSSI) continue; 
-                        bool found = false;
-                        for (int record_ap_i = 0; record_ap_i < detected_aps.count; record_ap_i++) 
-                        {
-                            // 2. Confronta il BSSID (Attenzione al .record.bssid)
-                            if (memcmp(detected_aps.ap[record_ap_i].record.bssid, ap_records[scanned_ap_i].bssid, 6) == 0) 
-                            {
-                                uint8_t ssid[33] = {0};
-                                if( strnlen((char*)detected_aps.ap[record_ap_i].record.ssid, 33) > 0 ) {
-                                    memcpy(ssid, detected_aps.ap[record_ap_i].record.ssid, 33);
-                                }
-                                if(memcmp(&detected_aps.ap[record_ap_i].record, &ap_records[scanned_ap_i], sizeof(wifi_ap_record_t)) != 0) {
-                                    memcpy(&detected_aps.ap[record_ap_i].record, &ap_records[scanned_ap_i], sizeof(wifi_ap_record_t));
-                                }
-                                memcpy(detected_aps.ap[record_ap_i].record.ssid, ssid, 33);
+    if (ap_count == 0) {
+        esp_wifi_clear_ap_list();
+        return ESP_OK;
+    }
 
-                                detected_aps.ap[record_ap_i].last_seen_us = esp_timer_get_time();
-                                found = true;
-                                break;
-                            }
+    wifi_ap_record_t ap_record = { 0 };
+    for(uint8_t record = 0; record < ap_count; record++) 
+    {
+        memset(&ap_record, 0, sizeof(wifi_ap_record_t));
+        if(esp_wifi_scan_get_ap_record(&ap_record) == ESP_OK)
+        {
+            if (ap_record.rssi < AP_SCAN_MIN_RSSI) continue;
+
+            if (xSemaphoreTake(aps_semaphore, pdMS_TO_TICKS(100)) == pdTRUE) 
+            {
+                bool found = false;
+                for(uint8_t memory_ap = 0; memory_ap < detected_aps.count; memory_ap++)
+                {
+                    if (memcmp(detected_aps.ap[memory_ap].bssid, ap_record.bssid, 6) == 0) 
+                    {
+                        if( strnlen((char*)ap_record.ssid, 33) > 0 ) {
+                            memcpy(detected_aps.ap[memory_ap].ssid, ap_record.ssid, 33);
                         }
-                        // 4. AP Nuovo: Inseriamo il record nella prima posizione libera
-                        if (!found && detected_aps.count < MAX_AP) 
-                        {
-                            memset(&detected_aps.ap[detected_aps.count], 0, sizeof(ap_ext_t));
-                            memcpy(&detected_aps.ap[detected_aps.count].record, &ap_records[scanned_ap_i], sizeof(wifi_ap_record_t));
-                            detected_aps.ap[detected_aps.count].last_seen_us = esp_timer_get_time();
-                            detected_aps.count++;
-                        }
+                        detected_aps.ap[memory_ap].primary = ap_record.primary;
+                        detected_aps.ap[memory_ap].rssi = ap_record.rssi;
+                        detected_aps.ap[memory_ap].wps = ap_record.wps;
+                        detected_aps.ap[memory_ap].authmode = ap_record.authmode;
+                        detected_aps.ap[memory_ap].pairwise_cipher = ap_record.pairwise_cipher;
+                        detected_aps.ap[memory_ap].group_cipher = ap_record.group_cipher;
+                        detected_aps.ap[memory_ap].bandwidth = ap_record.bandwidth;
+                        detected_aps.ap[memory_ap].last_seen_us = esp_timer_get_time();
+                        found = true;
+                        break;
                     }
-                    xSemaphoreGive(aps_semaphore);
                 }
+                /* Add new AP */
+                if (!found && detected_aps.count < MAX_AP) 
+                {
+                    uint8_t new_idx = detected_aps.count;
+                    memset(&detected_aps.ap[new_idx], 0, sizeof(ap_ext_t));
+                    memcpy(detected_aps.ap[new_idx].bssid, ap_record.bssid, 6);
+                    memcpy(detected_aps.ap[new_idx].ssid, ap_record.ssid, 33);
+                    detected_aps.ap[new_idx].primary = ap_record.primary;
+                    detected_aps.ap[new_idx].rssi = ap_record.rssi;
+                    detected_aps.ap[new_idx].wps = ap_record.wps;
+                    detected_aps.ap[new_idx].authmode = ap_record.authmode;
+                    detected_aps.ap[new_idx].pairwise_cipher = ap_record.pairwise_cipher;
+                    detected_aps.ap[new_idx].group_cipher = ap_record.group_cipher;
+                    detected_aps.ap[new_idx].bandwidth = ap_record.bandwidth;
+                    detected_aps.ap[new_idx].last_seen_us = esp_timer_get_time();
+                    detected_aps.count++;
+                }
+                xSemaphoreGive(aps_semaphore);
             }
-            free(ap_records);
         }
     }
+    esp_wifi_clear_ap_list();
     return ESP_OK;
 }
 /* ########################################################### */
@@ -1708,7 +1726,7 @@ static void add_client_to_list(const uint8_t *mac, const uint8_t *bssid, uint16_
     if (clients_semaphore == NULL) return;
 
     // Filter null MAC or Broadcast/Multicast
-    if (mac == NULL || (mac[0] & 0x01) == 1 || bssid == NULL || isMacBroadcast(bssid)) {
+    if (mac == NULL || (mac[0] & 0x01) == 1 || bssid == NULL /*|| isMacBroadcast(bssid)*/) {
         return;
     }
 
