@@ -260,8 +260,9 @@ esp_err_t ble_sniffer_start(void)
     struct ble_gap_disc_params disc_params = {
         .passive = 1,             /* receive-only, no scan requests */
         .filter_duplicates = 0,   /* every frame, not just the first per device */
-        .itvl = 0x0010,           /* scan interval, units of 0.625 ms */
-        .window = 0x0010,         /* scan window per interval */
+        .itvl = 0x01E0,           /* 480 * 0.625ms = 300ms: ogni quanto il controller richiede il radio */
+        .window = 0x0010,         /* 16 * 0.625ms = 10ms: quanto lo tiene occupato -> ~3.3% duty cycle,
+                                    * lascia ~290ms liberi per il WiFi ad ogni ciclo */
     };
 
     int rc = ble_gap_disc(s_own_addr_type, BLE_HS_FOREVER, &disc_params, ble_gap_event_cb, NULL);
