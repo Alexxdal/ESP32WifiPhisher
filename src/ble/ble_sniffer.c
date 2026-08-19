@@ -19,6 +19,9 @@ static const char *TAG = "BLE_SNIFFER";
 #include "host/util/util.h"
 #include "ble_identify.h"
 
+/* Stub per risolvere il bug di ESP-IDF quando CONFIG_BT_NIMBLE_GATT_SERVER è disabilitato */
+void ble_gatts_stop(void) { }
+
 #define BLE_SNIFFER_TASK_PRIO       5
 #define BLE_SNIFFER_TASK_STACK      4096
 #define BLE_SNIFFER_EVT_TASK_EXITED BIT0
@@ -210,24 +213,33 @@ esp_err_t ble_sniffer_init(void)
 
 esp_err_t ble_sniffer_deinit(void)
 {
-    ble_gap_disc_cancel();   /* no-op if not currently scanning */
-    s_running = false;
+    if (s_running) {
+        ble_gap_disc_cancel();
+        s_running = false;
+    }
 
     if (s_host_task_handle != NULL) {
-        nimble_port_stop();   /* makes nimble_port_run() return inside the task */
+        vTaskDelay(pdMS_TO_TICKS(250));
+        nimble_port_stop();
 
         EventBits_t bits = xEventGroupWaitBits(
             s_ble_evt,
             BLE_SNIFFER_EVT_TASK_EXITED,
             pdTRUE, pdFALSE,
-            pdMS_TO_TICKS(2000)
+            pdMS_TO_TICKS(10000)
         );
 
         if ((bits & BLE_SNIFFER_EVT_TASK_EXITED) == 0) {
-            /* Didn't confirm exit in time -> force-delete as a fallback. */
-            task_manager_delete_task_by_handle(s_host_task_handle);
+            ESP_LOGE(TAG, "ble_host_task non è uscito entro il timeout, "
+                           "salto nimble_port_deinit() per sicurezza");
+            s_host_ready = false;
+            return ESP_ERR_TIMEOUT;
         }
+
+        vTaskDelay(pdMS_TO_TICKS(100));
         s_host_task_handle = NULL;
+        //TODO: ESP-IDF Bug that cause crash solved in version 5.5
+        //nimble_port_deinit();
     }
 
     s_host_ready = false;
@@ -295,6 +307,9 @@ void ble_sniffer_set_frame_callback(ble_sniffer_frame_cb_t cb)
 
 size_t ble_sniffer_get_devices(ble_sniffer_device_t *out, size_t max_out)
 {
+    if (s_table_mutex == NULL) {
+        return 0;   /* sniffer non ancora avviato: nessun dispositivo da restituire */
+    }
     xSemaphoreTake(s_table_mutex, portMAX_DELAY);
     size_t n = (s_device_count < max_out) ? s_device_count : max_out;
     memcpy(out, s_devices, n * sizeof(ble_sniffer_device_t));
@@ -305,6 +320,10 @@ size_t ble_sniffer_get_devices(ble_sniffer_device_t *out, size_t max_out)
 
 void ble_sniffer_get_stats(ble_sniffer_stats_t *out)
 {
+    if (s_table_mutex == NULL) {
+        memset(out, 0, sizeof(*out));
+        return;
+    }
     xSemaphoreTake(s_table_mutex, portMAX_DELAY);
     *out = s_stats;
     xSemaphoreGive(s_table_mutex);
@@ -313,6 +332,9 @@ void ble_sniffer_get_stats(ble_sniffer_stats_t *out)
 
 void ble_sniffer_clear(void)
 {
+    if (s_table_mutex == NULL) {
+        return;
+    }
     xSemaphoreTake(s_table_mutex, portMAX_DELAY);
     memset(s_devices, 0, sizeof(s_devices));
     memset(&s_stats, 0, sizeof(s_stats));

@@ -136,11 +136,6 @@ void app_main()
         fatal_error_handler();
     }
 
-    if(ble_sniffer_init() != ESP_OK)
-    {
-        fatal_error_handler();
-    }
-
     /* Suspend main task */
     vTaskSuspend(NULL); 
 }

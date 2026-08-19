@@ -333,6 +333,11 @@
             }
         }
 
+        .wifi-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
         .wifi-table th {
             text-align: left;
             padding: 12px;
@@ -606,6 +611,13 @@
             <div class="menu-item" onclick="showView('view-deauth', this)">
                 <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zM4 12c0-4.42 3.58-8 8-8 1.85 0 3.55.63 4.9 1.69L5.69 16.9C4.63 15.55 4 13.85 4 12zm8 8c-1.85 0-3.55-.63-4.9-1.69L18.31 7.1C19.37 8.45 20 10.15 20 12c0 4.42-3.58 8-8 8z"/></svg> 
                 <span data-i18n="deauth_attack">Deauther</span>
+            </div>
+
+            <div class="menu-category" data-i18n="ble_cat">Bluetooth Modules</div>
+            <div class="menu-item" onclick="showView('view-ble', this)">
+                <!-- Icona Bluetooth -->
+                <svg viewBox="0 0 24 24"><path d="M17.71 7.71L12 2h-1v7.59L6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 11 14.41V22h1l5.71-5.71-4.3-4.29 4.3-4.29zM13 5.83l1.88 1.88L13 9.59V5.83zm1.88 10.46L13 18.17v-3.76l1.88 1.88z"/></svg>
+                <span data-i18n="ble_sniffer">BLE Sniffer</span>
             </div>
 
             <div class="menu-category" data-i18n="net_cat">Network Analysis</div>
@@ -1166,6 +1178,56 @@
             </div>
         </div>
 
+        <!-- BLE SNIFFER -->
+        <div id="view-ble" class="view-container">
+            <h2 data-i18n="ble_sniffer_title">BLE Scanner & Recon</h2>
+            
+            <div class="card">
+                <label style="color:var(--accent); border-bottom:1px solid #333; padding-bottom:5px; margin-bottom:15px; margin-top:0;" data-i18n="display_filters">DISPLAY FILTERS</label>
+                
+                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap:10px; margin-bottom:15px;">
+                    <input type="text" id="ble-filter-mac" placeholder="Filter MAC">
+                    <input type="text" id="ble-filter-name" placeholder="Filter Name / Vendor">
+                    <input type="number" id="ble-filter-rssi" placeholder="Min RSSI (-90)" value="-110">
+                </div>
+                
+                <div class="btn-group">
+                    <button onclick="startBleSniffer()" id="btn-ble-start">
+                        <svg style="width:16px; height:16px; vertical-align:middle; margin-right:5px;" viewBox="0 0 24 24"><path fill="currentColor" d="M8 5v14l11-7z"/></svg> START
+                    </button>
+                    
+                    <button class="danger" onclick="stopBleSniffer()" id="btn-ble-stop" disabled style="opacity:0.5; cursor:not-allowed;">
+                        <svg style="width:16px; height:16px; vertical-align:middle; margin-right:5px;" viewBox="0 0 24 24"><path fill="currentColor" d="M6 6h12v12H6z"/></svg> STOP
+                    </button>
+
+                    <button class="secondary" onclick="clearBleTable()">CLEAR</button>
+                </div>
+                
+                <div style="margin-top:5px; font-size:0.8rem; color:#666; text-align:right;">
+                    <span>Devices Found:</span> <span id="ble-device-count" style="color:var(--accent); font-weight:bold;">0</span>
+                </div>
+            </div>
+
+            <div class="card" style="padding:0; overflow-x:auto; height: 500px; overflow-y: scroll;">
+                <table class="wifi-table" style="font-family: 'Courier New', monospace; font-size: 0.8rem; width: 100%; border-collapse: collapse;">
+                    <thead style="position: sticky; top: 0; background: #1e1e1e; z-index: 10;">
+                        <tr>
+                            <th style="white-space: nowrap;">MAC Address</th>
+                            <th>RSSI</th>
+                            <th>Identity (Name/Vendor)</th>
+                            <th>Classification</th>
+                            <th>Pkts</th>
+                            <th>Last Seen</th> <!-- NUOVA COLONNA -->
+                            <th>Extra Data / Serial</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ble-body">
+                        <tr><td colspan="7" style="text-align:center; padding: 20px; color:#666;">Ready to scan BLE devices...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
         <!-- STA CONNECTION -->
         <div id="view-sta" class="view-container">
             <h2 data-i18n="sta_connection_title">Target Connection (STA)</h2>
@@ -1431,7 +1493,10 @@
             STOP_PACKET_ANALYZER: 22,
             GET_LAST_WIFI_CREDENTIALS: 23,
             HOST_DISCOVERY: 24,
-            PORT_SCAN_SINGLE: 25
+            PORT_SCAN_SINGLE: 25,
+            START_BLE_SNIFFER: 26,
+            STOP_BLE_SNIFFER: 27,
+            GET_BLE_DEVICES: 28
         };
 
         // Stato globale
@@ -3301,6 +3366,145 @@
         function stopPortScan() {
             isPortScanRunning = false;
             showToast("Stopping port scan...");
+        }
+
+        // ==========================================
+        // BLE SNIFFER LOGIC (POLLING)
+        // ==========================================
+        let isBleScanning = false;
+        let blePollingInterval = null;
+
+        async function startBleSniffer() {
+            log("Starting BLE Scanner...", "info");
+            const btnStart = document.getElementById('btn-ble-start');
+            const btnStop = document.getElementById('btn-ble-stop');
+
+            try {
+                await sendCommand(CMD.START_BLE_SNIFFER);
+                isBleScanning = true;
+                showToast("BLE Scanner Started");
+
+                btnStart.disabled = true; btnStart.style.opacity = "0.5"; btnStart.style.cursor = "not-allowed";
+                btnStop.disabled = false; btnStop.style.opacity = "1"; btnStop.style.cursor = "pointer";
+                
+                // Avvia il polling ogni 2 secondi
+                if (blePollingInterval) clearInterval(blePollingInterval);
+                blePollingInterval = setInterval(fetchBleDevices, 2000);
+
+            } catch (err) {
+                showToast("Error starting BLE scanner");
+                log("BLE Scanner Start Error: " + err, "error");
+            }
+        }
+
+        async function stopBleSniffer() {
+            log("Stopping BLE Scanner...", "warning");
+            const btnStart = document.getElementById('btn-ble-start');
+            const btnStop = document.getElementById('btn-ble-stop');
+
+            try {
+                await sendCommand(CMD.STOP_BLE_SNIFFER);
+                isBleScanning = false;
+                showToast("BLE Scanner Stopped");
+
+                // Ferma il polling
+                if (blePollingInterval) {
+                    clearInterval(blePollingInterval);
+                    blePollingInterval = null;
+                }
+
+                btnStart.disabled = false; btnStart.style.opacity = "1"; btnStart.style.cursor = "pointer";
+                btnStop.disabled = true; btnStop.style.opacity = "0.5"; btnStop.style.cursor = "not-allowed";
+            } catch (err) {
+                log("BLE Scanner Stop Error: " + err, "error");
+            }
+        }
+
+        function clearBleTable() {
+            // Manda comando al backend per azzerare la sua tabella interna (opzionale, ma consigliato)
+            // sendCommand(CMD.CLEAR_BLE_DEVICES); Se lo vuoi implementare
+            document.getElementById('ble-body').innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 20px; color:#666;">Ready to scan BLE devices...</td></tr>';
+            document.getElementById('ble-device-count').innerText = "0";
+        }
+
+        function fetchBleDevices() {
+            if (isBleScanning && document.getElementById('view-ble').classList.contains('active')) {
+                sendCommand(CMD.GET_BLE_DEVICES)
+                    .then(res => handleBleDevices(res)) // <-- AGGIUNGI QUESTA RIGA
+                    .catch(e => console.log("BLE fetch error", e));
+            }
+        }
+
+        // Funzione per mappare l'array posizionale proveniente dall'ESP32
+        function handleBleDevices(msg) {
+            if(!msg.devices) return;
+
+            const tbody = document.getElementById('ble-body');
+            tbody.innerHTML = '';
+
+            const minRssi = parseInt(document.getElementById('ble-filter-rssi').value) || -100;
+            const fMac = document.getElementById('ble-filter-mac').value.trim().toUpperCase();
+            const fNameData = document.getElementById('ble-filter-name').value.trim().toLowerCase();
+
+            let visibleCount = 0;
+            
+            // L'array ora è: [mac, rssi, name, vendor, label, serial, pkts, seconds_ago, data]
+            msg.devices.sort((a, b) => b[1] - a[1]).forEach(row => {
+                const mac = row[0];
+                const rssi = row[1];
+                const name = row[2];
+                const vendor = row[3];
+                const label = row[4];
+                const serial = row[5];
+                const pkts = row[6];
+                const secondsAgo = row[7];
+                const dataHex = row[8];
+
+                // Applica i filtri
+                if(rssi < minRssi) return;
+                if(fMac && !mac.includes(fMac)) return;
+                if(fNameData && !name.toLowerCase().includes(fNameData) && !vendor.toLowerCase().includes(fNameData)) return;
+
+                visibleCount++;
+
+                const tr = document.createElement('tr');
+                let rssiColor = rssi > -60 ? "#0f0" : (rssi > -80 ? "#ffab40" : "#ff5252");
+                
+                let identityHtml = name !== "" 
+                    ? `<div style="color:#fff; font-weight:bold;">${name}</div><div style="color:#888; font-size:0.7rem;">${vendor}</div>`
+                    : `<div style="color:#888; font-style:italic;">&lt;No Name&gt;</div><div style="color:#aaa; font-size:0.7rem;">${vendor}</div>`;
+
+                let badgeBg = "#222", badgeColor = "#aaa", badgeBorder = "transparent";
+                const lbl = label.toLowerCase();
+                if (lbl.includes("flipper") || lbl.includes("camera") || lbl.includes("airtag")) {
+                    badgeBg = "rgba(255, 82, 82, 0.15)"; badgeColor = "var(--danger)"; badgeBorder = "var(--danger)";
+                } else if (lbl.includes("tile") || lbl.includes("smarttag") || lbl.includes("chipolo") || lbl.includes("find my")) {
+                    badgeBg = "rgba(0, 230, 118, 0.15)"; badgeColor = "var(--accent)"; badgeBorder = "var(--accent)";
+                } else if (lbl.includes("apple") || lbl.includes("google") || lbl.includes("samsung")) {
+                    badgeBg = "rgba(255, 171, 64, 0.15)"; badgeColor = "#ffab40"; badgeBorder = "#ffab40";
+                }
+
+                let extraHtml = serial !== "" 
+                    ? `<span style="color:var(--accent); font-weight:bold;">SN: ${serial}</span>` 
+                    : `<span style="color:#666; word-break: break-all;">${dataHex}</span>`;
+
+                // Formattazione grafica del Last Seen basata sui dati reali del modulo C
+                let lastSeenStr = secondsAgo <= 2 ? "Active" : `${secondsAgo}s ago`;
+                let lastSeenColor = secondsAgo <= 2 ? "#00e676" : (secondsAgo < 15 ? "#ffab40" : "#666");
+
+                tr.innerHTML = `
+                    <td style="color:var(--accent); font-weight:bold; font-family:monospace; white-space: nowrap;">${mac}</td>
+                    <td style="color:${rssiColor}; font-weight:bold;">${rssi}</td>
+                    <td>${identityHtml}</td>
+                    <td><span style="background:${badgeBg}; color:${badgeColor}; border:1px solid ${badgeBorder}; padding:3px 6px; border-radius:4px; font-size:0.7rem; font-weight:bold; display:inline-block;">${label}</span></td>
+                    <td style="color:#fff;">${pkts}</td>
+                    <td style="color:${lastSeenColor}; font-size:0.75rem; font-weight:bold; white-space:nowrap;">${lastSeenStr}</td>
+                    <td style="font-size:0.75rem; font-family:monospace;">${extraHtml}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('ble-device-count').innerText = visibleCount;
         }
 
         // ==========================================

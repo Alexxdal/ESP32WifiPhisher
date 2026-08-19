@@ -19,6 +19,8 @@
 #include "networking.h"
 #include "scanner.h"
 #include "TaskManager.h"
+#include "ble_sniffer.h"
+#include "ble_identify.h"
 #include <libwifi.h>
 
 
@@ -1659,6 +1661,112 @@ static esp_err_t api_start_port_scan_single(ws_frame_req_t *req)
 }
 
 
+static esp_err_t api_start_ble_sniffer(ws_frame_req_t *req)
+{
+    ble_sniffer_init();
+    int retries = 0;
+    while (ble_sniffer_start() != ESP_OK && retries < 10) {
+        vTaskDelay(pdMS_TO_TICKS(100));
+        retries++;
+    }
+
+    if (retries >= 10) {
+        api_send_status_frame(req, "error", "BLE Sniffer start timeout (NimBLE not synced)");
+        return ESP_FAIL;
+    }
+
+    api_send_status_frame(req, "ok", "BLE Sniffer Started");
+    return ESP_OK;
+}
+
+
+static esp_err_t api_stop_ble_sniffer(ws_frame_req_t *req)
+{
+    ble_sniffer_stop();
+    ble_sniffer_deinit();
+    api_send_status_frame(req, "ok", "BLE Sniffer Stopped");
+    return ESP_OK;
+}
+
+
+static esp_err_t api_get_ble_devices(ws_frame_req_t *req)
+{
+    ble_sniffer_device_t *devices = malloc(sizeof(ble_sniffer_device_t) * BLE_SNIFFER_MAX_DEVICES);
+    if (!devices) {
+        ESP_LOGE(TAG, "No Heap memory for BLE devices!");
+        return ESP_ERR_NO_MEM;
+    }
+
+    size_t count = ble_sniffer_get_devices(devices, BLE_SNIFFER_MAX_DEVICES);
+
+    cJSON *root = cJSON_CreateObject();
+    if (root == NULL) {
+        free(devices);
+        return ESP_FAIL;
+    }
+
+    cJSON_AddNumberToObject(root, "req_id", req->req_id);
+    cJSON_AddStringToObject(root, "type", "ble_devices");
+    
+    // Array compatto posizionale per risparmiare memoria:
+    // [mac, rssi, name, vendor, label, serial, pkts, adv_data_hex]
+    cJSON *arr = cJSON_AddArrayToObject(root, "devices");
+    int64_t now_us = esp_timer_get_time();
+
+    for (size_t i = 0; i < count; i++) {
+        cJSON *row = cJSON_CreateArray();
+        
+        char mac_str[18];
+        snprintf(mac_str, sizeof(mac_str), "%02X:%02X:%02X:%02X:%02X:%02X",
+                 devices[i].addr[0], devices[i].addr[1], devices[i].addr[2],
+                 devices[i].addr[3], devices[i].addr[4], devices[i].addr[5]);
+
+        char data_hex[BLE_SNIFFER_MAX_ADV_LEN * 2 + 1] = {0};
+        for(int j = 0; j < devices[i].last_adv_len; j++) {
+            sprintf(data_hex + (j * 2), "%02X", devices[i].last_adv_payload[j]);
+        }
+
+        int seconds_ago = (int)((now_us - devices[i].last_seen_us) / 1000000);
+        if (seconds_ago < 0) seconds_ago = 0;
+
+        cJSON_AddItemToArray(row, cJSON_CreateString(mac_str));
+        cJSON_AddItemToArray(row, cJSON_CreateNumber(devices[i].last_rssi));
+        cJSON_AddItemToArray(row, cJSON_CreateString(devices[i].name[0] != '\0' ? devices[i].name : ""));
+        const char *vendor_str = devices[i].identify.vendor;
+        if (vendor_str == NULL) {
+            vendor_str = resolve_mac_oui(devices[i].addr);
+        }
+        cJSON_AddItemToArray(row, cJSON_CreateString(vendor_str));
+        cJSON_AddItemToArray(row, cJSON_CreateString(devices[i].identify.label ? devices[i].identify.label : "Unknown Device"));
+        cJSON_AddItemToArray(row, cJSON_CreateString(devices[i].identify.serial));
+        cJSON_AddItemToArray(row, cJSON_CreateNumber(devices[i].packet_count));
+        cJSON_AddItemToArray(row, cJSON_CreateNumber(seconds_ago)); // <-- INSERITO IL TIMER REALE
+        cJSON_AddItemToArray(row, cJSON_CreateString(data_hex));
+
+        cJSON_AddItemToArray(arr, row);
+    }
+
+    char *json_response = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    free(devices);
+
+    if (json_response == NULL) return ESP_FAIL;
+
+    ws_frame_req_t cmd;
+    cmd.hd = req->hd;
+    cmd.fd = req->fd;
+    cmd.payload = json_response;
+    cmd.len = strlen(json_response);
+    cmd.need_free = true;
+
+    if (ws_send_command_to_queue(&cmd) != ESP_OK) {
+        cJSON_free(json_response);
+        return ESP_FAIL;
+    }
+    return ESP_OK;
+}
+
+
 static const api_cmd_t api_cmd_list[] = {
     { API_GET_STATUS, api_get_status },
     { API_SET_AP_SETTINGS, api_admin_set_ap_settings },
@@ -1685,7 +1793,10 @@ static const api_cmd_t api_cmd_list[] = {
     { API_STOP_PACKET_ANALYZER, api_stop_packet_analyzer },
     { API_GET_LAST_WIFI_CREDENTIALS, api_get_wifi_last_credentials },
     { API_HOST_DISCOVERY, api_start_host_scan },
-    { API_PORT_SCAN, api_start_port_scan_single }
+    { API_PORT_SCAN, api_start_port_scan_single },
+    { API_START_BLE_SNIFFER, api_start_ble_sniffer },
+    { API_STOP_BLE_SNIFFER,  api_stop_ble_sniffer },
+    { API_GET_BLE_DEVICES,   api_get_ble_devices }
 };
 
 
