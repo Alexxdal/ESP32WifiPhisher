@@ -1290,6 +1290,14 @@ CONFIG_ESP_INTR_IN_IRAM=y
 # end of Hardware Settings
 
 #
+# ESP-Driver:LCD Controller Configurations
+#
+# CONFIG_LCD_ENABLE_DEBUG_LOG is not set
+# CONFIG_LCD_RGB_ISR_IRAM_SAFE is not set
+# CONFIG_LCD_RGB_RESTART_IN_VSYNC is not set
+# end of ESP-Driver:LCD Controller Configurations
+
+#
 # ESP-MM: Memory Management Configurations
 #
 # CONFIG_ESP_MM_CACHE_MSYNC_C2M_CHUNKED_OPS is not set

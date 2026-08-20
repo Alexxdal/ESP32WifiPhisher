@@ -328,7 +328,7 @@ static void display_task(void *param)
         } 
         else 
         {
-            snprintf(line, sizeof(line), "ESP32 Audit v%s", APP_VERSION); draw_text_line(y, line, C_CYAN); y += ROW_HEIGHT;
+            snprintf(line, sizeof(line), "ESP32WifiPhisher v%s", APP_VERSION); draw_text_line(y, line, C_CYAN); y += ROW_HEIGHT;
             
             wifi_config_t ap_cfg;
             char ap_ssid[33] = "--";
