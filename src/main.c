@@ -14,6 +14,7 @@
 #include "TaskManager.h"
 #include "ble_sniffer.h"
 #include "cjson_pool.h"
+#include "displayMng.h"
 
 #if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3)
     #include "esp_wifi_usb.h"
@@ -118,6 +119,11 @@ void app_main()
 
     /* Start wifi AP */
     wifi_start_softap();
+
+    /* Init Cardputer display (no-op on every other target, see displayMng.c) */
+    if (display_init() != ESP_OK) {
+        ESP_LOGW(TAG, "Display init failed, continuing without it");
+    }
 
     /* Start web server */
     http_server_start();
