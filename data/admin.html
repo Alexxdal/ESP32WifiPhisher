@@ -1505,7 +1505,8 @@
             PORT_SCAN_SINGLE: 25,
             START_BLE_SNIFFER: 26,
             STOP_BLE_SNIFFER: 27,
-            GET_BLE_DEVICES: 28
+            GET_BLE_DEVICES: 28,
+            BLE_DEVICES_CLEAR: 29,
         };
 
         // Stato globale
@@ -3429,9 +3430,13 @@
             }
         }
 
-        function clearBleTable() {
-            // Manda comando al backend per azzerare la sua tabella interna (opzionale, ma consigliato)
-            // sendCommand(CMD.CLEAR_BLE_DEVICES); Se lo vuoi implementare
+        async function clearBleTable() {
+            try {
+                await sendCommand(CMD.BLE_DEVICES_CLEAR);
+                showToast("BLE Scanner Devices Cleared");
+            } catch (err) {
+                log("BLE Scanner Devices Clear Error: " + err, "error");
+            }
             document.getElementById('ble-body').innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 20px; color:#666;">Ready to scan BLE devices...</td></tr>';
             document.getElementById('ble-device-count').innerText = "0";
         }

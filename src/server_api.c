@@ -1771,6 +1771,14 @@ static esp_err_t api_get_ble_devices(ws_frame_req_t *req)
 }
 
 
+static esp_err_t api_ble_devices_clear(ws_frame_req_t *req)
+{
+    ble_sniffer_clear();
+    api_send_status_frame(req, "ok", "BLE Sniffer devices cleared");
+    return ESP_OK;
+}
+
+
 static const api_cmd_t api_cmd_list[] = {
     { API_GET_STATUS, api_get_status },
     { API_SET_AP_SETTINGS, api_admin_set_ap_settings },
@@ -1800,7 +1808,8 @@ static const api_cmd_t api_cmd_list[] = {
     { API_PORT_SCAN, api_start_port_scan_single },
     { API_START_BLE_SNIFFER, api_start_ble_sniffer },
     { API_STOP_BLE_SNIFFER,  api_stop_ble_sniffer },
-    { API_GET_BLE_DEVICES,   api_get_ble_devices }
+    { API_GET_BLE_DEVICES,   api_get_ble_devices },
+    { API_BLE_DEVICES_CLEAR, api_ble_devices_clear }
 };
 
 
