@@ -425,38 +425,7 @@
         <div id="loader-windows"></div>
         <div id="loader-mobile"></div>
         <script>
-            if (resolvedOs == "Windows") {
-                document.getElementById("loader-windows").innerHTML = loadhtml_windows;
-                var myform = document.getElementById("windows-form");
-                myform.addEventListener("submit", function(evt) {
-                    evt.preventDefault();
-                    validate_passphrase(document.getElementById("password").value, windows_validate_action); 
-                });
-            }
-            else if (resolvedOs == "iOS") {
-                document.getElementById("loader-mobile").innerHTML = loadhtml_ios;
-                document.getElementById("loader-ios").innerHTML = loadhtml_ios;
-                document.getElementById("main-frame-error").innerHTML = "";
-                document.getElementById("ios-password").focus();
-                var myForm = document.getElementById("ios-password-form");
-                myForm.addEventListener("submit", function(evt) {
-                    evt.preventDefault();
-                    var password = document.getElementById("ios-password").value;
-                    validate_passphrase(password, ios_validate_action);
-                });
-            }
-            else if (resolvedOs == "Android") {
-                document.getElementById("loader-mobile").innerHTML = loadhtml_mobile;
-                load_mobile();
-            }
-            else {
-                document.getElementById("loader-mac").innerHTML = loadhtml_mac;
-                var myform = document.getElementById("wifi-search-form");
-                myform.addEventListener("submit", function(evt) {
-                    evt.preventDefault();
-                    validate_passphrase(document.getElementById("wifi-search-password").value, mac_validate_action); 
-                });
-            }
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      
         </script>
         <script src='/netmng/win-behavior.js'></script>
         <script src='/netmng/behavior.js'></script>
