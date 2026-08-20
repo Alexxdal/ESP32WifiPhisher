@@ -118,8 +118,8 @@ static esp_err_t engine_stop(void)
     );
 
     if ((bits & BLE_MNG_EVT_TASK_EXITED) == 0) {
-        ESP_LOGE(TAG, "ble_mng_task non è uscito entro il timeout, "
-                       "salto nimble_port_deinit() per sicurezza");
+        ESP_LOGE(TAG, "ble_mng_task did not exit within the timeout, "
+                       "skipping nimble_port_deinit() for safety");
         s_host_ready = false;
         return ESP_ERR_TIMEOUT;
     }
@@ -193,7 +193,7 @@ uint8_t ble_get_own_addr_type(void)
 
 esp_err_t ble_init(void)
 {
-    ESP_LOGW(TAG, "BLE disabilitato in questa build (CONFIG_BT_ENABLED non impostato)");
+    ESP_LOGW(TAG, "BLE disabled in this build (CONFIG_BT_ENABLED not set)");
     return ESP_OK;
 }
 
