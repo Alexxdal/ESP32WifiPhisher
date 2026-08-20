@@ -527,6 +527,13 @@
             margin-bottom: 0;
         }
 
+        #view-ble.active {
+            display: flex !important;
+            flex-direction: column;
+            overflow: hidden; /* Blocca lo scroll dell'intera pagina */
+            padding-bottom: 200px; /* Lascia spazio al terminale in basso */
+        }
+
         /* Responsive */
         @media (max-width: 768px) {
             .sidebar {
@@ -1208,23 +1215,25 @@
                 </div>
             </div>
 
-            <div class="card" style="padding:0; overflow-x:auto; height: 500px; overflow-y: scroll;">
-                <table class="wifi-table" style="font-family: 'Courier New', monospace; font-size: 0.8rem; width: 100%; border-collapse: collapse;">
-                    <thead style="position: sticky; top: 0; background: #1e1e1e; z-index: 10;">
-                        <tr>
-                            <th style="white-space: nowrap;">MAC Address</th>
-                            <th>RSSI</th>
-                            <th>Identity (Name/Vendor)</th>
-                            <th>Classification</th>
-                            <th>Pkts</th>
-                            <th>Last Seen</th> <!-- NUOVA COLONNA -->
-                            <th>Extra Data / Serial</th>
-                        </tr>
-                    </thead>
-                    <tbody id="ble-body">
-                        <tr><td colspan="7" style="text-align:center; padding: 20px; color:#666;">Ready to scan BLE devices...</td></tr>
-                    </tbody>
-                </table>
+            <div class="card" style="padding:0; display:flex; flex-direction:column; flex:1; min-height:0; margin-bottom:0;">
+                <div style="flex:1; overflow-y:auto; overflow-x:auto;">
+                    <table class="wifi-table" style="font-family: 'Courier New', monospace; font-size: 0.8rem; width: 100%; border-collapse: collapse;">
+                        <thead style="position: sticky; top: 0; background: #1e1e1e; z-index: 10;">
+                            <tr>
+                                <th style="white-space: nowrap;">MAC Address</th>
+                                <th>RSSI</th>
+                                <th>Identity (Name/Vendor)</th>
+                                <th>Classification</th>
+                                <th>Pkts</th>
+                                <th>Last Seen</th>
+                                <th>Extra Data / Serial</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ble-body">
+                            <tr><td colspan="7" style="text-align:center; padding: 20px; color:#666;">Ready to scan BLE devices...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
 

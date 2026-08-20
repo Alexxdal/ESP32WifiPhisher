@@ -21,6 +21,7 @@
 #include "TaskManager.h"
 #include "ble_sniffer.h"
 #include "ble_identify.h"
+#include "bleMng.h"
 #include <libwifi.h>
 
 
@@ -1663,7 +1664,10 @@ static esp_err_t api_start_port_scan_single(ws_frame_req_t *req)
 
 static esp_err_t api_start_ble_sniffer(ws_frame_req_t *req)
 {
-    ble_sniffer_init();
+    if(!ble_is_ready()) {
+        ble_init();
+    }
+    
     int retries = 0;
     while (ble_sniffer_start() != ESP_OK && retries < 10) {
         vTaskDelay(pdMS_TO_TICKS(100));
@@ -1683,7 +1687,7 @@ static esp_err_t api_start_ble_sniffer(ws_frame_req_t *req)
 static esp_err_t api_stop_ble_sniffer(ws_frame_req_t *req)
 {
     ble_sniffer_stop();
-    ble_sniffer_deinit();
+    //ble_deinit();
     api_send_status_frame(req, "ok", "BLE Sniffer Stopped");
     return ESP_OK;
 }

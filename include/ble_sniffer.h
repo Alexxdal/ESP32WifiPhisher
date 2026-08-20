@@ -58,23 +58,9 @@ typedef void (*ble_sniffer_frame_cb_t)(const ble_sniffer_device_t *device);
 
 
 /**
- * @brief One-time setup: NimBLE init, device table, and the host task
- * that runs the NimBLE event loop for the module's lifetime (this is
- * the "engine", not a per-scan task -- see ble_sniffer.c).
- */
-esp_err_t ble_sniffer_init(void);
-
-
-/**
- * @brief Tears down the host task. Same event-group handshake + timeout
- * + forced-delete fallback as wifi_sniffer_stop_channel_hopping().
- */
-esp_err_t ble_sniffer_deinit(void);
-
-
-/** 
- * @brief Starts passive scanning (cheap, safe to call repeatedly while init'd). 
- * 
+ * @brief Starts passive scanning. Chiama ble_init() (bleMng.h) PRIMA di
+ * questa -- lo sniffer non possiede più il ciclo di vita dello stack
+ * NimBLE, solo la device table e la scansione GAP.
  */
 esp_err_t ble_sniffer_start(void);
 

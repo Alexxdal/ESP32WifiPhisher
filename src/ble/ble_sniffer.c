@@ -1,43 +1,27 @@
 #include <string.h>
 #include "esp_log.h"
 #include "esp_err.h"
-#include "TaskManager.h"
 #include "ble_sniffer.h"
+#include "bleMng.h"
 
 static const char *TAG = "BLE_SNIFFER";
 
 #if CONFIG_BT_ENABLED
 
 #include "esp_timer.h"
-#include "esp_coexist.h"
 #include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include "freertos/semphr.h"
-#include "freertos/event_groups.h"
-#include "nimble/nimble_port.h"
 #include "host/ble_hs.h"
-#include "host/util/util.h"
 #include "ble_identify.h"
-
-/* Stub per risolvere il bug di ESP-IDF quando CONFIG_BT_NIMBLE_GATT_SERVER è disabilitato */
-void ble_gatts_stop(void) { }
-
-#define BLE_SNIFFER_TASK_PRIO       5
-#define BLE_SNIFFER_TASK_STACK      4096
-#define BLE_SNIFFER_EVT_TASK_EXITED BIT0
 
 static ble_sniffer_device_t s_devices[BLE_SNIFFER_MAX_DEVICES];
 static uint16_t             s_device_count = 0;
 static ble_sniffer_stats_t  s_stats = { 0 };
 
 static SemaphoreHandle_t      s_table_mutex = NULL;
-static EventGroupHandle_t     s_ble_evt = NULL;
-static TaskHandle_t           s_host_task_handle = NULL;
-static volatile bool          s_host_ready = false;   /* NimBLE host synced with controller */
 static volatile bool          s_running = false;       /* scan currently active */
 static volatile bool          s_live_analyzer = false;
 static ble_sniffer_frame_cb_t s_frame_cb = NULL;
-static uint8_t                s_own_addr_type = 0;
 
 /* --- device table --- */
 
@@ -136,42 +120,9 @@ static int ble_gap_event_cb(struct ble_gap_event *event, void *arg)
     return 0;
 }
 
-/* Fires once the NimBLE host completes its reset/sync handshake with the
- * controller. Only marks the host ready -- ble_sniffer_start() is what
- * actually kicks off discovery, so start/stop can be called independently
- * of this one-time sync. */
-static void ble_app_on_sync(void)
-{
-    int rc = ble_hs_id_infer_auto(0, &s_own_addr_type);
-    if (rc != 0) {
-        ESP_LOGE(TAG, "ble_hs_id_infer_auto failed: %d", rc);
-        return;
-    }
-    s_host_ready = true;
-    ESP_LOGI(TAG, "NimBLE host synced, ready to scan");
-}
-
-/* Runs the NimBLE event loop for the module's lifetime. Same exit
- * handshake as wifi_sniffer_channel_hopping_task: signal EXITED, then
- * unregister and self-delete. */
-static void ble_host_task(void *param)
-{
-    if (s_ble_evt) {
-        xEventGroupClearBits(s_ble_evt, BLE_SNIFFER_EVT_TASK_EXITED);
-    }
-
-    nimble_port_run();   /* blocks until nimble_port_stop() (called from deinit) */
-
-    if (s_ble_evt) {
-        xEventGroupSetBits(s_ble_evt, BLE_SNIFFER_EVT_TASK_EXITED);
-    }
-    task_manager_unregister_current_task();
-    vTaskDelete(NULL);
-}
-
 /* --- public API --- */
 
-esp_err_t ble_sniffer_init(void)
+esp_err_t ble_sniffer_start(void)
 {
     if (s_table_mutex == NULL) {
         s_table_mutex = xSemaphoreCreateMutex();
@@ -179,78 +130,9 @@ esp_err_t ble_sniffer_init(void)
             return ESP_ERR_NO_MEM;
         }
     }
-    if (s_ble_evt == NULL) {
-        s_ble_evt = xEventGroupCreate();
-        if (s_ble_evt == NULL) {
-            return ESP_ERR_NO_MEM;
-        }
-    }
 
-    /* Favor WiFi in the coexistence arbiter: timing-sensitive attacks
-     * (CSA spoofing, PMF downgrade, channel hopping) keep priority, BLE
-     * scan gets the leftover slots. */
-    esp_coex_preference_set(ESP_COEX_PREFER_WIFI);
-
-    esp_err_t err = nimble_port_init();
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "nimble_port_init failed: %d", err);
-        return err;
-    }
-    ble_hs_cfg.sync_cb = ble_app_on_sync;
-
-    if (s_host_task_handle == NULL) {
-        err = task_manager_create_task(ble_host_task, "ble_sniffer_task",
-                                        BLE_SNIFFER_TASK_STACK, NULL,
-                                        BLE_SNIFFER_TASK_PRIO, &s_host_task_handle);
-        if (err != ESP_OK) {
-            ESP_LOGE(TAG, "failed to create ble_sniffer_task: %d", err);
-            return err;
-        }
-    }
-    return ESP_OK;
-}
-
-
-esp_err_t ble_sniffer_deinit(void)
-{
-    if (s_running) {
-        ble_gap_disc_cancel();
-        s_running = false;
-    }
-
-    if (s_host_task_handle != NULL) {
-        vTaskDelay(pdMS_TO_TICKS(250));
-        nimble_port_stop();
-
-        EventBits_t bits = xEventGroupWaitBits(
-            s_ble_evt,
-            BLE_SNIFFER_EVT_TASK_EXITED,
-            pdTRUE, pdFALSE,
-            pdMS_TO_TICKS(10000)
-        );
-
-        if ((bits & BLE_SNIFFER_EVT_TASK_EXITED) == 0) {
-            ESP_LOGE(TAG, "ble_host_task non è uscito entro il timeout, "
-                           "salto nimble_port_deinit() per sicurezza");
-            s_host_ready = false;
-            return ESP_ERR_TIMEOUT;
-        }
-
-        vTaskDelay(pdMS_TO_TICKS(100));
-        s_host_task_handle = NULL;
-        //TODO: ESP-IDF Bug that cause crash solved in version 5.5
-        //nimble_port_deinit();
-    }
-
-    s_host_ready = false;
-    return ESP_OK;
-}
-
-
-esp_err_t ble_sniffer_start(void)
-{
-    if (!s_host_ready) {
-        ESP_LOGW(TAG, "Host not synced yet, call ble_sniffer_init() first and retry");
+    if (!ble_is_ready()) {
+        ESP_LOGW(TAG, "Host not synced yet, call ble_init() first and retry");
         return ESP_ERR_INVALID_STATE;
     }
     if (s_running) {
@@ -265,7 +147,7 @@ esp_err_t ble_sniffer_start(void)
                                     * lascia ~290ms liberi per il WiFi ad ogni ciclo */
     };
 
-    int rc = ble_gap_disc(s_own_addr_type, BLE_HS_FOREVER, &disc_params, ble_gap_event_cb, NULL);
+    int rc = ble_gap_disc(ble_get_own_addr_type(), BLE_HS_FOREVER, &disc_params, ble_gap_event_cb, NULL);
     if (rc != 0) {
         ESP_LOGE(TAG, "ble_gap_disc failed: %d", rc);
         return ESP_FAIL;
@@ -284,6 +166,8 @@ esp_err_t ble_sniffer_stop(void)
     }
     ble_gap_disc_cancel();
     s_running = false;
+
+    ESP_LOGI(TAG, "BLE passive scan stopped");
     return ESP_OK;
 }
 
@@ -348,17 +232,6 @@ void ble_sniffer_clear(void)
 /* BLE disattivato in questa build: nessuno stack NimBLE, nessun task,
  * nessuna RAM statica del device table (s_devices[64] + relativi buffer
  * spariscono dal .bss). Stub no-op per non dover toccare main.c. */
-
-esp_err_t ble_sniffer_init(void)
-{
-    ESP_LOGW(TAG, "BLE disabilitato in questa build (CONFIG_BT_ENABLED non impostato)");
-    return ESP_OK;
-}
-
-esp_err_t ble_sniffer_deinit(void)
-{
-    return ESP_OK;
-}
 
 esp_err_t ble_sniffer_start(void)
 {
