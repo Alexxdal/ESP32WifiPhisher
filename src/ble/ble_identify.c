@@ -99,6 +99,11 @@ typedef struct {
     uint16_t service_uuid16[4];
     uint8_t  service_uuid16_count;
 
+    bool     has_service_data;
+    uint16_t service_data_uuid;
+    const uint8_t *service_data;  /* payload after the 2-byte UUID, first 0x16 seen */
+    uint8_t  service_data_len;
+
     char     name[32];
     bool     has_name;
 } ble_ad_fields_t;
@@ -130,8 +135,16 @@ static void parse_ad_structures(const uint8_t *adv, uint8_t adv_len, ble_ad_fiel
             break;
 
         case 0x16: /* Service Data - 16-bit UUID */
-            if (data_len >= 2 && f->service_uuid16_count < 4) {
-                f->service_uuid16[f->service_uuid16_count++] = data[0] | (data[1] << 8);
+            if (data_len >= 2) {
+                if (f->service_uuid16_count < 4) {
+                    f->service_uuid16[f->service_uuid16_count++] = data[0] | (data[1] << 8);
+                }
+                if (!f->has_service_data) {   /* keep the first one -- most advs carry just one */
+                    f->has_service_data = true;
+                    f->service_data_uuid = data[0] | (data[1] << 8);
+                    f->service_data = data + 2;
+                    f->service_data_len = data_len - 2;
+                }
             }
             break;
 
@@ -254,6 +267,31 @@ void ble_identify_classify(const uint8_t *adv, uint8_t adv_len,
         }
     }
 
+    /* Open Drone ID / ASTM F3411 Remote ID broadcast: Service Data UUID
+     * 0xFFFA (ASTM International) + application code 0x0D (Open Drone ID
+     * within the ASTM namespace), then an 8-bit message counter and the
+     * ODID message itself. Verified against opendroneid's own reference
+     * transmitter (transmitter-linux/bluetooth.c). */
+    if (f.has_service_data && f.service_data_uuid == 0xFFFA &&
+        f.service_data_len >= 2 && f.service_data[0] == 0x0D) {
+        out->type = BLE_DEV_DRONE_REMOTE_ID;
+        out->vendor = "Open Drone ID / ASTM F3411";
+        out->label = "Drone Remote ID broadcast";
+        return;
+    }
+
+    /* Xiaomi MiBeacon: Frame Control(2) + Product ID(2) + Frame Counter(1)
+     * + MAC(6) + optional capability/object fields. Deliberately NOT
+     * decoding the Product ID into a specific model here -- its offset
+     * shifts depending on flag bits inside Frame Control, so a naive
+     * fixed-offset read would misidentify some devices. */
+    if (f.has_service_data && f.service_data_uuid == 0xFE95 && f.service_data_len >= 4) {
+        out->type = BLE_DEV_XIAOMI_MIBEACON;
+        out->vendor = "Xiaomi";
+        out->label = "Mi Beacon (smart home sensor)";
+        return;
+    }
+
     /* Flock Safety camera: manufacturer 0x09C8 (XUNTONG) + a name
      * pattern. Ported from Marauder's isFlockCamera() -- CAVEAT: this
      * signature isn't independently verified against real hardware by
@@ -284,10 +322,27 @@ void ble_identify_classify(const uint8_t *adv, uint8_t adv_len,
         uint8_t type_byte = f.mfg_data[0];
         uint8_t type_len  = f.mfg_data[1];
 
-        if (type_byte == 0x12 && type_len == 0x19 && f.mfg_len >= 25) {
+        if (type_byte == 0x02 && type_len == 0x15 && f.mfg_len >= 23) {
+            /* iBeacon: 16-byte UUID + major(2) + minor(2) + calibrated
+             * tx power(1) = 21 bytes, matching type_len 0x15. Generic
+             * beacon format, not tracker-specific -- could be anything
+             * from a retail beacon to a smart-home hub. */
+            out->type = BLE_DEV_IBEACON;
+            out->vendor = "Apple";
+            out->label = "iBeacon";
+        } else if (type_byte == 0x12 && type_len == 0x19 && f.mfg_len >= 25) {
             out->type = BLE_DEV_AIRTAG;
             out->vendor = "Apple";
             out->label = "AirTag (Find My / lost mode)";
+        } else if (type_byte == 0x12) {
+            /* Same Find My family as the AirTag branch above, but the
+             * short "status" form broadcast by a device that's near its
+             * owner (e.g. an iPhone contributing to the crowd-sourced
+             * Find My network) rather than a separated/lost tag. Only
+             * distinguished from AirTag by length. */
+            out->type = BLE_DEV_APPLE_FINDMY_STATUS;
+            out->vendor = "Apple";
+            out->label = "Find My network (status broadcast)";
         } else if (type_byte == 0x07) {
             out->type = BLE_DEV_APPLE_PROXIMITY;
             out->vendor = "Apple";
@@ -326,6 +381,19 @@ void ble_identify_classify(const uint8_t *adv, uint8_t adv_len,
         out->type = BLE_DEV_CHIPOLO;
         out->vendor = "Chipolo";
         out->label = "Chipolo tracker";
+        return;
+    }
+
+    /* Microsoft Swift Pair: company ID 0x0006 + Beacon ID 0x03 + a
+     * reserved RSSI byte that the spec fixes at 0x80. Checking both
+     * makes this a real signature rather than "any Microsoft company
+     * ID", which would also match unrelated Microsoft BLE traffic.
+     * Source: learn.microsoft.com/windows-hardware/design/component-guidelines/bluetooth-swift-pair */
+    if (f.has_company && f.company_id == 0x0006 && f.mfg_len >= 3 &&
+        f.mfg_data[0] == 0x03 && f.mfg_data[2] == 0x80) {
+        out->type = BLE_DEV_SWIFT_PAIR;
+        out->vendor = "Microsoft";
+        out->label = "Swift Pair (device in pairing mode)";
         return;
     }
 

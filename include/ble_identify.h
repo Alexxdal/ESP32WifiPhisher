@@ -23,7 +23,9 @@ typedef enum {
     BLE_DEV_GENERIC_VENDOR,       /* company/service name known, no specific model */
     BLE_DEV_APPLE_PROXIMITY,      /* AirPods-style "Proximity Pairing" popup */
     BLE_DEV_APPLE_NEARBY_ACTION,  /* "Setup New iPhone"-style popup (also used for spam) */
-    BLE_DEV_APPLE_FINDMY,         /* Apple "Nearby Info" broadcast */
+    BLE_DEV_APPLE_FINDMY,         /* Apple "Nearby Info" broadcast (sub-type 0x10) */
+    BLE_DEV_APPLE_FINDMY_STATUS,  /* Find My network status broadcast (sub-type 0x12, short form -- device near its owner, not a lost tag) */
+    BLE_DEV_IBEACON,              /* Apple iBeacon (sub-type 0x02) -- UUID/major/minor beacon, not tracker-specific */
     BLE_DEV_AIRTAG,               /* Apple AirTag, lost-mode Find My broadcast */
     BLE_DEV_THIRDPARTY_FINDMY,    /* non-Apple accessory on the Find My network */
     BLE_DEV_TILE,
@@ -33,6 +35,9 @@ typedef enum {
     BLE_DEV_FLOCK_CAMERA,         /* see caveat in ble_identify.c: unverified signature */
     BLE_DEV_FAST_PAIR,            /* Google Fast Pair advertisement */
     BLE_DEV_EDDYSTONE,            /* Google Eddystone beacon */
+    BLE_DEV_SWIFT_PAIR,           /* Microsoft Swift Pair (device in Windows quick-pairing mode) */
+    BLE_DEV_DRONE_REMOTE_ID,      /* ASTM F3411 / Open Drone ID broadcast */
+    BLE_DEV_XIAOMI_MIBEACON,      /* Xiaomi MiBeacon smart-home sensor advertisement */
 } ble_device_type_t;
 
 
