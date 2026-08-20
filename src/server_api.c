@@ -1785,10 +1785,6 @@ static esp_err_t api_start_ble_spam(ws_frame_req_t *req)
     cJSON *json = cJSON_Parse(req->payload);
     if (!json) return ESP_FAIL;
 
-    if(!ble_is_ready()) {
-        ble_init();
-    }
-
     ble_spam_type_t spam_type = BLE_SPAM_ALL;
 
     cJSON *j_type = cJSON_GetObjectItemCaseSensitive(json, "type");
@@ -1797,8 +1793,18 @@ static esp_err_t api_start_ble_spam(ws_frame_req_t *req)
     }
     cJSON_Delete(json);
 
-    if (ble_spam_start(spam_type) != ESP_OK) {
-        api_send_status_frame(req, "error", "Failed to start BLE Spam. Is NimBLE synced?");
+    if(!ble_is_ready()) {
+        ble_init();
+    }
+
+    int retries = 0;
+    while (ble_spam_start(spam_type) != ESP_OK && retries < 20) {
+        vTaskDelay(pdMS_TO_TICKS(100));
+        retries++;
+    }
+
+    if (retries >= 20) {
+        api_send_status_frame(req, "error", "BLE Spam start timeout (NimBLE not synced)");
         return ESP_FAIL;
     }
 
@@ -1810,6 +1816,7 @@ static esp_err_t api_start_ble_spam(ws_frame_req_t *req)
 static esp_err_t api_stop_ble_spam(ws_frame_req_t *req)
 {
     ble_spam_stop();
+    //ble_deinit();
     api_send_status_frame(req, "ok", "BLE Spam Stopped");
     return ESP_OK;
 }

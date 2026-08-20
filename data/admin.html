@@ -3507,10 +3507,13 @@
                 if (res.status === 'ok') {
                     isBleSpamming = true;
                     showToast("BLE Spam Attack Started!");
-                    
+
                     btnStart.disabled = true; btnStart.style.opacity = "0.5"; btnStart.style.cursor = "not-allowed";
                     btnStop.disabled = false; btnStop.style.opacity = "1"; btnStop.style.cursor = "pointer";
                     typeSelect.disabled = true;
+                } else {
+                    showToast(res.message || "Failed to start BLE Spam");
+                    log("BLE Spam Start Error: " + (res.message || "unknown"), "error");
                 }
             } catch (err) {
                 showToast("Error starting BLE Spam");
