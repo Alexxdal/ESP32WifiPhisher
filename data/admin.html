@@ -627,6 +627,11 @@
                 <span data-i18n="ble_sniffer">BLE Sniffer</span>
             </div>
 
+            <div class="menu-item" onclick="showView('view-ble-spam', this)">
+                <svg viewBox="0 0 24 24"><path d="M11 2v4.26L6.53 1.74 5.11 3.15l15.73 15.74 1.41-1.42-4.14-4.14L22 9h-4.27L22 4.74l-1.41-1.41L13 11.2V2h-2zm-1 12.26l-4.15 4.15L2.29 14.86 1 16.14l4.5 4.5 1.41-1.41 4.14-4.14-5.6-5.61-1.41 1.41L10 14.26zm3 .44v5.3l-2.07-2.07L13 14.7z"/></svg> 
+                <span data-i18n="ble_spam">BLE Spam Attack</span>
+            </div>
+
             <div class="menu-category" data-i18n="net_cat">Network Analysis</div>
             <div class="menu-item" id="menu-sta" onclick="showView('view-sta', this)">
                 <svg viewBox="0 0 24 24"><path d="M12 21L15.6 16.2C14.6 15.45 13.35 15 12 15C10.65 15 9.4 15.45 8.4 16.2L12 21ZM12 3C7.95 3 4.21 4.34 1.2 6.6L3 9C5.5 7.12 8.62 6 12 6C15.38 6 18.5 7.12 21 9L22.8 6.6C19.79 4.34 16.05 3 12 3ZM12 9C9.3 9 6.81 9.89 4.8 11.4L6.6 13.8C8.1 12.67 9.97 12 12 12C14.03 12 15.9 12.67 17.4 13.8L19.2 11.4C17.19 9.89 14.7 9 12 9Z"/></svg> 
@@ -1237,6 +1242,36 @@
             </div>
         </div>
 
+        <!-- BLE SPAM -->
+        <div id="view-ble-spam" class="view-container">
+            <h2 data-i18n="ble_spam_title">BLE Spam Attack</h2>
+            <div class="card">
+                <p style="font-size:0.85rem; color:#aaa; margin-top:0;" data-i18n="ble_spam_desc">Broadcast fake BLE advertisements to trigger persistent popups on nearby devices.</p>
+
+                <label data-i18n="target_device_ecosystem">TARGET ECOSYSTEM</label>
+                <select id="ble-spam-type">
+                    <option value="0">Apple (AirPods, Setup New Device)</option>
+                    <option value="1">Samsung (Galaxy Buds/Watch)</option>
+                    <option value="2">Google (Fast Pair)</option>
+                    <option value="3">Microsoft (Swift Pair)</option>
+                    <option value="4" selected>All Vendors (Randomize)</option>
+                </select>
+
+                <div style="margin-top: 15px; padding: 10px; background: rgba(255, 171, 64, 0.1); border-left: 3px solid #ffab40; color: #aaa; font-size: 0.8rem; font-style: italic;">
+                    <strong style="color:#ffab40;">Note:</strong> iOS and Android devices may require the screen to be unlocked to display pairing popups.
+                </div>
+
+                <div class="btn-group" style="margin-top: 25px;">
+                    <button class="danger" onclick="startBleSpam()" id="btn-ble-spam-start">
+                        <svg style="width:16px; height:16px; vertical-align:middle; margin-right:5px;" viewBox="0 0 24 24"><path fill="currentColor" d="M8 5v14l11-7z"/></svg> <span data-i18n="btn_start_attack">START SPAM</span>
+                    </button>
+                    <button class="secondary" onclick="stopBleSpam()" id="btn-ble-spam-stop" disabled style="opacity:0.5; cursor:not-allowed;">
+                        <svg style="width:16px; height:16px; vertical-align:middle; margin-right:5px;" viewBox="0 0 24 24"><path fill="currentColor" d="M6 6h12v12H6z"/></svg> <span data-i18n="btn_stop">STOP</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <!-- STA CONNECTION -->
         <div id="view-sta" class="view-container">
             <h2 data-i18n="sta_connection_title">Target Connection (STA)</h2>
@@ -1507,6 +1542,8 @@
             STOP_BLE_SNIFFER: 27,
             GET_BLE_DEVICES: 28,
             BLE_DEVICES_CLEAR: 29,
+            START_BLE_SPAM: 30,
+            STOP_BLE_SPAM: 31,
         };
 
         // Stato globale
@@ -3449,6 +3486,57 @@
             }
         }
 
+        // ==========================================
+        // BLE SPAM LOGIC
+        // ==========================================
+        let isBleSpamming = false;
+
+        async function startBleSpam() {
+            const typeSelect = document.getElementById('ble-spam-type');
+            const typeVal = parseInt(typeSelect.value);
+            const typeName = typeSelect.options[typeSelect.selectedIndex].text;
+
+            log(`Starting BLE Spam... Target: ${typeName}`, "warning");
+            
+            const btnStart = document.getElementById('btn-ble-spam-start');
+            const btnStop = document.getElementById('btn-ble-spam-stop');
+
+            try {
+                // Invia il comando al C con il parametro 'type' corrispondente al tuo enum ble_spam_vendor_t
+                const res = await sendCommand(CMD.START_BLE_SPAM, { type: typeVal });
+                if (res.status === 'ok') {
+                    isBleSpamming = true;
+                    showToast("BLE Spam Attack Started!");
+                    
+                    btnStart.disabled = true; btnStart.style.opacity = "0.5"; btnStart.style.cursor = "not-allowed";
+                    btnStop.disabled = false; btnStop.style.opacity = "1"; btnStop.style.cursor = "pointer";
+                    typeSelect.disabled = true;
+                }
+            } catch (err) {
+                showToast("Error starting BLE Spam");
+                log("BLE Spam Start Error: " + err, "error");
+            }
+        }
+
+        async function stopBleSpam() {
+            log("Stopping BLE Spam...", "info");
+            const btnStart = document.getElementById('btn-ble-spam-start');
+            const btnStop = document.getElementById('btn-ble-spam-stop');
+            const typeSelect = document.getElementById('ble-spam-type');
+
+            try {
+                await sendCommand(CMD.STOP_BLE_SPAM);
+                isBleSpamming = false;
+                showToast("BLE Spam Stopped");
+
+                btnStart.disabled = false; btnStart.style.opacity = "1"; btnStart.style.cursor = "pointer";
+                btnStop.disabled = true; btnStop.style.opacity = "0.5"; btnStop.style.cursor = "not-allowed";
+                typeSelect.disabled = false;
+            } catch (err) {
+                log("BLE Spam Stop Error: " + err, "error");
+            }
+        }
+        
         // Funzione per mappare l'array posizionale proveniente dall'ESP32
         function handleBleDevices(msg) {
             if(!msg.devices) return;

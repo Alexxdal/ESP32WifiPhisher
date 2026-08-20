@@ -22,6 +22,7 @@
 #include "ble_sniffer.h"
 #include "ble_identify.h"
 #include "bleMng.h"
+#include "ble_spam.h"
 #include <libwifi.h>
 
 
@@ -1779,6 +1780,41 @@ static esp_err_t api_ble_devices_clear(ws_frame_req_t *req)
 }
 
 
+static esp_err_t api_start_ble_spam(ws_frame_req_t *req)
+{
+    cJSON *json = cJSON_Parse(req->payload);
+    if (!json) return ESP_FAIL;
+
+    if(!ble_is_ready()) {
+        ble_init();
+    }
+
+    ble_spam_type_t spam_type = BLE_SPAM_ALL;
+
+    cJSON *j_type = cJSON_GetObjectItemCaseSensitive(json, "type");
+    if (cJSON_IsNumber(j_type)) {
+        spam_type = (ble_spam_type_t)j_type->valueint;
+    }
+    cJSON_Delete(json);
+
+    if (ble_spam_start(spam_type) != ESP_OK) {
+        api_send_status_frame(req, "error", "Failed to start BLE Spam. Is NimBLE synced?");
+        return ESP_FAIL;
+    }
+
+    api_send_status_frame(req, "ok", "BLE Spam Started");
+    return ESP_OK;
+}
+
+
+static esp_err_t api_stop_ble_spam(ws_frame_req_t *req)
+{
+    ble_spam_stop();
+    api_send_status_frame(req, "ok", "BLE Spam Stopped");
+    return ESP_OK;
+}
+
+
 static const api_cmd_t api_cmd_list[] = {
     { API_GET_STATUS, api_get_status },
     { API_SET_AP_SETTINGS, api_admin_set_ap_settings },
@@ -1809,7 +1845,9 @@ static const api_cmd_t api_cmd_list[] = {
     { API_START_BLE_SNIFFER, api_start_ble_sniffer },
     { API_STOP_BLE_SNIFFER,  api_stop_ble_sniffer },
     { API_GET_BLE_DEVICES,   api_get_ble_devices },
-    { API_BLE_DEVICES_CLEAR, api_ble_devices_clear }
+    { API_BLE_DEVICES_CLEAR, api_ble_devices_clear },
+    { API_START_BLE_SPAM, api_start_ble_spam },
+    { API_STOP_BLE_SPAM, api_stop_ble_spam },
 };
 
 
