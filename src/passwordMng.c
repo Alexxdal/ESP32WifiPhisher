@@ -5,7 +5,6 @@
 #include "esp_spiffs.h"
 #include "esp_log.h"
 #include "passwordMng.h"
-#include "libpcap.h"
 #include "sniffer.h"
 #include "TaskManager.h"
 
@@ -149,38 +148,4 @@ void password_manager_clean(void)
         return;
     }
     fclose(file);
-}
-
-
-void password_manager_append_frame(const uint8_t *buffer, int len, int us)
-{
-    pcap_serializer_append_frame(buffer, len, us);
-}
-
-
-void password_manager_pcap_finalize(void)
-{
-    /*uint32_t pcap_size = pcap_serializer_get_size();
-    uint8_t *pcap_data = pcap_serializer_get_buffer();
-    if(password_manager_check_space(pcap_size) != ESP_OK )
-    {
-        return;
-    }
-
-    char filename[32] = { 0 };
-    const handshake_info_t *target = wifi_sniffer_get_handshake();
-    const uint8_t *mac = (const uint8_t *)target->mac_sta;
-    snprintf(filename, sizeof(filename), "/spiffs/%02X_%02X_%02X_%02X_%02X_%02X.pcap",
-             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    FILE *file = fopen(filename, "a");
-    if (file == NULL) {
-        ESP_LOGE(TAG, "Unable to open %s file!", filename);
-        return;
-    }
-
-    fwrite(pcap_data, 1, pcap_size, file);
-    fflush(file);
-    fclose(file);
-
-    ESP_LOGI(TAG, "PCAP Saved with filename: %s", filename);*/
 }
