@@ -1435,6 +1435,23 @@ uint8_t wifi_sniffer_get_clients_count(void)
 }
 
 
+uint8_t wifi_sniffer_get_associated_client_count(const uint8_t *bssid)
+{
+    uint8_t count = 0;
+    if(clients_semaphore == NULL) return 0;
+    if (xSemaphoreTake(clients_semaphore, pdMS_TO_TICKS(100)) == pdTRUE) 
+    {
+        for(uint8_t client_idx = 0; client_idx < clients.count; client_idx++) {
+            if(memcmp(bssid, clients.client[client_idx].bssid, 6) == 0) {
+                count++;
+            }
+        }
+        xSemaphoreGive(clients_semaphore);
+    }
+    return count;
+}
+
+
 esp_err_t wifi_sniffer_get_aps(aps_info_t *out)
 {
     if(out == NULL || aps_semaphore == NULL) return ESP_ERR_INVALID_ARG;
@@ -1479,6 +1496,24 @@ uint8_t wifi_sniffer_get_aps_count(void)
 
     if (xSemaphoreTake(aps_semaphore, pdMS_TO_TICKS(100)) == pdTRUE) {
         ret_value = detected_aps.count;
+        xSemaphoreGive(aps_semaphore);
+    }
+    return ret_value;
+}
+
+
+int8_t wifi_sniffer_get_ap_rssi(const uint8_t *bssid)
+{
+    int8_t ret_value = 0;
+    if(aps_semaphore == NULL) return 0;
+
+    if (xSemaphoreTake(aps_semaphore, pdMS_TO_TICKS(100)) == pdTRUE) {
+        for(uint8_t ap_idx = 0; ap_idx < detected_aps.count; ap_idx++) {
+            if(memcmp(bssid, detected_aps.ap[ap_idx].bssid, 6) == 0) {
+                ret_value = detected_aps.ap[ap_idx].rssi;
+                break;
+            }
+        }
         xSemaphoreGive(aps_semaphore);
     }
     return ret_value;

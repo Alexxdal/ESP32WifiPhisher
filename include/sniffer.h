@@ -292,6 +292,13 @@ uint8_t wifi_sniffer_get_clients_count(void);
 
 
 /**
+ * @brief Return number of clients associated with bssid
+ * 
+ */
+uint8_t wifi_sniffer_get_associated_client_count(const uint8_t *bssid);
+
+
+/**
  * @brief Get pointer to detected aps info
  * 
  * @return const aps_info_t* 
@@ -315,6 +322,12 @@ esp_err_t wifi_sniffer_get_aps_light(aps_info_light_t *out);
  *
  */
 uint8_t wifi_sniffer_get_aps_count(void);
+
+
+/**
+ * @brief Get AP current rssi value
+ */
+int8_t wifi_sniffer_get_ap_rssi(const uint8_t *bssid);
 
 
 /**

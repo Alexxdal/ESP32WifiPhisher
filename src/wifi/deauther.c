@@ -455,3 +455,9 @@ void deauther_set_attack_type(deauther_attack_type_t attack_type)
 {
     current_attack_type = attack_type;
 }
+
+
+deauther_attack_type_t deauther_get_attack_type(void)
+{
+    return current_attack_type;
+}

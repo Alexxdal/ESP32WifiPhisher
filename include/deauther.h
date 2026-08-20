@@ -76,4 +76,7 @@ bool deauther_is_running(void);
 
 void deauther_set_attack_type(deauther_attack_type_t attack_type);
 
+
+deauther_attack_type_t deauther_get_attack_type(void);
+
 #endif // DEAUTHER_H
