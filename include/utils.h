@@ -72,7 +72,7 @@ void print_handshake(handshake_info_t *handshake);
 
 
 /**
- * @brief Get the Next Channel
+ * @brief Get the Next Wifi Channel
  * 
  * @param current_channel 
  * @return uint8_t 
@@ -99,6 +99,15 @@ const char *wifi_rate_to_str(wifi_phy_rate_t rate);
 
 
 /**
+ * @brief Convert wifi deauth reason to string
+ * 
+ * @param reason 
+ * @return const char* 
+ */
+const char *wifi_deauth_reason_to_str(uint16_t reason);
+
+
+/**
  * @brief Hex dump bytes
  * 
  * @param tag 
@@ -115,5 +124,14 @@ void hex_dump_bytes(const char *tag, const uint8_t *buf, size_t len);
  * @return const char* 
  */
 const char* resolve_mac_oui(const uint8_t mac[6]);
+
+
+/**
+ * @brief Check if a WiFi channel is valid for the current hardware
+ * 
+ * @param channel
+ * @return true
+ */
+bool wifi_is_valid_channel(uint8_t channel);
 
 #endif

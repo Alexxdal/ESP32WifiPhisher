@@ -31,23 +31,6 @@ void password_manager_clean(void);
 
 
 /**
- * @brief Append new frame to pcap buffer
- * 
- * @param buffer 
- * @param len 
- * @param us 
- */
-void password_manager_append_frame(const uint8_t *buffer, int len, int us);
-
-
-/**
- * @brief Save pcap file to SPIFFS
- * 
- */
-void password_manager_pcap_finalize(void);
-
-
-/**
  * @brief Read password file and put output directly on web response
  * 
  * @param req 

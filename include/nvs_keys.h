@@ -26,4 +26,17 @@
  */
 #define WIFI_TX_RATE_KEY    "wifi_tx_rate"
 
+
+/**
+ * @brief Key for storage on wifi last connected ssid
+ */
+#define WIFI_CONNECTION_LAST_SSID_KEY "wifi_last_ssid"
+
+
+/**
+ * @brief Key for storage on wifi last connected password
+ */
+#define WIFI_CONNECTION_LAST_PASS_KEY "wifi_last_pass"
+
+
 #endif

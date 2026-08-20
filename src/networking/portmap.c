@@ -48,7 +48,7 @@ esp_err_t setup_dnat_for_captive_portal(void)
     uint8_t idx_dns = ip_portmap_add(IPPROTO_UDP, any_ip.addr, 53, esp_ip.addr, 53);
     // Controlliamo che l'indice non sia 0xFF (255), che significa "Tabella piena" o "Errore"
     if (idx_dns != 0xFF) {
-        ESP_LOGI(TAG_NAT, "DNS (UDP 53) -> 192.168.4.1:53 configured (Index: %d)", idx_dns);
+        ESP_LOGI(TAG_NAT, "DNS (UDP 53) -> 192.168.4.1:53 configured");
     } else {
         ESP_LOGE(TAG_NAT, "Error configuring DNS");
         return ESP_FAIL;
@@ -60,7 +60,7 @@ esp_err_t setup_dnat_for_captive_portal(void)
      */
     uint8_t idx_http = ip_portmap_add(IPPROTO_TCP, any_ip.addr, 80, esp_ip.addr, 80);
     if (idx_http != 0xFF) {
-        ESP_LOGI(TAG_NAT, "HTTP (TCP 80) -> 192.168.4.1:80 configured (Index: %d)", idx_http);
+        ESP_LOGI(TAG_NAT, "HTTP (TCP 80) -> 192.168.4.1:80 configured");
     } else {
         ESP_LOGE(TAG_NAT, "Error configuring HTTP");
         return ESP_FAIL;

@@ -53,12 +53,15 @@ typedef enum {
 } deauther_attack_mode_t;
 
 
+void deauther_send_frames(const target_info_t *target, deauther_attack_type_t attack_type);
+
+
 /**
  * @brief Start deauthentication attack on target
  * @param deauth_target deauth attack target
  * 
  */
-void deauther_start(const target_info_t *deauth_target, deauther_attack_type_t attack_type);
+esp_err_t deauther_start(const target_info_t *deauth_target, deauther_attack_type_t attack_type);
 
 
 /**
@@ -69,5 +72,11 @@ void deauther_stop(void);
 
 
 bool deauther_is_running(void);
+
+
+void deauther_set_attack_type(deauther_attack_type_t attack_type);
+
+
+deauther_attack_type_t deauther_get_attack_type(void);
 
 #endif // DEAUTHER_H

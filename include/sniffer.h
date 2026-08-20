@@ -11,11 +11,25 @@
 
 /**
  * @brief List of APs using native ESP-IDF struct
- * 
+ *
  */
+#if defined(CONFIG_IDF_TARGET_ESP32S2)
+/* S2 Has only 320kb of ram */
+#define MAX_AP      15
+#else
 #define MAX_AP      35
+#endif
 typedef struct {
-    wifi_ap_record_t record; // La struct nativa di ESP-IDF
+    uint8_t bssid[6];                     /**< MAC address of AP */
+    uint8_t ssid[33];                     /**< SSID of AP */
+    uint8_t primary;                      /**< Channel of AP */
+    int8_t  rssi;                         /**< Signal strength of AP. Note that in some rare cases where signal strength is very strong, RSSI values can be slightly positive */
+    uint8_t wps;                          /**< Identify if WPS is supported or not */
+    wifi_auth_mode_t authmode;            /**< Auth mode of AP */
+    wifi_cipher_type_t pairwise_cipher;   /**< Pairwise cipher of AP */
+    wifi_cipher_type_t group_cipher;      /**< Group cipher of AP */
+    wifi_bandwidth_t bandwidth;           /**< Bandwidth of AP */
+    /* Statistics */
     uint32_t packets_rx;     // Pacchetti ricevuti dall'AP
     uint32_t packets_tx;     // Pacchetti inviati dall'AP
     uint32_t bytes_rx;
@@ -29,12 +43,37 @@ typedef struct {
 } aps_info_t;
 
 
+/**
+ * @brief Light AP record: only the fields attack code actually reads
+ * 
+ */
+typedef struct {
+    uint8_t  bssid[6];
+    uint8_t  ssid[33];
+    uint8_t  primary;           /* channel */
+    int8_t   rssi;
+    wifi_auth_mode_t   authmode;
+    wifi_cipher_type_t group_cipher;
+    wifi_cipher_type_t pairwise_cipher;
+} ap_ext_light_t;
+
+typedef struct {
+    uint8_t count;
+    ap_ext_light_t ap[MAX_AP];
+} aps_info_light_t;
+
+
 
 /**
  * @brief Struct containing Client info
  * 
  */
-#define MAX_CLIENTS 50
+#if defined(CONFIG_IDF_TARGET_ESP32S2)
+/* S2 Has only 320kb of ram */
+#define MAX_CLIENTS 20
+#else
+#define MAX_CLIENTS 45
+#endif
 typedef struct {
     int8_t rssi;
     uint8_t channel;
@@ -51,6 +90,22 @@ typedef struct {
     uint8_t count;
     client_t client[MAX_CLIENTS];
 } client_list_t;
+
+
+/**
+ * @brief Light client record: only mac/bssid/rssi, which is all attack
+ * code needs.
+ */
+typedef struct {
+    uint8_t mac[6];
+    uint8_t bssid[6];
+    int8_t  rssi;
+} client_light_t;
+
+typedef struct {
+    uint8_t count;
+    client_light_t client[MAX_CLIENTS];
+} client_list_light_t;
 
 
 
@@ -75,21 +130,34 @@ typedef struct {
 
 /**
  * @brief Struct containing captured HANDSHAKE and PMKID for aircrack
- * 
+ *
  */
-#define MAX_HANDSHAKE_NUM 10
+#if defined(CONFIG_IDF_TARGET_ESP32S2)
+#define MAX_HANDSHAKE_NUM 3
+#else
+#define MAX_HANDSHAKE_NUM 5
+#endif
 typedef struct {
+    uint8_t ssid[33];
     uint8_t bssid[6];
     uint8_t mac_sta[6];
     uint8_t anonce[32];
     uint8_t snonce[32];
     uint8_t mic[16];
     uint8_t pmkid[16];
-    uint8_t eapol[256];
-    uint16_t eapol_len;
+    uint8_t eapol_m1[200];
+    uint16_t eapol_m1_len;
+    uint8_t eapol_m2[200];
+    uint16_t eapol_m2_len;
+    uint8_t eapol_m3[256];
+    uint16_t eapol_m3_len;
+    uint8_t eapol_m4[200];
+    uint16_t eapol_m4_len;
     uint8_t key_decriptor_version;
     /* Capture information */
     int64_t last_m1_timestamp;
+    int64_t last_m2_timestamp;
+    int64_t last_m3_timestamp;
     uint64_t replay_counter;
     bool handshake_captured;
     bool pmkid_captured;
@@ -113,6 +181,13 @@ typedef struct {
     uint8_t channel;
 } sniffer_packet_t;
 
+
+/**
+ * @brief Initialize the Wi-Fi sniffer
+ * 
+ * @return esp_err_t 
+ */
+esp_err_t wifi_sniffer_init(void);
 
 
 /**
@@ -203,10 +278,24 @@ esp_err_t wifi_sniffer_get_clients(client_list_t *out);
 
 
 /**
+ * @brief Same data as wifi_sniffer_get_clients(), but copies only
+ * mac/bssid/rssi per entry.
+ */
+esp_err_t wifi_sniffer_get_clients_light(client_list_light_t *out);
+
+
+/**
  * @brief Return the number of captured clients/STA
- * 
+ *
  */
 uint8_t wifi_sniffer_get_clients_count(void);
+
+
+/**
+ * @brief Return number of clients associated with bssid
+ * 
+ */
+uint8_t wifi_sniffer_get_associated_client_count(const uint8_t *bssid);
 
 
 /**
@@ -222,10 +311,23 @@ esp_err_t wifi_sniffer_get_aps(aps_info_t *out);
 
 
 /**
+ * @brief Same data as wifi_sniffer_get_aps(), but copies only
+ * bssid/ssid/channel/rssi/authmode/ciphers per entry.
+ */
+esp_err_t wifi_sniffer_get_aps_light(aps_info_light_t *out);
+
+
+/**
  * @brief Return the number of detected APs
- * 
+ *
  */
 uint8_t wifi_sniffer_get_aps_count(void);
+
+
+/**
+ * @brief Get AP current rssi value
+ */
+int8_t wifi_sniffer_get_ap_rssi(const uint8_t *bssid);
 
 
 /**

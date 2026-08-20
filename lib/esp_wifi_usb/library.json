@@ -1,0 +1,20 @@
+{
+  "name": "esp_wifi_usb",
+  "version": "1.0.0",
+  "description": "rtl8188e usb driver for esp32.",
+  "keywords": [
+    "rtl8188e",
+    "usb",
+    "wifi",
+    "sniffing",
+    "driver"
+  ],
+  "authors": [
+    {
+      "name": "Alexxdal",
+      "email": "alexdal@live.it"
+    }
+  ],
+  "frameworks": "espidf",
+  "platforms": "espressif32"
+}

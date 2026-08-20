@@ -107,6 +107,12 @@ bool verify_password(const char *passphrase, const char *ssid, size_t ssid_len,
     uint8_t pmk[32] = { 0 }; 
     uint8_t ptk[WPA_PTK_LEN] = { 0 }; 
     uint8_t calculated_mic[16] = { 0 };
+    uint8_t zero_mic_eapol[256] = { 0 }; // Buffer per EAPOL con MIC azzerato
+
+    if (eapol_len < 97 || eapol_len > sizeof(zero_mic_eapol)) {
+        ESP_LOGE(TAG, "Invalid M2 EAPOL Length: %zu", eapol_len);
+        return false;
+    }
 
     error = calculate_pmk(passphrase, ssid, ssid_len, pmk);
     if (error != 0) {
@@ -116,8 +122,12 @@ bool verify_password(const char *passphrase, const char *ssid, size_t ssid_len,
     int ptk_alg = (key_descriptor == 3) ? PTK_ALG_SHA256 : PTK_ALG_SHA1;
     calculate_ptk(pmk, mac_ap, mac_sta, anonce, snonce, ptk, ptk_alg);
 
-    calculate_mic(ptk, eapol, eapol_len, calculated_mic, key_descriptor);
-    
+    memcpy(zero_mic_eapol, eapol, eapol_len);
+    // Azzera ESATTAMENTE i 16 byte del MIC (Offset fisso a 81 per i frame EAPOL)
+    memset(zero_mic_eapol + 81, 0, 16);
+
+    calculate_mic(ptk, zero_mic_eapol, eapol_len, calculated_mic, key_descriptor);
+
     bool ret = memcmp(calculated_mic, expected_mic, 16) == 0;
     if(ret == true) {
         ESP_LOGI(TAG, "Password \"%s\" verified with handshake!", passphrase);

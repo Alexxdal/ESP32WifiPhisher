@@ -11,10 +11,11 @@
  */
 typedef struct {
     uint8_t mac[6];
-    int64_t last_ack_time_us;
+    int64_t last_activity_us;
+    int64_t block_until_us;
     uint32_t fail_count;
+    bool active;
 } client_ack_tracker_t;
-
 
 extern esp_err_t esp_wifi_internal_set_retry_counter(uint8_t short_retry, uint8_t long_retry);
 
@@ -24,6 +25,24 @@ extern esp_err_t esp_wifi_internal_set_retry_counter(uint8_t short_retry, uint8_
  * 
  */
 esp_err_t wifi_init(void);
+
+
+/**
+ * @brief Check if wifi is connected
+ * 
+ * @return true if connected, false otherwise
+ */
+bool wifi_is_connected(void);
+
+
+/**
+ * @brief Connect to a wifi network
+ * 
+ * @param ssid 
+ * @param password 
+ * @return esp_err_t 
+ */
+esp_err_t wifi_connect(const char *ssid, const char *password);
 
 
 /**
@@ -108,5 +127,14 @@ uint32_t wifi_get_frame_pps(void);
  */
 bool wifi_mng_is_client_responsive(const uint8_t *mac);
 
+/**
+ * @brief Check is there is an usb wifi dongle connected
+ */
+bool wifi_usb_present(void);
+
+/**
+ * @brief Set usb wifi presence
+ */
+void wifi_usb_set_present(bool presence);
 
 #endif

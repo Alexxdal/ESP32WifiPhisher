@@ -6,11 +6,11 @@
 #include <esp_log.h>
 #include <lwip/sockets.h>
 #include <cJSON.h>
+#include "evil_twin.h"
 #include "server.h"
 #include "server_api.h"
+#include "TaskManager.h"
 
-/* Pages include */
-#include "web/passwords.h"
 
 static const char *TAG = "WEBSERVER";
 static httpd_handle_t server = NULL;
@@ -53,7 +53,7 @@ static void ws_send_work(void *arg)
     }
 
     if (r->need_free && r->payload) {
-        free(r->payload);
+        cJSON_free(r->payload);
     }
     free(r);
 }
@@ -86,13 +86,13 @@ static void ws_frame_process_task(void *pvParameter)
 					if (httpd_queue_work(ws_frame.hd, ws_send_work, heap_req) != ESP_OK) {
                         ESP_LOGE(TAG, "Failed to queue WS work, freeing memory");
                         if(heap_req->payload && heap_req->need_free) {
-                            free(heap_req->payload);
+                            cJSON_free(heap_req->payload);
                         }
 						free(heap_req);
                     }
                 } else {
 					ESP_LOGE(TAG, "Failed to alloc async req");
-                    if(ws_frame.payload && ws_frame.need_free) free(ws_frame.payload);
+                    if(ws_frame.payload && ws_frame.need_free) cJSON_free(ws_frame.payload);
                 }
 				break;
 			}
@@ -269,7 +269,7 @@ static esp_err_t redirect_handler(httpd_req_t *req)
 				break;
 
 			default:
-				uri = "/upgrade.html";
+				uri = "/admin.html";
 				break;
 		}
 	}
@@ -392,7 +392,7 @@ void http_server_start(void)
 		ESP_LOGE(TAG, "Failed to create websocket frame queue!");
 		return;
 	}
-	xTaskCreate(ws_frame_process_task, "ws_frame_process_task", 8096, NULL, 5, &ws_frame_process_task_handle);
+	task_manager_create_task(ws_frame_process_task, "ws_frame_process_task", 4096, NULL, 5, &ws_frame_process_task_handle);
 
 	/* Handler for CORS preflight requests */
 	httpd_uri_t cors_preflight_uri = {
@@ -434,7 +434,7 @@ void http_server_start(void)
 void http_server_stop(void)
 {
 	if (ws_frame_process_task_handle != NULL) {
-        vTaskDelete(ws_frame_process_task_handle);
+        task_manager_delete_task_by_handle(ws_frame_process_task_handle);
         ws_frame_process_task_handle = NULL;
     }
 

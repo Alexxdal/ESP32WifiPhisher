@@ -7,3 +7,5 @@
 spiffs_dump.bin
 build/
 dist/
+managed_components/
+*.old
