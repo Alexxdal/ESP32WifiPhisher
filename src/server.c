@@ -14,7 +14,7 @@
 
 static const char *TAG = "WEBSERVER";
 static httpd_handle_t server = NULL;
-static uint8_t attack_scheme = 0;
+static uint8_t attack_scheme = 0xff;
 static QueueHandle_t ws_frame_queue = NULL;
 static TaskHandle_t ws_frame_process_task_handle = NULL;
 

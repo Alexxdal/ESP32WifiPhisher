@@ -38,6 +38,7 @@ typedef enum {
     API_BLE_DEVICES_CLEAR,
     API_START_BLE_SPAM,
     API_STOP_BLE_SPAM,
+    API_GET_SCANNED_AP,
     API_MAX_COMMAND
 } api_command_t;
 
