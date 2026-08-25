@@ -524,6 +524,7 @@ static esp_err_t api_wifi_scan(ws_frame_req_t *req)
     cJSON *root = cJSON_CreateArray();
     if (!root) {
         free(scan_results);
+        cJSON_Delete(response_obj);
         api_send_status_frame(req, "error", "cJSON_CreateArray failed");
         return ESP_ERR_NO_MEM;
     }
@@ -1822,6 +1823,95 @@ static esp_err_t api_stop_ble_spam(ws_frame_req_t *req)
 }
 
 
+static esp_err_t api_get_scanned_ap(ws_frame_req_t *req)
+{
+    aps_info_t *scan_results = (aps_info_t *)malloc(sizeof(aps_info_t));
+    if (!scan_results) {
+        ESP_LOGE(TAG, "No Heap memory for scan results!");
+        return ESP_ERR_NO_MEM;
+    }
+
+    if (wifi_sniffer_get_aps(scan_results) != ESP_OK) {
+        api_send_status_frame(req, "error", "Failed to get scanned APs.");
+        free(scan_results);
+        return ESP_FAIL;
+    }
+
+    if (scan_results->count == 0) {
+        api_send_status_frame(req, "ok", "No APs found");
+        free(scan_results);
+        return ESP_OK;
+    }
+
+    cJSON *response_obj = cJSON_CreateObject();
+    cJSON_AddNumberToObject(response_obj, "req_id", req->req_id);
+    cJSON_AddStringToObject(response_obj, "type", "scan_result");
+
+    /* Ordine campi array: [ssid, signal, channel, bssid, authmode,
+       authmode_code, pairwise_cipher, group_cipher, wps] */
+    cJSON *root = cJSON_CreateArray();
+    if (!root) {
+        free(scan_results);
+        cJSON_Delete(response_obj);
+        api_send_status_frame(req, "error", "cJSON_CreateArray failed");
+        return ESP_ERR_NO_MEM;
+    }
+
+    for (int i = 0; i < scan_results->count; i++)
+    {
+        char ssid[33];
+        memcpy(ssid, scan_results->ap[i].ssid, sizeof(scan_results->ap[i].ssid));
+        ssid[32] = '\0';
+        char bssid[18];
+        snprintf(bssid, sizeof(bssid), MACSTRCAPS, MAC2STR(scan_results->ap[i].bssid));
+
+        cJSON *obj = cJSON_CreateArray();
+        if (!obj) {
+            cJSON_Delete(root);
+            free(scan_results);
+            cJSON_Delete(response_obj);
+            api_send_status_frame(req, "error", "cJSON_CreateArray failed");
+            return ESP_ERR_NO_MEM;
+        }
+
+        cJSON_AddItemToArray(obj, cJSON_CreateString(ssid));
+        cJSON_AddItemToArray(obj, cJSON_CreateNumber(scan_results->ap[i].rssi));
+        cJSON_AddItemToArray(obj, cJSON_CreateNumber(scan_results->ap[i].primary));
+        cJSON_AddItemToArray(obj, cJSON_CreateString(bssid));
+        cJSON_AddItemToArray(obj, cJSON_CreateString(authmode_to_str(scan_results->ap[i].authmode)));
+        cJSON_AddItemToArray(obj, cJSON_CreateNumber(scan_results->ap[i].authmode));
+        cJSON_AddItemToArray(obj, cJSON_CreateNumber(scan_results->ap[i].pairwise_cipher));
+        cJSON_AddItemToArray(obj, cJSON_CreateNumber(scan_results->ap[i].group_cipher));
+        cJSON_AddItemToArray(obj, cJSON_CreateBool(scan_results->ap[i].wps ? 1 : 0));
+
+        cJSON_AddItemToArray(root, obj);
+    }
+    cJSON_AddItemToObject(response_obj, "data", root);
+
+    char *json = cJSON_PrintUnformatted(response_obj);
+    if (scan_results) free(scan_results);
+    cJSON_Delete(response_obj);
+
+    if (!json) {
+        return ESP_ERR_NO_MEM;
+    }
+
+    ws_frame_req_t cmd;
+    cmd.hd = req->hd;
+    cmd.fd = req->fd;
+    cmd.payload = json;
+    cmd.len = strlen(json);
+    cmd.need_free = true;
+
+    if (ws_send_command_to_queue(&cmd) != ESP_OK) {
+        cJSON_free(json);
+        return ESP_FAIL;
+    }
+
+    return ESP_OK;
+}
+
+
 static const api_cmd_t api_cmd_list[] = {
     { API_GET_STATUS, api_get_status },
     { API_SET_AP_SETTINGS, api_admin_set_ap_settings },
@@ -1855,6 +1945,7 @@ static const api_cmd_t api_cmd_list[] = {
     { API_BLE_DEVICES_CLEAR, api_ble_devices_clear },
     { API_START_BLE_SPAM, api_start_ble_spam },
     { API_STOP_BLE_SPAM, api_stop_ble_spam },
+    { API_GET_SCANNED_AP, api_get_scanned_ap }
 };
 
 
