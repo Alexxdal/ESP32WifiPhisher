@@ -99,7 +99,8 @@ The fastest way to get started: use the [Online Flasher](https://espwifiphisher.
 
    1. Select your target environment (e.g. `esp32s3`) from the PlatformIO toolbar.
    2. Connect your ESP32 board to your computer via USB.
-   3. Click **Upload**.
+   3. Click **General->Upload**.
+   4. Click **Platform->Upload Filesystem Image**
 
 ### Monitor Logs
 
