@@ -156,8 +156,8 @@ def _merge_bin():
     esptool = env.subst("$UPLOADER")
 
     flash_mode = env.BoardConfig().get("build.flash_mode", "dio")
-    # Se vuoi davvero “universale 4MB”, ok SOLO se la tua partition table sta entro 4MB
-    flash_size = "4MB"
+    # Ambil ukuran flash dari board config (env: board_upload.flash_size)
+    flash_size = env.BoardConfig().get("upload.flash_size", "4MB") or "4MB"
 
     f_flash = str(env.BoardConfig().get("build.f_flash", "40000000")).replace("L", "")
     flash_freq = "80m" if f_flash.isdigit() and int(f_flash) >= 80000000 else "40m"
@@ -173,7 +173,7 @@ def _merge_bin():
         str(python), str(esptool),
         "--chip", str(chip),
         "merge_bin",
-        "--fill-flash-size", "4MB",
+        "--fill-flash-size", str(flash_size),
         "-o", str(out_file),
         "--flash_mode", str(flash_mode),
         "--flash_freq", str(flash_freq),
