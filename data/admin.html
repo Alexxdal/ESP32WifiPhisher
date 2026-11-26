@@ -834,15 +834,15 @@
                 </div>
 
                 <div class="card" style="border-top: 3px solid #00bcd4;">
-                    <div class="stat-label">STA NETWORK & DISCOVERY</div>
+                    <div class="stat-label" data-i18n="sta_net_discovery">STA NETWORK & DISCOVERY</div>
                     
                     <div style="margin-top:20px; display:flex; flex-direction:column; gap:15px;">
                         <div style="display:flex; align-items:center; justify-content:space-between; padding-bottom:10px; border-bottom:1px solid #333;">
                             <div>
-                                <div style="font-size:0.85rem; font-weight:bold; color:#fff;" id="dash-sta-ssid">No Network</div>
-                                <div style="font-size:0.75rem; color:#888;">Active STA Connection</div>
+                                <div style="font-size:0.85rem; font-weight:bold; color:#fff;" id="dash-sta-ssid" data-i18n="no_network">No Network</div>
+                                <div style="font-size:0.75rem; color:#888;" data-i18n="active_sta_conn">Active STA Connection</div>
                             </div>
-                            <div id="dash-sta-badge" style="background:#222; color:#555; padding:4px 10px; border-radius:4px; font-size:0.7rem; font-weight:bold; letter-spacing:1px;">
+                            <div id="dash-sta-badge" style="background:#222; color:#555; padding:4px 10px; border-radius:4px; font-size:0.7rem; font-weight:bold; letter-spacing:1px;" data-i18n="status_offline">
                                 OFFLINE
                             </div>
                         </div>
@@ -850,18 +850,18 @@
                         <div style="display:flex; align-items:center; justify-content:space-between; padding-bottom:10px; border-bottom:1px solid #333;">
                             <div>
                                 <div style="font-size:0.85rem; font-weight:bold; color:var(--accent); font-family:monospace;" id="dash-sta-ip">--.--.--.--</div>
-                                <div style="font-size:0.75rem; color:#888;">Local IP Address</div>
+                                <div style="font-size:0.75rem; color:#888;" data-i18n="local_ip_addr">Local IP Address</div>
                             </div>
                             <div style="text-align:right;">
                                 <div style="font-size:0.85rem; font-weight:bold; color:#ccc; font-family:monospace;" id="dash-sta-gw">--.--.--.--</div>
-                                <div style="font-size:0.75rem; color:#888;">Gateway</div>
+                                <div style="font-size:0.75rem; color:#888;" data-i18n="gateway">Gateway</div>
                             </div>
                         </div>
 
                         <div style="display:flex; align-items:center; justify-content:space-between; padding-bottom:10px; border-bottom:1px solid #333;">
                             <div>
                                 <div style="font-size:0.85rem; font-weight:bold; color:var(--accent); font-family:monospace;" id="dash-sta-mask">--.--.--.--</div>
-                                <div style="font-size:0.75rem; color:#888;">Subnet Mask</div>
+                                <div style="font-size:0.75rem; color:#888;" data-i18n="subnet_mask">Subnet Mask</div>
                             </div>
                         </div>
                     </div>
@@ -995,18 +995,18 @@
                 <div style="display:flex; align-items:center; gap:10px; background:#121212; padding:8px 12px; border-radius:6px; border:1px solid #333;">
                     <span style="font-size:0.75rem; color:#aaa; font-weight:bold; letter-spacing:1px;" data-i18n="channel">CH:</span>
                     <select id="recon-chan" style="width: auto; padding: 4px 20px 4px 8px; height: 30px; font-size: 0.8rem; margin:0; min-width: 110px;">
-                        <option value="0">ALL (HOP)</option>
+                        <option value="0" data-i18n="opt_all_hop">ALL (HOP)</option>
                         <!-- I canali verranno popolati via JS -->
                     </select>
                     
-                    <button onclick="startRecon()" id="btn-recon-start" style="padding: 6px 12px; margin:0; font-size:0.75rem;">START</button>
-                    <button class="danger" onclick="stopRecon()" id="btn-recon-stop" disabled style="opacity:0.5; cursor:not-allowed; padding: 6px 12px; margin:0; font-size:0.75rem;">STOP</button>
-                    <button class="secondary" onclick="clearReconData()" style="padding: 6px 12px; margin:0; font-size:0.75rem;">CLEAR</button>
+                    <button onclick="startRecon()" id="btn-recon-start" style="padding: 6px 12px; margin:0; font-size:0.75rem;" data-i18n="btn_start">START</button>
+                    <button class="danger" onclick="stopRecon()" id="btn-recon-stop" disabled style="opacity:0.5; cursor:not-allowed; padding: 6px 12px; margin:0; font-size:0.75rem;" data-i18n="btn_stop">STOP</button>
+                    <button class="secondary" onclick="clearReconData()" style="padding: 6px 12px; margin:0; font-size:0.75rem;" data-i18n="btn_clear">CLEAR</button>
                 </div>
             </div>
 
             <div class="card" style="padding:0; overflow-x:auto; margin-bottom: 20px;">
-                    <div style="padding:10px 15px; background:#181818; border-bottom:1px solid #333; font-weight:bold; color:var(--accent); font-size: 0.85rem;">
+                    <div style="padding:10px 15px; background:#181818; border-bottom:1px solid #333; font-weight:bold; color:var(--accent); font-size: 0.85rem;" data-i18n="access_points">
                         ACCESS POINTS
                     </div>
                     <table class="wifi-table" style="font-family: 'Courier New', monospace; font-size: 0.8rem;">
@@ -1024,13 +1024,13 @@
                             </tr>
                         </thead>
                         <tbody id="recon-ap-body">
-                            <tr><td colspan="9" style="text-align:center; padding:15px; color:#666;">Start an attack or scan to listen...</td></tr>
+                            <tr><td colspan="9" style="text-align:center; padding:15px; color:#666;" data-i18n="recon_ap_empty">Start an attack or scan to listen...</td></tr>
                         </tbody>
                     </table>
                 </div>  
 
             <div class="card" style="padding:0; overflow-x:auto;">
-                <div style="padding:10px 15px; background:#181818; border-bottom:1px solid #333; font-weight:bold; color:#00bcd4; font-size: 0.85rem;">
+                <div style="padding:10px 15px; background:#181818; border-bottom:1px solid #333; font-weight:bold; color:#00bcd4; font-size: 0.85rem;" data-i18n="clients">
                     CLIENTS
                 </div>
                 <table class="wifi-table" style="font-family: 'Courier New', monospace; font-size: 0.8rem;">
@@ -1046,7 +1046,7 @@
                         </tr>
                     </thead>
                     <tbody id="recon-cli-body">
-                        <tr><td colspan="7" style="text-align:center; padding:15px; color:#666;">Waiting for clients...</td></tr>
+                        <tr><td colspan="7" style="text-align:center; padding:15px; color:#666;" data-i18n="recon_cli_empty">Waiting for clients...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -1134,9 +1134,9 @@
                     <option value="broadcast" data-i18n="opt_all_networks">All Networks (Broadcast/Hopping)</option>
                 </select>
                 <div id="deauth-broadcast-channel-container" style="display: none; margin-top: 15px;">
-                    <label>ATTACK CHANNEL</label>
+                    <label data-i18n="attack_channel">ATTACK CHANNEL</label>
                     <select id="deauth-broadcast-channel" onchange="updateDeauthUI()">
-                        <option value="0">All Channels (Hopping)</option>
+                        <option value="0" data-i18n="opt_all_channels_hop">All Channels (Hopping)</option>
                         <!-- Le altre opzioni verranno generate via JS -->
                     </select>
                 </div>
@@ -1198,25 +1198,25 @@
                 <label style="color:var(--accent); border-bottom:1px solid #333; padding-bottom:5px; margin-bottom:15px; margin-top:0;" data-i18n="display_filters">DISPLAY FILTERS</label>
                 
                 <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap:10px; margin-bottom:15px;">
-                    <input type="text" id="ble-filter-mac" placeholder="Filter MAC">
-                    <input type="text" id="ble-filter-name" placeholder="Filter Name / Vendor">
-                    <input type="number" id="ble-filter-rssi" placeholder="Min RSSI (-90)" value="-110">
+                    <input type="text" id="ble-filter-mac" data-i18n="ph_filter_mac" placeholder="Filter MAC">
+                    <input type="text" id="ble-filter-name" data-i18n="ph_filter_name" placeholder="Filter Name / Vendor">
+                    <input type="number" id="ble-filter-rssi" data-i18n="ph_min_rssi" placeholder="Min RSSI (-90)" value="-110">
                 </div>
                 
                 <div class="btn-group">
                     <button onclick="startBleSniffer()" id="btn-ble-start">
-                        <svg style="width:16px; height:16px; vertical-align:middle; margin-right:5px;" viewBox="0 0 24 24"><path fill="currentColor" d="M8 5v14l11-7z"/></svg> START
+                        <svg style="width:16px; height:16px; vertical-align:middle; margin-right:5px;" viewBox="0 0 24 24"><path fill="currentColor" d="M8 5v14l11-7z"/></svg> <span data-i18n="btn_start">START</span>
                     </button>
                     
                     <button class="danger" onclick="stopBleSniffer()" id="btn-ble-stop" disabled style="opacity:0.5; cursor:not-allowed;">
-                        <svg style="width:16px; height:16px; vertical-align:middle; margin-right:5px;" viewBox="0 0 24 24"><path fill="currentColor" d="M6 6h12v12H6z"/></svg> STOP
+                        <svg style="width:16px; height:16px; vertical-align:middle; margin-right:5px;" viewBox="0 0 24 24"><path fill="currentColor" d="M6 6h12v12H6z"/></svg> <span data-i18n="btn_stop">STOP</span>
                     </button>
 
-                    <button class="secondary" onclick="clearBleTable()">CLEAR</button>
+                    <button class="secondary" onclick="clearBleTable()" data-i18n="btn_clear">CLEAR</button>
                 </div>
                 
                 <div style="margin-top:5px; font-size:0.8rem; color:#666; text-align:right;">
-                    <span>Devices Found:</span> <span id="ble-device-count" style="color:var(--accent); font-weight:bold;">0</span>
+                    <span data-i18n="devices_found">Devices Found:</span> <span id="ble-device-count" style="color:var(--accent); font-weight:bold;">0</span>
                 </div>
             </div>
 
@@ -1225,17 +1225,17 @@
                     <table class="wifi-table" style="font-family: 'Courier New', monospace; font-size: 0.8rem; width: 100%; border-collapse: collapse;">
                         <thead style="position: sticky; top: 0; background: #1e1e1e; z-index: 10;">
                             <tr>
-                                <th style="white-space: nowrap;">MAC Address</th>
-                                <th>RSSI</th>
-                                <th>Identity (Name/Vendor)</th>
-                                <th>Classification</th>
-                                <th>Pkts</th>
-                                <th>Last Seen</th>
-                                <th>Extra Data / Serial</th>
+                                <th style="white-space: nowrap;" data-i18n="th_mac_addr">MAC Address</th>
+                                <th data-i18n="th_rssi">RSSI</th>
+                                <th data-i18n="th_identity">Identity (Name/Vendor)</th>
+                                <th data-i18n="th_classification">Classification</th>
+                                <th data-i18n="th_ble_pkts">Pkts</th>
+                                <th data-i18n="th_last_seen">Last Seen</th>
+                                <th data-i18n="th_extra_data">Extra Data / Serial</th>
                             </tr>
                         </thead>
                         <tbody id="ble-body">
-                            <tr><td colspan="7" style="text-align:center; padding: 20px; color:#666;">Ready to scan BLE devices...</td></tr>
+                            <tr><td colspan="7" style="text-align:center; padding: 20px; color:#666;" data-i18n="ble_ready_msg">Ready to scan BLE devices...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -1250,15 +1250,15 @@
 
                 <label data-i18n="target_device_ecosystem">TARGET ECOSYSTEM</label>
                 <select id="ble-spam-type">
-                    <option value="0">Apple (AirPods, Setup New Device)</option>
-                    <option value="1">Samsung (Galaxy Buds/Watch)</option>
-                    <option value="2">Google (Fast Pair)</option>
-                    <option value="3">Microsoft (Swift Pair)</option>
-                    <option value="4" selected>All Vendors (Randomize)</option>
+                    <option value="0" data-i18n="opt_ble_apple">Apple (AirPods, Setup New Device)</option>
+                    <option value="1" data-i18n="opt_ble_samsung">Samsung (Galaxy Buds/Watch)</option>
+                    <option value="2" data-i18n="opt_ble_google">Google (Fast Pair)</option>
+                    <option value="3" data-i18n="opt_ble_microsoft">Microsoft (Swift Pair)</option>
+                    <option value="4" selected data-i18n="opt_ble_all">All Vendors (Randomize)</option>
                 </select>
 
                 <div style="margin-top: 15px; padding: 10px; background: rgba(255, 171, 64, 0.1); border-left: 3px solid #ffab40; color: #aaa; font-size: 0.8rem; font-style: italic;">
-                    <strong style="color:#ffab40;">Note:</strong> iOS and Android devices may require the screen to be unlocked to display pairing popups.
+                    <strong style="color:#ffab40;" data-i18n="note_lbl">Note:</strong> <span data-i18n="ble_spam_note">iOS and Android devices may require the screen to be unlocked to display pairing popups.</span>
                 </div>
 
                 <div class="btn-group" style="margin-top: 25px;">
@@ -1276,11 +1276,11 @@
         <div id="view-sta" class="view-container">
             <h2 data-i18n="sta_connection_title">Target Connection (STA)</h2>
             <div class="card">
-                <p style="font-size:0.85rem; color:#aaa; margin-top:0;">Connect the ESP32 to a target network to access its internal subnet.</p>
+                <p style="font-size:0.85rem; color:#aaa; margin-top:0;" data-i18n="sta_desc">Connect the ESP32 to a target network to access its internal subnet.</p>
                 
                 <div style="display:flex; gap:10px; margin-bottom:15px; flex-wrap: wrap;">
-                    <input type="text" id="sta-ssid" placeholder="Selected Target SSID" style="background:#222; cursor:not-allowed; flex:1; min-width: 200px;">
-                    <input type="text" id="sta-password" placeholder="WiFi Password (if required)" style="flex:1; min-width: 200px;">
+                    <input type="text" id="sta-ssid" data-i18n="ph_sta_ssid" placeholder="Selected Target SSID" style="background:#222; cursor:not-allowed; flex:1; min-width: 200px;">
+                    <input type="text" id="sta-password" data-i18n="ph_sta_password" placeholder="WiFi Password (if required)" style="flex:1; min-width: 200px;">
                 </div>
                 
                 <div class="btn-group">
@@ -1291,12 +1291,12 @@
                 
                 <div style="margin-top:20px; font-size:0.85rem; padding: 15px; background: #121212; border-radius: 4px; border: 1px solid #333; display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                     <div style="grid-column: span 2; border-bottom: 1px solid #222; padding-bottom: 8px;">
-                        <span style="color:#666;">Connected Network:</span> <span id="sta-connected-ssid" style="font-weight:bold; color:#fff; font-size:0.95rem;">NONE</span>
+                        <span style="color:#666;" data-i18n="lbl_connected_network">Connected Network:</span> <span id="sta-connected-ssid" style="font-weight:bold; color:#fff; font-size:0.95rem;" data-i18n="status_none">NONE</span>
                     </div>
-                    <div><span style="color:#666;">Status:</span> <span id="sta-status" style="color:#ff5252; font-weight:bold;">DISCONNECTED</span></div>
-                    <div><span style="color:#666;">Local IP:</span> <span id="sta-ip" style="font-family:monospace; color:var(--accent);">--.--.--.--</span></div>
-                    <div><span style="color:#666;">Gateway:</span> <span id="sta-gw" style="font-family:monospace; color:#aaa;">--.--.--.--</span></div>
-                    <div><span style="color:#666;">Subnet:</span> <span id="sta-mask" style="font-family:monospace; color:#aaa;">--.--.--.--</span></div>
+                    <div><span style="color:#666;" data-i18n="lbl_status">Status:</span> <span id="sta-status" style="color:#ff5252; font-weight:bold;" data-i18n="status_disconnected">DISCONNECTED</span></div>
+                    <div><span style="color:#666;" data-i18n="lbl_local_ip">Local IP:</span> <span id="sta-ip" style="font-family:monospace; color:var(--accent);">--.--.--.--</span></div>
+                    <div><span style="color:#666;" data-i18n="lbl_gateway">Gateway:</span> <span id="sta-gw" style="font-family:monospace; color:#aaa;">--.--.--.--</span></div>
+                    <div><span style="color:#666;" data-i18n="lbl_subnet">Subnet:</span> <span id="sta-mask" style="font-family:monospace; color:#aaa;">--.--.--.--</span></div>
                 </div>
             </div>
         </div>
@@ -1306,25 +1306,25 @@
             <h2 data-i18n="host_discovery_title">Subnet Scan</h2>
             
             <div class="card">
-                <p style="margin-top:0; color:#aaa; font-size:0.9rem; margin-bottom: 20px;">Map the internal network to find active devices, hostnames, and exposed services.</p>
+                <p style="margin-top:0; color:#aaa; font-size:0.9rem; margin-bottom: 20px;" data-i18n="hd_desc">Map the internal network to find active devices, hostnames, and exposed services.</p>
 
                 <!-- 1. DASHBOARD STATS -->
                 <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap:15px; margin-bottom:25px;">
                     <div style="background:#121212; border:1px solid #333; border-radius:6px; padding:15px; text-align:center;">
                         <div style="font-size:1.8rem; font-weight:bold; color:var(--accent); font-family:monospace;" id="hd-stat-hosts">--</div>
-                        <div style="font-size:0.7rem; color:#888; text-transform:uppercase; letter-spacing:1px; margin-top:5px;">Hosts Found</div>
+                        <div style="font-size:0.7rem; color:#888; text-transform:uppercase; letter-spacing:1px; margin-top:5px;" data-i18n="hd_hosts_found">Hosts Found</div>
                     </div>
                     <div style="background:#121212; border:1px solid #333; border-radius:6px; padding:15px; text-align:center;">
                         <div style="font-size:1.8rem; font-weight:bold; color:var(--accent); font-family:monospace;" id="hd-stat-services">--</div>
-                        <div style="font-size:0.7rem; color:#888; text-transform:uppercase; letter-spacing:1px; margin-top:5px;">With Services</div>
+                        <div style="font-size:0.7rem; color:#888; text-transform:uppercase; letter-spacing:1px; margin-top:5px;" data-i18n="hd_with_services">With Services</div>
                     </div>
                     <div style="background:#121212; border:1px solid #333; border-radius:6px; padding:15px; text-align:center;">
                         <div style="font-size:1.8rem; font-weight:bold; color:var(--accent); font-family:monospace;" id="hd-stat-vendors">--</div>
-                        <div style="font-size:0.7rem; color:#888; text-transform:uppercase; letter-spacing:1px; margin-top:5px;">Vendors</div>
+                        <div style="font-size:0.7rem; color:#888; text-transform:uppercase; letter-spacing:1px; margin-top:5px;" data-i18n="hd_vendors">Vendors</div>
                     </div>
                     <div style="background:#121212; border:1px solid #333; border-radius:6px; padding:15px; text-align:center;">
                         <div style="font-size:1.8rem; font-weight:bold; color:#ccc; font-family:monospace;" id="hd-stat-time">--:--</div>
-                        <div style="font-size:0.7rem; color:#888; text-transform:uppercase; letter-spacing:1px; margin-top:5px;">Last Scan</div>
+                        <div style="font-size:0.7rem; color:#888; text-transform:uppercase; letter-spacing:1px; margin-top:5px;" data-i18n="hd_last_scan">Last Scan</div>
                     </div>
                 </div>
 
@@ -1333,7 +1333,7 @@
                     
                     <!-- Scan Options -->
                     <div style="display:flex; flex-wrap:wrap; gap:15px; align-items:center;">
-                        <span style="font-size:0.75rem; color:#888; font-weight:bold; letter-spacing:1px;">OPTIONS:</span>
+                        <span style="font-size:0.75rem; color:#888; font-weight:bold; letter-spacing:1px;" data-i18n="lbl_options">OPTIONS:</span>
                         
                         <label style="display:flex; align-items:center; gap:8px; font-size:0.85rem; color:#ccc; cursor:pointer;">
                             <input type="checkbox" id="hd-include-mdns" style="width:auto; margin:0; accent-color:var(--accent);">
@@ -1344,7 +1344,7 @@
                         <label style="display:flex; align-items:center; gap:8px; font-size:0.85rem; color:#ccc; cursor:pointer;">
                             <input type="checkbox" id="hd-include-ssdp" style="width:auto; margin:0; accent-color:var(--accent);">
                             SSDP/UPnP
-                            <span style="color:#666; font-size:0.75rem; background:#111; padding:2px 6px; border-radius:3px;" title="Includes one extra HTTP request per UPnP device to read its friendly name/model">+3-6 sec</span>
+                            <span style="color:#666; font-size:0.75rem; background:#111; padding:2px 6px; border-radius:3px;" data-i18n-title="hd_ssdp_tooltip" title="Includes one extra HTTP request per UPnP device to read its friendly name/model">+3-6 sec</span>
                         </label>
                     </div>
 
@@ -1352,23 +1352,23 @@
                     <div class="btn-group" style="margin-top:0;">
                         <button onclick="startHostScan()" style="margin:0;">
                             <svg style="width:16px; height:16px; vertical-align:middle; margin-right:5px;" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/></svg> 
-                            START SWEEP
+                            <span data-i18n="btn_start_sweep">START SWEEP</span>
                         </button>
-                        <button class="secondary" onclick="clearHostScan();" style="margin:0;">CLEAR</button>
+                        <button class="secondary" onclick="clearHostScan();" style="margin:0;" data-i18n="btn_clear">CLEAR</button>
                     </div>
                 </div>
 
                 <!-- 3. TABLE HEADER & FILTER -->
                 <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:10px; flex-wrap:wrap; gap:10px;">
-                    <div style="font-weight:bold; color:var(--accent); font-size: 0.85rem; padding-left:5px;">DISCOVERED TARGETS</div>
-                    <input type="text" id="hd-filter" oninput="renderHostScanTable()" placeholder="Filter by IP, MAC, Hostname..." 
+                    <div style="font-weight:bold; color:var(--accent); font-size: 0.85rem; padding-left:5px;" data-i18n="discovered_targets">DISCOVERED TARGETS</div>
+                    <input type="text" id="hd-filter" oninput="renderHostScanTable()" data-i18n="ph_hd_filter" placeholder="Filter by IP, MAC, Hostname..." 
                            style="width:100%; max-width: 300px; padding:8px 12px; background:#121212; border:1px solid #444; border-radius:4px; color:white; font-size:0.8rem; margin:0;">
                 </div>
 
                 <!-- 4. DEVICE LIST (Fing-style rows) -->
                 <div style="border:1px solid #333; border-radius:6px; background:#121212; overflow:hidden;">
                     <div id="host-scan-body">
-                        <div class="host-empty">Run a sweep to find targets</div>
+                        <div class="host-empty" data-i18n="hd_empty_msg">Run a sweep to find targets</div>
                     </div>
                 </div>
 
@@ -1381,43 +1381,43 @@
             <div class="card">
                 <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap:15px; margin-bottom:15px;">
                     <div>
-                        <label style="margin-top:0;">TARGET IP</label>
-                        <input type="text" id="ps-ip" placeholder="e.g. 192.168.1.5">
+                        <label style="margin-top:0;" data-i18n="target_ip">TARGET IP</label>
+                        <input type="text" id="ps-ip" data-i18n="ph_ps_ip" placeholder="e.g. 192.168.1.5">
                     </div>
                     <div>
-                        <label style="margin-top:0;">SCAN METHOD</label>
+                        <label style="margin-top:0;" data-i18n="scan_method">SCAN METHOD</label>
                         <select id="ps-method">
-                            <option value="1">SYN Scan (Stealth)</option>
-                            <option value="0">Connect Scan</option>
-                            <option value="2" disabled>FIN Scan (Not Implemented)</option>
-                            <option value="3" disabled>NULL Scan (Not Implemented)</option>
-                            <option value="4" disabled>XMAS Scan (Not Implemented)</option>
-                            <option value="5" disabled>ACK Scan (Not Implemented)</option>
+                            <option value="1" data-i18n="opt_syn_scan">SYN Scan (Stealth)</option>
+                            <option value="0" data-i18n="opt_connect_scan">Connect Scan</option>
+                            <option value="2" disabled data-i18n="opt_fin_scan">FIN Scan (Not Implemented)</option>
+                            <option value="3" disabled data-i18n="opt_null_scan">NULL Scan (Not Implemented)</option>
+                            <option value="4" disabled data-i18n="opt_xmas_scan">XMAS Scan (Not Implemented)</option>
+                            <option value="5" disabled data-i18n="opt_ack_scan">ACK Scan (Not Implemented)</option>
                         </select>
                     </div>
                     <div>
-                        <label style="margin-top:0;">PORTS TARGET</label>
+                        <label style="margin-top:0;" data-i18n="ports_target">PORTS TARGET</label>
                         <select id="ps-ports-preset" onchange="toggleCustomPorts()">
-                            <option value="top20">Top 20 Ports (Fast)</option>
-                            <option value="top100">Top 100 Ports</option>
-                            <option value="iot">IoT Default Ports</option>
-                            <option value="custom">Custom (Manual)</option>
+                            <option value="top20" data-i18n="opt_top20">Top 20 Ports (Fast)</option>
+                            <option value="top100" data-i18n="opt_top100">Top 100 Ports</option>
+                            <option value="iot" data-i18n="opt_iot_ports">IoT Default Ports</option>
+                            <option value="custom" data-i18n="opt_custom_ports">Custom (Manual)</option>
                         </select>
                     </div>
                     <div id="custom-ports-container" style="display:none;">
-                        <label style="margin-top:0;">CUSTOM PORTS</label>
-                        <input type="text" id="ps-custom-ports" placeholder="e.g. 80, 443, 8000-8080">
+                        <label style="margin-top:0;" data-i18n="custom_ports">CUSTOM PORTS</label>
+                        <input type="text" id="ps-custom-ports" data-i18n="ph_custom_ports" placeholder="e.g. 80, 443, 8000-8080">
                     </div>
                 </div>
                 
                 <div class="btn-group">
-                    <button class="danger" onclick="startPortScan()" id="btn-ps-start">START SCAN</button>
-                    <button class="secondary" onclick="stopPortScan()" id="btn-ps-stop" disabled style="opacity:0.5; cursor:not-allowed;">STOP</button>
-                    <button class="secondary" onclick="document.getElementById('ps-terminal').innerHTML = '<div style=\'color:#666;\'>Ready. Enter target and click START.</div>';">CLEAR</button>
+                    <button class="danger" onclick="startPortScan()" id="btn-ps-start" data-i18n="btn_start_scan">START SCAN</button>
+                    <button class="secondary" onclick="stopPortScan()" id="btn-ps-stop" disabled style="opacity:0.5; cursor:not-allowed;" data-i18n="btn_stop">STOP</button>
+                    <button class="secondary" onclick="document.getElementById('ps-terminal').innerHTML = '<div style=\'color:#666;\'>' + (currentTranslations['ps_ready_msg'] || 'Ready. Enter target and click START.') + '</div>';" data-i18n="btn_clear">CLEAR</button>
                 </div>
                 
                 <div id="ps-terminal" style="margin-top:20px; background:var(--terminal-bg); padding:15px; flex: 1; min-height: 150px; overflow-y:auto; border:1px solid #333; font-family:'Courier New', monospace; color:#0f0; font-size:0.85rem; border-radius:4px;">
-                    <div style="color:#666;">Ready. Enter target and click START.</div>
+                    <div style="color:#666;" data-i18n="ps_ready_msg">Ready. Enter target and click START.</div>
                 </div>
             </div>
         </div>
@@ -1426,23 +1426,23 @@
         <div id="view-handshakes" class="view-container">
             <h2 data-i18n="captured_handshakes">Captured Handshakes</h2>
             <div class="card" style="padding:0; overflow-x:auto;">
-                <div style="padding:15px; border-bottom:1px solid #333; font-weight:bold; color:var(--accent);">
+                <div style="padding:15px; border-bottom:1px solid #333; font-weight:bold; color:var(--accent);" data-i18n="handshakes_list_title">
                     LIST OF CAPTURED HANDSHAKES
                 </div>
                 <table class="wifi-table" style="font-family: 'Courier New', monospace; font-size: 0.85rem;">
                     <thead style="background: #181818;">
                         <tr>
-                            <th>Target SSID</th>
-                            <th>BSSID (Access Point)</th>
-                            <th>Channel</th>
-                            <th>Encryption Type</th>
-                            <th>Capture Mode</th>
-                            <th style="text-align: center;">Action</th>
+                            <th data-i18n="th_target_ssid">Target SSID</th>
+                            <th data-i18n="th_bssid_ap">BSSID (Access Point)</th>
+                            <th data-i18n="channel">Channel</th>
+                            <th data-i18n="th_encryption_type">Encryption Type</th>
+                            <th data-i18n="th_capture_mode">Capture Mode</th>
+                            <th style="text-align: center;" data-i18n="th_action">Action</th>
                         </tr>
                     </thead>
                     <tbody id="handshakers-bank-body">
                         <tr>
-                            <td colspan="6" style="text-align:center; padding:20px; color:#666;">No handshake captured.</td>
+                            <td colspan="6" style="text-align:center; padding:20px; color:#666;" data-i18n="no_handshake_captured">No handshake captured.</td>
                         </tr>
                     </tbody>
                 </table>
@@ -1476,17 +1476,17 @@
                     <input type="number" id="channel" name="channel" min="1" max="13">
                     <label data-i18n="tx_rate">TX Power Rate</label>
                     <select id="tx_rate" name="tx_rate">
-                        <optgroup label="Max Range / Attack (802.11b)">
-                            <option value="0">1 Mbps (Long Preamble)</option>
-                            <option value="2">5.5 Mbps (Long Preamble)</option>
+                        <optgroup label="Max Range / Attack (802.11b)" data-i18n="optgrp_max_range">
+                            <option value="0" data-i18n="opt_tx_1m">1 Mbps (Long Preamble)</option>
+                            <option value="2" data-i18n="opt_tx_5m">5.5 Mbps (Long Preamble)</option>
                         </optgroup>
-                        <optgroup label="Balanced / Default (802.11g)">
+                        <optgroup label="Balanced / Default (802.11g)" data-i18n="optgrp_balanced">
                             <option value="11">6 Mbps</option>
-                            <option value="15">9 Mbps (Default)</option>
+                            <option value="15" data-i18n="opt_tx_9m">9 Mbps (Default)</option>
                             <option value="10">12 Mbps</option>
                             <option value="9">24 Mbps</option>
                         </optgroup>
-                        <optgroup label="High Speed (802.11g/n)">
+                        <optgroup label="High Speed (802.11g/n)" data-i18n="optgrp_high_speed">
                             <option value="12">54 Mbps</option>
                             <option value="16">MCS0 (6.5 Mbps / LGI)</option>
                             <option value="23">MCS7 (65 Mbps / LGI)</option>
@@ -1991,9 +1991,18 @@
                     if (currentTranslations[key]) {
                         if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
                             el.placeholder = currentTranslations[key];
+                        } else if (el.tagName === 'OPTGROUP') {
+                            el.label = currentTranslations[key];
                         } else {
                             el.innerText = currentTranslations[key];
                         }
+                    }
+                });
+
+                document.querySelectorAll('[data-i18n-title]').forEach(el => {
+                    const key = el.getAttribute('data-i18n-title');
+                    if (currentTranslations[key]) {
+                        el.title = currentTranslations[key];
                     }
                 });
 
@@ -2203,7 +2212,7 @@
                 const staMaskEl = document.getElementById('sta-mask');
                 const staSsidEl = document.getElementById('sta-connected-ssid');
 
-                const activeSsid = data.wifi_sta_ssid ? data.wifi_sta_ssid : "No Network";
+                const activeSsid = data.wifi_sta_ssid ? data.wifi_sta_ssid : (currentTranslations["no_network"] || "No Network");
 
                 
                 if (data.has_ip) {
@@ -2213,14 +2222,14 @@
                         dashStaIp.innerText = data.ip;
                         dashStaGw.innerText = data.gateway || "--.--.--.--";
                         dashStaMask.innerText = data.netmask || "--.--.--.--";
-                        dashStaBadge.innerText = "CONNECTED";
+                        dashStaBadge.innerText = currentTranslations["status_connected"] || "CONNECTED";
                         dashStaBadge.style.background = "rgba(0, 230, 118, 0.2)";
                         dashStaBadge.style.color = "var(--accent)";
                         dashStaBadge.style.border = "1px solid var(--accent)";
                     }
                     // STA Tab
                     if(staStatusEl) {
-                        staStatusEl.innerText = "CONNECTED";
+                        staStatusEl.innerText = currentTranslations["status_connected"] || "CONNECTED";
                         staStatusEl.style.color = "var(--accent)";
                         staIpEl.innerText = data.ip;
                         staGwEl.innerText = data.gateway || "--.--.--.--";
@@ -2235,14 +2244,14 @@
                         dashStaIp.innerText = "--.--.--.--";
                         dashStaGw.innerText = "--.--.--.--";
                         dashStaMask.innerText = "--.--.--.--";
-                        dashStaBadge.innerText = "DHCP REQ...";
+                        dashStaBadge.innerText = currentTranslations["status_dhcp_req"] || "DHCP REQ...";
                         dashStaBadge.style.background = "rgba(255, 171, 64, 0.2)";
                         dashStaBadge.style.color = "#ffab40";
                         dashStaBadge.style.border = "1px solid #ffab40";
                     }
                     // STA Tab
                     if(staStatusEl) {
-                        staStatusEl.innerText = "OBTAINING IP...";
+                        staStatusEl.innerText = currentTranslations["status_obtaining_ip"] || "OBTAINING IP...";
                         staStatusEl.style.color = "#ffab40";
                         staIpEl.innerText = "--.--.--.--";
                         if(staSsidEl) staSsidEl.innerText = activeSsid;
@@ -2250,23 +2259,23 @@
                 } else {
                     // Dashboard Card
                     if(dashStaBadge) {
-                        dashStaSsid.innerText = "No Network";
+                        dashStaSsid.innerText = currentTranslations["no_network"] || "No Network";
                         dashStaIp.innerText = "--.--.--.--";
                         dashStaGw.innerText = "--.--.--.--";
                         dashStaMask.innerText = "--.--.--.--";
-                        dashStaBadge.innerText = "OFFLINE";
+                        dashStaBadge.innerText = currentTranslations["status_offline"] || "OFFLINE";
                         dashStaBadge.style.background = "#222";
                         dashStaBadge.style.color = "#555";
                         dashStaBadge.style.border = "1px solid transparent";
                     }
                     // STA Tab
                     if(staStatusEl) {
-                        staStatusEl.innerText = "DISCONNECTED";
+                        staStatusEl.innerText = currentTranslations["status_disconnected"] || "DISCONNECTED";
                         staStatusEl.style.color = "var(--danger)";
                         staIpEl.innerText = "--.--.--.--";
                         staGwEl.innerText = "--.--.--.--";
                         staMaskEl.innerText = "--.--.--.--";
-                        if(staSsidEl) staSsidEl.innerText = "NONE";
+                        if(staSsidEl) staSsidEl.innerText = currentTranslations["status_none"] || "NONE";
                     }
                 }
             } catch (e) { console.error(e); }
@@ -2787,7 +2796,7 @@
             if(!ssid) { showToast("Select a target AP from Scanner first!"); return; }
             
             log(`Connecting STA to ${ssid}...`, "warning");
-            document.getElementById('sta-status').innerText = "CONNECTING...";
+            document.getElementById('sta-status').innerText = currentTranslations["status_connecting"] || "CONNECTING...";
             document.getElementById('sta-status').style.color = "#ffab40";
             
             try {
@@ -3474,7 +3483,7 @@
             } catch (err) {
                 log("BLE Scanner Devices Clear Error: " + err, "error");
             }
-            document.getElementById('ble-body').innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 20px; color:#666;">Ready to scan BLE devices...</td></tr>';
+            document.getElementById('ble-body').innerHTML = `<tr><td colspan="7" style="text-align:center; padding: 20px; color:#666;" data-i18n="ble_ready_msg">${currentTranslations["ble_ready_msg"] || "Ready to scan BLE devices..."}</td></tr>`;
             document.getElementById('ble-device-count').innerText = "0";
         }
 
