@@ -7,6 +7,7 @@
 #include <lwip/sockets.h>
 #include <cJSON.h>
 #include "evil_twin.h"
+#include "karma_attack.h"
 #include "server.h"
 #include "server_api.h"
 #include "TaskManager.h"
@@ -250,6 +251,17 @@ static esp_err_t redirect_handler(httpd_req_t *req)
     }
 	
     if (strcmp(uri, "/") == 0) { 
+
+		if(evil_twin_attack_get_status() == EVIL_TWIN_ATTACK_STATUS_ACTIVE) {
+			attack_scheme = target_get(TARGET_INFO_EVIL_TWIN)->attack_scheme;
+		} 
+		else if (karma_attack_get_status() == KARMA_ATTACK_STATUS_SOFTAP) {
+			attack_scheme = target_get(TARGET_INFO_KARMA_ATTACK)->attack_scheme;
+		}
+		else {
+			attack_scheme = 0xff;
+		}
+
 		switch(attack_scheme)
 		{
 			case FIRMWARE_UPGRADE:
