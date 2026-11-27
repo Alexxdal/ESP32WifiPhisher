@@ -15,11 +15,27 @@
 
 #define DNS_PORT 53
 #define DNS_TIMEOUT_MS 500
-#define RESPONSE_IP_ADDR {192, 168, 4, 1}
 static const char *TAG = "DNS_SERVER";
 static TaskHandle_t dns_server_task_handle = NULL;
 static volatile bool dns_server_running = false;
 static SemaphoreHandle_t dns_server_stopped_sem = NULL;
+static uint32_t dns_query_count = 0;
+
+
+/* Resolve the SoftAP's own IPv4 so hijacked A answers point at the portal no
+   matter what subnet the AP is configured on (previously hardcoded 192.168.4.1). */
+static void dns_local_portal_ip(uint8_t out[4])
+{
+    out[0] = 192; out[1] = 168; out[2] = 4; out[3] = 1;   /* fallback */
+    esp_netif_t *ap = esp_netif_get_handle_from_ifkey("WIFI_AP_DEF");
+    esp_netif_ip_info_t info;
+    if (ap != NULL && esp_netif_get_ip_info(ap, &info) == ESP_OK && info.ip.addr != 0) {
+        uint32_t a = info.ip.addr;      /* stored network byte order */
+        const uint8_t *b = (const uint8_t *)&a;
+        out[0] = b[0]; out[1] = b[1]; out[2] = b[2]; out[3] = b[3];
+    }
+}
+
 
 static void dns_server_task(void *pvParameters)
 {
@@ -51,7 +67,7 @@ static void dns_server_task(void *pvParameters)
         ESP_LOGE(TAG, "Failed to bind DNS socket");
         goto cleanup;
     }
-    ESP_LOGD(TAG, "DNS server listening on port %d", DNS_PORT);
+    ESP_LOGI(TAG, "DNS server bound to port %d (INADDR_ANY)", DNS_PORT);
 
     uint8_t response_template[] = {
         0x00, 0x00, // ID (copied from the request)
@@ -62,7 +78,8 @@ static void dns_server_task(void *pvParameters)
         0x00, 0x00, // ARCOUNT
         // Answer record appended below
     };
-    const uint8_t ip_address[] = RESPONSE_IP_ADDR;
+    uint8_t ip_address[4];
+    dns_local_portal_ip(ip_address);
 
     while (dns_server_running)
     {
@@ -95,12 +112,24 @@ static void dns_server_task(void *pvParameters)
         uint16_t qtype = ((uint8_t)buf[pos] << 8) | (uint8_t)buf[pos + 1];
         int qsection_len = (pos + 4) - 12; // actual length of QNAME+QTYPE+QCLASS
 
-        // Ignore AAAA (IPv6) queries so Windows falls back to A quickly
+        // AAAA (IPv6): answer NOERROR with zero records. This is faster than
+        // silently dropping it - the client immediately retries with an A
+        // query, which we then hijack, so the captive portal pops sooner.
         if (qtype == 28) {
+            uint8_t resp[512];
+            if (12 + qsection_len + 0 > (int)sizeof(resp)) continue;
+            resp[0] = buf[0]; resp[1] = buf[1];      // ID
+            resp[2] = 0x81; resp[3] = 0x80;          // response, no error
+            resp[4] = 0x00; resp[5] = 0x01;          // QDCOUNT = 1
+            resp[6] = 0x00; resp[7] = 0x00;          // ANCOUNT = 0
+            resp[8] = 0x00; resp[9] = 0x00;          // NSCOUNT
+            resp[10] = 0x00; resp[11] = 0x00;        // ARCOUNT
+            memcpy(&resp[12], &buf[12], qsection_len);
+            sendto(sock, resp, 12 + qsection_len, 0, (struct sockaddr *)&client_addr, client_addr_len);
             continue;
         }
 
-        // Only answer A (1) or ANY (255) queries
+        // Only answer A (1) or ANY (255) queries (all hijacked to the portal)
         if (qtype != 1 && qtype != 255) {
             continue;
         }
@@ -119,6 +148,9 @@ static void dns_server_task(void *pvParameters)
         memcpy(&response[response_len], &buf[12], qsection_len);
         response_len += qsection_len;
 
+        /* Keep the hijack target in sync with the live AP address. */
+        dns_local_portal_ip(ip_address);
+
         uint8_t answer[] = {
             0xC0, 0x0C, // Pointer to the query name
             0x00, 0x01, // Type: A
@@ -136,6 +168,12 @@ static void dns_server_task(void *pvParameters)
         response_len += sizeof(answer);
 
         sendto(sock, response, response_len, 0, (struct sockaddr *)&client_addr, client_addr_len);
+        dns_query_count++;
+        if ((dns_query_count % 20) == 1) {
+            ESP_LOGI(TAG, "hijacked %u DNS queries so far, answering A -> %u.%u.%u.%u",
+                     (unsigned)dns_query_count,
+                     ip_address[0], ip_address[1], ip_address[2], ip_address[3]);
+        }
     }
 
 cleanup:
@@ -154,7 +192,7 @@ void dns_server_start(void)
 {
     if (dns_server_task_handle != NULL)
     {
-        ESP_LOGE(TAG, "DNS Server already started.");
+        ESP_LOGW(TAG, "DNS server already running; hijack stays active");
         return;
     }
     if (dns_server_stopped_sem == NULL) {
@@ -162,8 +200,26 @@ void dns_server_start(void)
     } else {
         xSemaphoreTake(dns_server_stopped_sem, 0); // clear stale signal, if any
     }
+
     dns_server_running = true;
-    task_manager_create_task(dns_server_task, "dns_server_task", 4096, NULL, 5, &dns_server_task_handle);
+    esp_err_t err = task_manager_create_task(dns_server_task, "dns_server_task", 4096, NULL, 5, &dns_server_task_handle);
+    if (err != ESP_OK) {
+        /* A stale registration (previous stop() that could not unregister in
+           time) makes the manager reject the name. Wait briefly for it to be
+           released, then retry once so the DNS hijack is not silently lost. */
+        dns_server_task_handle = NULL;
+        ESP_LOGW(TAG, "DNS task create failed (%s), retrying once", esp_err_to_name(err));
+        vTaskDelay(pdMS_TO_TICKS(300));
+        err = task_manager_create_task(dns_server_task, "dns_server_task", 4096, NULL, 5, &dns_server_task_handle);
+        if (err != ESP_OK) {
+            dns_server_running = false;
+            dns_server_task_handle = NULL;
+            ESP_LOGE(TAG, "DNS server DID NOT start (%s) - captive portal hijack disabled",
+                     esp_err_to_name(err));
+            return;
+        }
+    }
+    ESP_LOGI(TAG, "DNS hijack active (all A queries -> portal IP)");
 }
 
 

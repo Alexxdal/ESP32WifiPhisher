@@ -233,6 +233,40 @@ esp_err_t wifi_init(void)
     ESP_ERROR_CHECK(esp_wifi_set_bandwidth(WIFI_IF_STA, WIFI_BW_HT20));
 #endif
 
+    esp_netif_t *ap_netif = esp_netif_get_handle_from_ifkey("WIFI_AP_DEF");
+    if (ap_netif != NULL) {
+        esp_netif_ip_info_t ap_ip;
+        if (esp_netif_get_ip_info(ap_netif, &ap_ip) == ESP_OK && ap_ip.ip.addr != 0) {
+            esp_netif_dhcps_stop(ap_netif);
+
+            /* DNS address the server will advertise (option 6 payload). */
+            esp_netif_dns_info_t dns = {0};
+            dns.ip.type = ESP_IPADDR_TYPE_V4;
+            dns.ip.u_addr.ip4.addr = ap_ip.ip.addr;
+            esp_err_t e1 = esp_netif_set_dns_info(ap_netif, ESP_NETIF_DNS_MAIN, &dns);
+
+            /* Turn the offer flag on (boolean, not the address). */
+            uint8_t offer_dns = 1;
+            esp_err_t e2 = esp_netif_dhcps_option(ap_netif, ESP_NETIF_OP_SET,
+                              ESP_NETIF_DOMAIN_NAME_SERVER, &offer_dns, sizeof(offer_dns));
+
+            /* Captive portal URI hint. */
+            char portal_uri[48];
+            snprintf(portal_uri, sizeof(portal_uri), "http://" IPSTR "/", IP2STR(&ap_ip.ip));
+            esp_err_t e3 = esp_netif_dhcps_option(ap_netif, ESP_NETIF_OP_SET,
+                              ESP_NETIF_CAPTIVEPORTAL_URI, portal_uri, strlen(portal_uri));
+
+            esp_netif_dhcps_start(ap_netif);
+
+            if (e1 != ESP_OK) ESP_LOGW(TAG, "Set DNS addr failed (%s)", esp_err_to_name(e1));
+            if (e2 != ESP_OK) ESP_LOGW(TAG, "DHCP DNS offer flag failed (%s)", esp_err_to_name(e2));
+            if (e3 != ESP_OK) ESP_LOGW(TAG, "Captive portal URI option failed (%s)", esp_err_to_name(e3));
+
+            ESP_LOGI(TAG, "AP DHCP: DNS " IPSTR ", portal " IPSTR " (option 6+114)",
+                     IP2STR(&ap_ip.ip), IP2STR(&ap_ip.ip));
+        }
+    }
+
     ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL));
 
     /* Callback for frame statistics */
@@ -326,12 +360,12 @@ void wifi_start_softap(void)
         }
     };
 
-    if(read_string_from_nvs(WIFI_SSID_KEY, (char *)&wifi_config.ap.ssid) != ESP_OK )
+    if(read_string_from_nvs_sized(WIFI_SSID_KEY, (char *)&wifi_config.ap.ssid, sizeof(wifi_config.ap.ssid)) != ESP_OK )
     {
         strcpy((char *)&wifi_config.ap.ssid, DEFAULT_WIFI_SSID);
     }
     wifi_config.ap.ssid_len = strlen((char *)&wifi_config.ap.ssid);
-    if(read_string_from_nvs(WIFI_PASS_KEY, (char *)&wifi_config.ap.password) != ESP_OK )
+    if(read_string_from_nvs_sized(WIFI_PASS_KEY, (char *)&wifi_config.ap.password, sizeof(wifi_config.ap.password)) != ESP_OK )
     {
         strcpy((char *)&wifi_config.ap.password, DEFAULT_WIFI_PASS);
     }
@@ -341,7 +375,15 @@ void wifi_start_softap(void)
     }
     wifi_config.ap.authmode = DEFAULT_WIFI_AUTH;
 
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config));
+    esp_err_t cfg_err = esp_wifi_set_config(WIFI_IF_AP, &wifi_config);
+    if (cfg_err != ESP_OK) {
+        ESP_LOGE(TAG, "esp_wifi_set_config failed (%s), retrying with defaults", esp_err_to_name(cfg_err));
+        strcpy((char *)&wifi_config.ap.ssid, DEFAULT_WIFI_SSID);
+        wifi_config.ap.ssid_len = strlen(DEFAULT_WIFI_SSID);
+        strcpy((char *)&wifi_config.ap.password, DEFAULT_WIFI_PASS);
+        wifi_config.ap.channel = DEFAULT_WIFI_CHAN;
+        ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config));
+    }
     
     /* Force only 11b and 11g for max stability */
     #if CONFIG_SOC_WIFI_SUPPORT_5G
@@ -362,13 +404,24 @@ void wifi_start_softap(void)
 }
 
 
-void wifi_ap_clone(wifi_config_t *wifi_config, uint8_t *bssid)
+esp_err_t wifi_ap_clone(wifi_config_t *wifi_config, uint8_t *bssid)
 {
+    if (wifi_config == NULL) return ESP_ERR_INVALID_ARG;
+
     if( bssid != NULL )
     {
-        ESP_ERROR_CHECK(esp_wifi_set_mac(WIFI_IF_AP, bssid));
+        esp_err_t mac_err = esp_wifi_set_mac(WIFI_IF_AP, bssid);
+        if (mac_err != ESP_OK) {
+            ESP_LOGW(TAG, "wifi_ap_clone: set_mac failed (%s)", esp_err_to_name(mac_err));
+            /* not fatal: keep the driver MAC and continue cloning */
+        }
     }
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, wifi_config));
+
+    esp_err_t err = esp_wifi_set_config(WIFI_IF_AP, wifi_config);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "wifi_ap_clone: set_config failed (%s)", esp_err_to_name(err));
+    }
+    return err;
 }
 
 

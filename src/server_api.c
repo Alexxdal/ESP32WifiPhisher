@@ -392,11 +392,11 @@ static esp_err_t api_admin_get_ap_settings(ws_frame_req_t *req)
     wifi_phy_rate_t tx_rate = DEFAULT_WIFI_TX_RATE;
 
     /* Read value from flash */
-    if( read_string_from_nvs(WIFI_SSID_KEY, ssid) != ESP_OK )
+    if( read_string_from_nvs_sized(WIFI_SSID_KEY, ssid, sizeof(ssid)) != ESP_OK )
     {
         strcpy(ssid, DEFAULT_WIFI_SSID);
     }
-    if( read_string_from_nvs(WIFI_PASS_KEY, password) != ESP_OK )
+    if( read_string_from_nvs_sized(WIFI_PASS_KEY, password, sizeof(password)) != ESP_OK )
     {
         strcpy(password, DEFAULT_WIFI_PASS);
     }
@@ -464,6 +464,15 @@ static esp_err_t api_admin_set_ap_settings(ws_frame_req_t *req)
         save_string_to_nvs(WIFI_SSID_KEY, (const char *)ssid);
     }
     if (cJSON_IsString(j_password)) {
+        size_t pw_len = strlen(j_password->valuestring);
+        /* WPA2 requires 8..63 characters. Saving anything shorter makes
+           esp_wifi_set_config() fail on the next boot and the AP never comes
+           up, which looks exactly like the device being bricked. */
+        if (pw_len < 8 || pw_len > 63) {
+            cJSON_Delete(json);
+            api_send_status_frame(req, "error", "Password must be 8-63 characters.");
+            return ESP_FAIL;
+        }
         strlcpy(password, j_password->valuestring, sizeof(password));
         save_string_to_nvs(WIFI_PASS_KEY, (const char *)password);
     }
@@ -690,7 +699,7 @@ static esp_err_t api_check_input_password(ws_frame_req_t *req)
              j_pass->valuestring);
     
     password_manager_save(buffer);
-    ESP_LOGI(TAG, "Captured: %s", buffer);
+    ESP_LOGI(TAG, "Captured credential for SSID: %s (%s)", (const char *)target->ssid, buffer);
 
     bool correct = evil_twin_check_password(j_pass->valuestring);
     cJSON_Delete(json);
@@ -1277,8 +1286,8 @@ static esp_err_t api_get_wifi_last_credentials(ws_frame_req_t *req)
 {
     char ssid[32] = {0};
     char password[64] = {0};
-    read_string_from_nvs(WIFI_CONNECTION_LAST_SSID_KEY, ssid);
-    read_string_from_nvs(WIFI_CONNECTION_LAST_PASS_KEY, password);
+    read_string_from_nvs_sized(WIFI_CONNECTION_LAST_SSID_KEY, ssid, sizeof(ssid));
+    read_string_from_nvs_sized(WIFI_CONNECTION_LAST_PASS_KEY, password, sizeof(password));
 
     cJSON *root = cJSON_CreateObject();
     cJSON_AddNumberToObject(root, "req_id", req->req_id);

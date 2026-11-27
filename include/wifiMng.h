@@ -58,7 +58,7 @@ void wifi_start_softap(void);
  * @param wifi_config 
  * @param bssid 
  */
-void wifi_ap_clone(wifi_config_t *wifi_config, uint8_t *bssid);
+esp_err_t wifi_ap_clone(wifi_config_t *wifi_config, uint8_t *bssid);
 
 
 /**

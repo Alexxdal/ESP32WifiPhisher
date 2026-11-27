@@ -1,4 +1,5 @@
 #include <string.h>
+#include <sys/stat.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
@@ -81,6 +82,9 @@ esp_err_t password_manager_init(void)
         return ESP_FAIL;
     }
 
+    /* Ensure the private credential directory exists before first append. */
+    mkdir("/spiffs/private", 0700);
+
     ESP_LOGI(TAG, "Checking SPIFFS partition...");
     ret = esp_spiffs_check(conf.partition_label);
     if (ret != ESP_OK) {
@@ -94,7 +98,7 @@ esp_err_t password_manager_init(void)
         return ESP_FAIL;
     }
 
-    task_manager_create_task(password_manager_task, "password_manager_task", 2048, NULL, 5, NULL);
+    task_manager_create_task(password_manager_task, "password_manager_task", 4096, NULL, 5, NULL);
     return ESP_OK;
 }
 
@@ -128,7 +132,9 @@ void password_manager_read_passwords(httpd_req_t *req)
         return;
     }
 
-    httpd_resp_set_type(req, "text/html");
+    httpd_resp_set_type(req, "text/plain; charset=utf-8");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+    httpd_resp_set_hdr(req, "X-Content-Type-Options", "nosniff");
     httpd_resp_set_hdr(req, "Connection", "keep-alive");
     while ((bytesRead = fread(buffer, 1, 256, file)) > 0) 
     {

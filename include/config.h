@@ -23,11 +23,10 @@ void save_string_to_nvs(const char* key, const char* value);
 
 
 /**
- * @brief Read string value from flash
- * 
- * @param key 
+ * @brief Read string value from flash into a buffer of a known size.
+ *
  */
-esp_err_t read_string_from_nvs(const char* key, char* value);
+esp_err_t read_string_from_nvs_sized(const char* key, char* value, size_t value_size);
 
 
 /**

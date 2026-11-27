@@ -39,4 +39,14 @@
 #define WIFI_CONNECTION_LAST_PASS_KEY "wifi_last_pass"
 
 
+/**
+ * @brief Random path the admin dashboard is served from (e.g. "x7k2p9")
+ */
+#define ADMIN_PATH_KEY  "admin_path"
+
+/**
+ * @brief Access PIN for the admin dashboard
+ */
+#define ADMIN_PIN_KEY   "admin_pin"
+
 #endif

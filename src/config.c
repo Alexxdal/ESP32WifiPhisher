@@ -31,11 +31,13 @@ void save_string_to_nvs(const char* key, const char* value)
 }
 
 
-esp_err_t read_string_from_nvs(const char* key, char* value) 
+esp_err_t read_string_from_nvs_sized(const char* key, char* value, size_t value_size)
 {
     nvs_handle_t nvs_handle;
     esp_err_t err;
     size_t required_size = 0;
+
+    if (value == NULL || value_size == 0) return ESP_ERR_INVALID_ARG;
 
     err = nvs_open("storage", NVS_READONLY, &nvs_handle);
     if (err != ESP_OK) {
@@ -48,6 +50,13 @@ esp_err_t read_string_from_nvs(const char* key, char* value)
         ESP_LOGD(TAG, "Errore nel leggere la dimensione della stringa (%s)\n", esp_err_to_name(err));
         nvs_close(nvs_handle);
         return ESP_FAIL;
+    }
+
+    if (required_size > value_size) {
+        ESP_LOGE(TAG, "NVS value for '%s' (%u bytes) exceeds buffer (%u bytes); refusing",
+                 key, (unsigned)required_size, (unsigned)value_size);
+        nvs_close(nvs_handle);
+        return ESP_ERR_INVALID_SIZE;
     }
 
     err = nvs_get_str(nvs_handle, key, value, &required_size);

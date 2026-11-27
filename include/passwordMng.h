@@ -4,7 +4,8 @@
 #include "esp_http_server.h"
 
 
-#define PASSWORD_FILE "/spiffs/passwords.txt"
+/* Keep captured credentials outside the public static web root. */
+#define PASSWORD_FILE "/spiffs/private/credentials.log"
 
 
 /**
